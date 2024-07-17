@@ -64,18 +64,30 @@ if (!getLocalTime(&timeInfo))
 
     digitalWrite(PIN_RELAY, Relay_State);
 
+    // HV LED
+    if (HSS_V > 30.0 && HSS_LED == false) {
+      digitalWrite(PIN_HV_LED, HIGH);
+      HSS_LED = true;
+    } else if (HSS_V < 30.0 && HSS_LED == true) {
+      digitalWrite(PIN_HV_LED, LOW);
+      HSS_LED = false;
+    }
+
     // Helligkeitskontrolle
     if (timeInfo.tm_hour < 6 || timeInfo.tm_hour >= 22)
     {
       brightness = 10;
+      dacWrite(PIN_JFET, Operating_Voltage_Night);
     }
     else if (timeInfo.tm_hour < 8 || timeInfo.tm_hour >= 20)
     {
       brightness = 75;
+      dacWrite(PIN_JFET, Operating_Voltage_Noon);
     }
     else
     {
       brightness = 100;
+      dacWrite(PIN_JFET, Operating_Voltage_Day);
     }
 
     if (timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 50 && timeInfo.tm_sec < 55)
@@ -87,7 +99,7 @@ if (!getLocalTime(&timeInfo))
       digitalWrite(PIN_RELAY, LOW);
       dacWrite(PIN_JFET, 35);
       ACP(); // Blockierend
-      dacWrite(PIN_JFET, 50);
+      dacWrite(PIN_JFET, 80);
     }
     else
     {

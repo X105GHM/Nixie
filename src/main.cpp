@@ -5,6 +5,8 @@
 #include "Digit_Control/Digit.h"
 #include "HSS/HSS.h"
 #include "Time/Time.h"
+#include <driver/adc.h>
+
 
 // Konstanten
 constexpr uint8_t PIN_DIN = 13;
@@ -20,10 +22,11 @@ void setup()
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_OE, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
-  pinMode(PIN_HSS_V, INPUT);
   pinMode(PIN_JFET, OUTPUT);
   pinMode(PIN_HV_LED, OUTPUT);
   pinMode(PIN_RELAY, OUTPUT);  //* Kein Ticker ? ---> Jumper X2 Ziehen          Wenn nicht Tickt aber Jumper steckt ---> U1 (F2)
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_0);
   digitalWrite(PIN_OE, LOW);  // erzwingt alle Röhren aus // * Hier entsteht das Leuchten beim einstecken!
   digitalWrite(PIN_HSS_CUTOFF, HIGH);
   dacWrite(PIN_JFET, 50); // 170V

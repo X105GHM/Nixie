@@ -1,34 +1,32 @@
 #include "HSS/HSS.h"
 #include "ACP/ACP.h"
 #include "Digit_Control/Digit.h"
+#include <driver/adc.h>
 
 bool HSS_LED = false;
 bool HSS_CUTOFF = false;
+bool samplesFilled = false;
+float HSS_V;
+u_int16_t samples[NUM_SAMPLES];
+u_int8_t sampleIndex = 0;
 
-void readHSS()
-{
-  float HSS_V = (analogRead(PIN_HSS_V) / 4095) * 270;
 
-  if (HSS_V > 210)
-  {
-    digitalWrite(PIN_HSS_CUTOFF, HIGH);
-    HSS_CUTOFF = true;
-  }
-  else if (HSS_V < 100 && HSS_CUTOFF == true)
-  {
-    digitalWrite(PIN_HSS_CUTOFF, LOW);
-    HSS_CUTOFF = false;
+void readHSS() {
+  int rawADC = adc1_get_raw(ADC1_CHANNEL_4);
+  samples[sampleIndex] = rawADC;
+  sampleIndex = (sampleIndex + 1) % NUM_SAMPLES;
+
+  if (sampleIndex == 0) {
+    samplesFilled = true;
   }
 
-  if (HSS_V > 30 && HSS_LED == false)
-  {
-    digitalWrite(PIN_HV_LED, HIGH);
-    HSS_LED = true;
-  }
-  else if (HSS_V < 30 && HSS_LED == true)
-  {
-    digitalWrite(PIN_HV_LED, LOW);
-    HSS_LED = false;
+  if (samplesFilled) {
+    long sum = 0;
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+      sum += samples[i];
+    }
+    float averageADC = sum / (float)NUM_SAMPLES;
+    HSS_V = (averageADC / 4095.0) * 270.0;
   }
 }
 
