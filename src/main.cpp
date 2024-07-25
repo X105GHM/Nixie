@@ -7,6 +7,10 @@
 #include "Time/Time.h"
 #include <driver/adc.h>
 
+//* Der DAC-Wert muss für jede Uhr individuell angepasst werden.
+//* 160V bis 170V bei allen Helligkeitsstufen, 180V bis 190V bei ACP.
+//  Erinnerung: Z-Diode 200V!!!
+
 
 // Konstanten
 constexpr uint8_t PIN_DIN = 13;

@@ -2,6 +2,7 @@
 #include "ACP/ACP.h"
 #include "Digit_Control/Digit.h"
 #include "Button/Button.h"
+#include "Melody/Melody.h"
 #include "time.h"
 
 struct tm timeInfo;
@@ -11,7 +12,7 @@ uint32_t lastRefresh = 0;
 void setTimezone(String timezone)
 {
   Serial.printf("  Setting Timezone to %s\n", timezone.c_str());
-  setenv("TZ", timezone.c_str(), 1);    // * Passen Sie nun die TZ an.  Die Uhreinstellungen werden angepasst, um die neue Ortszeit anzuzeigen
+  setenv("TZ", timezone.c_str(), 1);    // * Passe die TZ an.  Die Uhreinstellungen werden angepasst, um die neue Ortszeit anzuzeigen
   tzset();
 }
 
@@ -99,8 +100,13 @@ if (!getLocalTime(&timeInfo))
       digitalWrite(PIN_RELAY, LOW);
       dacWrite(PIN_JFET, 35);
       ACP(); // Blockierend
-      dacWrite(PIN_JFET, 80);
-    }
+      dacWrite(PIN_JFET, 75);
+    }/*
+    else if ((timeInfo.tm_mon == 11 && timeInfo.tm_mday == 25 && timeInfo.tm_hour == 9 && timeInfo.tm_min == 00 && timeInfo.tm_sec == 00))
+    {
+      displayDate();
+      playJingleBells();
+    }*/
     else
     {
       displayTime(); // Legt die anzuzeigenden Ziffern fest
