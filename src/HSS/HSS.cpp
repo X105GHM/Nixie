@@ -6,23 +6,27 @@
 bool HSS_LED = false;
 bool HSS_CUTOFF = false;
 bool samplesFilled = false;
+bool HSS_load = false;
 float HSS_V;
 u_int16_t samples[NUM_SAMPLES];
 u_int8_t sampleIndex = 0;
 
-
-void readHSS() {
+void readHSS()
+{
   int rawADC = adc1_get_raw(ADC1_CHANNEL_4);
   samples[sampleIndex] = rawADC;
   sampleIndex = (sampleIndex + 1) % NUM_SAMPLES;
 
-  if (sampleIndex == 0) {
+  if (sampleIndex == 0)
+  {
     samplesFilled = true;
   }
 
-  if (samplesFilled) {
+  if (samplesFilled)
+  {
     long sum = 0;
-    for (int i = 0; i < NUM_SAMPLES; i++) {
+    for (int i = 0; i < NUM_SAMPLES; i++)
+    {
       sum += samples[i];
     }
     float averageADC = sum / (float)NUM_SAMPLES;
@@ -42,4 +46,29 @@ void updateHSS()
     // Sonst HSS abschalten
     digitalWrite(PIN_HSS_CUTOFF, HIGH);
   }
+}
+
+void loadCheck()
+{
+    brightness = 100;
+    digits = 999999;
+    displayEnabled = true;
+    while (!HSS_load)
+    {
+        digitalWrite(PIN_HSS_CUTOFF, LOW);
+        delay(50);
+        readHSS();
+        if (HSS_V < 185.0)
+        {
+            HSS_load = false;
+            digitalWrite(PIN_HSS_CUTOFF, HIGH);
+            delay(30000); // Wartezeit von 30 Sekunden
+        }
+        else
+        {
+            HSS_load = true;
+            displayEnabled = false;
+            digitalWrite(PIN_HSS_CUTOFF, LOW);
+        }
+    }
 }

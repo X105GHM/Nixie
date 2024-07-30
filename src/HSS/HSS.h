@@ -26,5 +26,6 @@ extern u_int8_t sampleIndex;
 // Funktionsdeklarationen
 void readHSS();
 void updateHSS();
+void loadCheck();
 
 #endif // HSS_CONTROL_H
