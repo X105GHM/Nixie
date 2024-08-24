@@ -5,7 +5,7 @@
 #include <SPI.h>
 
 // Konstanten
-constexpr uint16_t ON_TIME_US = 1000;
+constexpr uint16_t ON_TIME_US = 8000;
 constexpr uint8_t ADAPTIVE_BRIGHTNESS = 1;
 
 // Globale Variablen

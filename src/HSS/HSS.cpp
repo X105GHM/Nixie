@@ -56,8 +56,9 @@ void loadCheck()
     while (!HSS_load)
     {
         digitalWrite(PIN_HSS_CUTOFF, LOW);
-        delay(50);
+        delay(400);
         readHSS();
+        delay(100);
         if (HSS_V < 185.0)
         {
             HSS_load = false;

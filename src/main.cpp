@@ -33,7 +33,8 @@ void setup()
   adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_0);
   digitalWrite(PIN_OE, LOW);  // erzwingt alle Röhren aus // * Hier entsteht das Leuchten beim einstecken!
   digitalWrite(PIN_HSS_CUTOFF, HIGH);
-  dacWrite(PIN_JFET, 50); // 170V
+  brightness = 100;
+  dacWrite(PIN_JFET, Operating_Voltage_Day);
 
   Serial.begin(115200);
 
@@ -47,7 +48,7 @@ void setup()
 
   xTaskCreatePinnedToCore(displayDigits, "DisplayLoop", 10000, NULL, 1, &mainTask, 1);
 
-  loadCheck();
+  //loadCheck();
 
   if (WiFi.status() != WL_CONNECTED)
   {
