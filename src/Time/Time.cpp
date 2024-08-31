@@ -32,7 +32,6 @@ void initTime(String timezone)
     return;
   }
   Serial.println("  Got the time from NTP");
-  // Jetzt können wir die echte Zeitzone festlegen
   setTimezone(timezone);
 }
 
@@ -66,33 +65,14 @@ if (!getLocalTime(&timeInfo))
     digitalWrite(PIN_RELAY, Relay_State);
 
     // HV LED
-    if (HSS_V > 30.0 && HSS_LED == false) {
+    if (HSS_V > 60.0 && HSS_LED == false) {
       digitalWrite(PIN_HV_LED, HIGH);
       HSS_LED = true;
-    } else if (HSS_V < 30.0 && HSS_LED == true) {
+    } else if (HSS_V < 60.0 && HSS_LED == true) {
       digitalWrite(PIN_HV_LED, LOW);
       HSS_LED = false;
     }
-
-    // Helligkeitskontrolle //! Aufgrund eines Layoutfehlers in Version 4 ist ein geräuschloser Betrieb nicht möglich.
-
-    /*
-    if (timeInfo.tm_hour < 6 || timeInfo.tm_hour >= 22)
-    {
-      brightness = 10;  
-      dacWrite(PIN_JFET, Operating_Voltage_Night);
-    }
-    else if (timeInfo.tm_hour < 8 || timeInfo.tm_hour >= 20)
-    {
-      brightness = 75;
-      dacWrite(PIN_JFET, Operating_Voltage_Noon);
-    }
-    else
-    {
-      brightness = 100;
-      dacWrite(PIN_JFET, Operating_Voltage_Day);
-    }
-    */
+  
     if (timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 50 && timeInfo.tm_sec < 55)
     {
       displayDate(); // legt die anzuzeigenden Ziffern fest
@@ -102,13 +82,8 @@ if (!getLocalTime(&timeInfo))
       digitalWrite(PIN_RELAY, LOW);
       dacWrite(PIN_JFET, 35);
       ACP(); // Blockierend
-      dacWrite(PIN_JFET, 80);
-    }/*
-    else if ((timeInfo.tm_mon == 11 && timeInfo.tm_mday == 25 && timeInfo.tm_hour == 9 && timeInfo.tm_min == 00 && timeInfo.tm_sec == 00))
-    {
-      displayDate();
-      playJingleBells();
-    }*/
+      dacWrite(PIN_JFET, Operating_Voltage);
+    }
     else
     {
       displayTime(); // Legt die anzuzeigenden Ziffern fest

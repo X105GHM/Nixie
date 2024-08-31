@@ -8,30 +8,11 @@ bool HSS_CUTOFF = false;
 bool samplesFilled = false;
 bool HSS_load = false;
 float HSS_V;
-u_int16_t samples[NUM_SAMPLES];
-u_int8_t sampleIndex = 0;
 
 void readHSS()
 {
-  int rawADC = adc1_get_raw(ADC1_CHANNEL_4);
-  samples[sampleIndex] = rawADC;
-  sampleIndex = (sampleIndex + 1) % NUM_SAMPLES;
-
-  if (sampleIndex == 0)
-  {
-    samplesFilled = true;
-  }
-
-  if (samplesFilled)
-  {
-    long sum = 0;
-    for (int i = 0; i < NUM_SAMPLES; i++)
-    {
-      sum += samples[i];
-    }
-    float averageADC = sum / (float)NUM_SAMPLES;
-    HSS_V = (averageADC / 4095.0) * 270.0;
-  }
+  int debuggspannung = analogReadMilliVolts(34);
+  HSS_V = (debuggspannung / 1000.0) * 57;
 }
 
 void updateHSS()
@@ -55,21 +36,26 @@ void loadCheck()
     displayEnabled = true;
     while (!HSS_load)
     {
+        Serial.println("HSS ON");
         digitalWrite(PIN_HSS_CUTOFF, LOW);
         delay(400);
         readHSS();
         delay(100);
-        if (HSS_V < 185.0)
+        Serial.print("Spannung:");
+        Serial.println(HSS_V);
+        if (HSS_V > 110.0)
         {
-            HSS_load = false;
             digitalWrite(PIN_HSS_CUTOFF, HIGH);
+            Serial.println("Wartezeit von 30 Sekunden");
+            HSS_load = false;
             delay(30000); // Wartezeit von 30 Sekunden
         }
         else
         {
-            HSS_load = true;
             displayEnabled = false;
-            digitalWrite(PIN_HSS_CUTOFF, LOW);
+            digitalWrite(PIN_HSS_CUTOFF, HIGH);
+            Serial.println("HSS OFF");
+            HSS_load = true;
         }
     }
 }

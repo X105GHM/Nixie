@@ -148,7 +148,7 @@ void displayDate()
   digits = 0;
 
   digits += timeInfo.tm_mday * 10000;
-  digits += (timeInfo.tm_mon + 1) * 100;  // Monat ist 0-11, wir müssen 1 hinzufügen
+  digits += (timeInfo.tm_mon + 1) * 100;  // Monat ist 0-11, zum Anzeigen +1
   digits += (timeInfo.tm_year + 1900) % 100;
 }
 

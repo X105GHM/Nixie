@@ -32,9 +32,9 @@ void onButtonLongPress()
   displayDate();
   delay(5000);
   digitalWrite(PIN_RELAY, LOW);
-  dacWrite(PIN_JFET, 35); // 170V
+  dacWrite(PIN_JFET, ACP_Voltage); // 190V
   ACP(); // Blockierend
-  dacWrite(PIN_JFET, 50); // 185V
+  dacWrite(PIN_JFET, Operating_Voltage); // 160V
   delay(5000);
 }
 
