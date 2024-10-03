@@ -6,6 +6,8 @@
 #include "HSS/HSS.h"
 #include "Time/Time.h"
 #include <driver/adc.h>
+#include <ESPAsyncWebServer.h>
+#include <ESPmDNS.h>
 
 //* Der DAC-Wert muss für jede Uhr individuell angepasst werden.
 //* 160V bis 170V bei allen Helligkeitsstufen, 180V bis 190V bei ACP.
@@ -17,6 +19,7 @@ constexpr uint8_t PIN_DIN = 13;
 constexpr uint8_t PIN_CLK = 14;
 
 TaskHandle_t mainTask;
+AsyncWebServer server(80);
 
 void setup()
 {
@@ -43,8 +46,37 @@ void setup()
 
   wifiManager.autoConnect("Nixie Clock");
 
+  MDNS.end();
+  MDNS.begin("nixie");
+  MDNS.addService("http", "tcp", 80);
+
   initTime("CET-1CEST,M3.5.0,M10.5.0/3");
 
+  server.on("/api/power", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "application/json", displayEnabled ? "true" : "false");
+  });
+
+  server.on(
+    "/api/power",
+    HTTP_PATCH,
+    [](AsyncWebServerRequest *request) {},
+    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final){},
+    [](AsyncWebServerRequest* request, uint8_t* data, size_t length, size_t index, size_t total){
+      if (strncmp((char *)data, "true", length) == 0) {
+        displayEnabled = true;
+      } else if (strncmp((char*)data, "false", length) == 0) {
+        displayEnabled = false;
+      } else {
+        Serial.println("API parse error");
+      }
+      request->send(200, "application/json", digitalRead(PIN_HSS_CUTOFF) ? "false" : "true");
+    }
+  );
+  server.begin();
+
+  xTaskCreatePinnedToCore(displayDigits, "DisplayLoop", 10000, NULL, 1, &mainTask, 1);
+
+  // loadCheck();
   //loadCheck();
 
   if (WiFi.status() != WL_CONNECTED)

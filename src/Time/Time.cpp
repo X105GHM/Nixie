@@ -46,7 +46,7 @@ void blinkError()
   }
 }
 
-void timeCycle() 
+void timeCycle()
 {
 if (!getLocalTime(&timeInfo))
   {
@@ -72,7 +72,7 @@ if (!getLocalTime(&timeInfo))
       digitalWrite(PIN_HV_LED, LOW);
       HSS_LED = false;
     }
-  
+
     if (timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 50 && timeInfo.tm_sec < 55)
     {
       displayDate(); // legt die anzuzeigenden Ziffern fest
@@ -90,8 +90,8 @@ if (!getLocalTime(&timeInfo))
       displayTime(); // Legt die anzuzeigenden Ziffern fest
     }
   }
-  if (!displayEnabled)
-  {
-    displayEnabled = true;
-  }
+  // if (!displayEnabled)
+  // {
+  //   displayEnabled = true;
+  // }
 }

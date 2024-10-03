@@ -3,12 +3,12 @@
 #include "ACP/ACP.h"
 #include "Time/Time.h"
 
-bool displayEnabled = false;
+bool displayEnabled = true;
 bool Relay_State = false;
 
-int32_t digits = 0; 
-/* Zahl, die angezeigt werden soll, negativ bedeutet, dass nur 4 Ziffern angezeigt werden (zweite Positionen sind leer).
-   0-9 ist die erste Röhre links, 10-19 die zweite Röhre usw. */
+int32_t digits = 0;
+/*Zahl, die angezeigt werden soll, negativ bedeutet, dass nur 4 Ziffern angezeigt werden (zweite Positionen sind leer).
+  0-9 ist die erste Röhre links, 10-19 die zweite Röhre usw.*/
 
 byte singleDigit = 0;
 uint32_t symbolArray[10] = {512, 1, 2, 4, 8, 16, 32, 64, 128, 256}; // 0 bis 9
@@ -88,11 +88,11 @@ void updateDisplay()
 
 void displayTime()
 {
-    digits = 0;
-    digits += timeInfo.tm_hour * 10000;
-    digits += timeInfo.tm_min * 100;
-    digits += timeInfo.tm_sec;
-    updateDisplay(); 
+  digits = 0;
+  digits += timeInfo.tm_hour * 10000;
+  digits += timeInfo.tm_min * 100;
+  digits += timeInfo.tm_sec;
+  updateDisplay();
 }
 
 void displayDate()
