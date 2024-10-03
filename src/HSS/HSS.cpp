@@ -43,7 +43,7 @@ void loadCheck()
         delay(100);
         Serial.print("Spannung:");
         Serial.println(HSS_V);
-        if (HSS_V > 110.0)
+        if (HSS_V > 116.0)
         {
             digitalWrite(PIN_HSS_CUTOFF, HIGH);
             Serial.println("Wartezeit von 30 Sekunden");

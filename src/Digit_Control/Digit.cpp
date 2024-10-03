@@ -20,7 +20,8 @@ void IRAM_ATTR displayDigits(void *pvParameters)
   Serial.println(xPortGetCoreID());
   for (;;)
   {
-    delayMicroseconds(ON_TIME_US);
+    delayMicroseconds(8000);
+    //delayMicroseconds(ON_TIME_US);
     if (!displayEnabled)
     {
       continue;
@@ -125,7 +126,8 @@ void IRAM_ATTR displayDigits(void *pvParameters)
     if (ADAPTIVE_BRIGHTNESS && !runningACP1 || !runningACP2)
     {
       // Helligkeit dimmen, indem eine längere Ausschaltzeit erzwungen wird
-      delayMicroseconds((ON_TIME_US * 100 - ON_TIME_US * min(brightness, (uint)100)) / min(brightness, (uint)100));
+      //delayMicroseconds((ON_TIME_US * 100 - ON_TIME_US * min(brightness, (uint)100)) / min(brightness, (uint)100));
+      delayMicroseconds(1);
     }
     digitalWrite(PIN_OE, HIGH);  // Daten zwischenspeichern (aktiviert HV-Ausgänge entsprechend den Registern)
     if (runningACP1 || runningACP2 || runningManualACP)
