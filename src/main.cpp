@@ -74,11 +74,6 @@ void setup()
   );
   server.begin();
 
-  xTaskCreatePinnedToCore(displayDigits, "DisplayLoop", 10000, NULL, 1, &mainTask, 1);
-
-  // loadCheck();
-  //loadCheck();
-
   if (WiFi.status() != WL_CONNECTED)
   {
     digits = 123456; // Demo Modus
