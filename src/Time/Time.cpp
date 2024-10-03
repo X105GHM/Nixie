@@ -83,6 +83,7 @@ if (!getLocalTime(&timeInfo))
       dacWrite(PIN_JFET, 35);
       ACP(); // Blockierend
       dacWrite(PIN_JFET, Operating_Voltage);
+      digitalWrite(PIN_HSS_CUTOFF, LOW);
     }
     else
     {

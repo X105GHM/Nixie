@@ -5,91 +5,71 @@
 bool runningACP1 = false;
 bool runningACP2 = false;
 bool runningManualACP = false;
+int32_t previousDigits = -1; 
+
+void updateIfChanged(int32_t newDigits)
+{
+    if (newDigits != previousDigits) {
+        digits = newDigits;
+        updateDisplay(); 
+        previousDigits = newDigits;  
+    }
+}
 
 void ACP()
 {
-// Ziffern durchlaufen, um eine Kathodenvergiftung zu vermeiden
-
-  brightness = 100;
-
-  for (int number = 0; number <= 9; number++)
-  {
-    digits = 111111 * number;
-
-    delay(500);
-  }
-
-  delay(200);
-
-  runningACP1 = true;
-
-  for (int number = 0; number <= 9; number++)
-  {
-    digits = 101010 * number;
-
-    delay(100);
-  }
-
-  for (int i = 0; i <= 4; i++)
-  {
     for (int number = 0; number <= 9; number++)
     {
-      digits = 101010 * number;
-
-      delay(100);
+        updateIfChanged(111111 * number);
+        delay(500);
     }
-  }
-
-  runningACP1 = false;
-  runningManualACP = true;
-
-  for (int number = 0; number <= 240; number++)
-  {
-    singleDigit = (singleDigit + 1) % 60;
 
     delay(200);
-  }
+    runningACP1 = true;
 
-  singleDigit = 0;
-  runningManualACP = false;
-  runningACP2 = true;
-
-  for (int i = 0; i <= 4; i++)
-  {
     for (int number = 0; number <= 9; number++)
     {
-      digits = 10101 * number;
-
-      delay(50);
+        updateIfChanged(101010 * number);
+        delay(100);
     }
-  }
 
-  for (int number = 0; number <= 9; number++)
-  {
-    digits = (90909 - (10101 * number));
+    for (int i = 0; i <= 8; i++)
+    {
+        for (int number = 0; number <= 9; number++)
+        {
+            updateIfChanged(101010 * number);
+            delay(20);
+        }
+    }
 
-    delay(100);
-  }
+    runningACP1 = false;
+    singleDigit = 0;
+    runningACP2 = true;
 
-  runningACP2 = false;
+    for (int i = 0; i <= 4; i++)
+    {
+        for (int number = 0; number <= 9; number++)
+        {
+            updateIfChanged(10101 * number);
+            delay(50);
+        }
+    }
 
-  runningACP1 = true;
+    for (int number = 0; number <= 9; number++)
+    {
+        updateIfChanged(90909 - (10101 * number));
+        delay(100);
+    }
 
-  digits = 306060;
-  delay(4000);
-  digits = 407070;
-  delay(4000);
-  digits = 508080;
-  delay(4000);
-  digits = 609090;
-  delay(4000);
-  digits = 706060;
-  delay(4000);
-  digits = 807070;
-  delay(4000);
-  digits = 908080;
-  delay(4000);
-  digits = 309090;
-  delay(4000);
-  runningACP1 = false;
+    runningACP2 = false;
+    runningACP1 = true;
+
+    int32_t displaySequence[] = {306060, 407070, 508080, 609090, 706060, 807070, 908080, 309090};
+    for (int i = 0; i < 8; i++)
+    {
+        updateIfChanged(displaySequence[i]);
+        delay(4000);
+    }
+    digitalWrite(PIN_HSS_CUTOFF, LOW);
+    runningACP1 = false;
 }

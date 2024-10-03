@@ -33,7 +33,6 @@ void setup()
   adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_0);
   digitalWrite(PIN_OE, LOW);  // erzwingt alle Röhren aus // * Hier entsteht das Leuchten beim einstecken!
   digitalWrite(PIN_HSS_CUTOFF, HIGH);
-  brightness = 100;
   dacWrite(PIN_JFET, Operating_Voltage);
 
   Serial.begin(115200);
@@ -45,8 +44,6 @@ void setup()
   wifiManager.autoConnect("Nixie Clock");
 
   initTime("CET-1CEST,M3.5.0,M10.5.0/3");
-
-  xTaskCreatePinnedToCore(displayDigits, "DisplayLoop", 10000, NULL, 1, &mainTask, 1);
 
   //loadCheck();
 

@@ -31,7 +31,6 @@ void updateHSS()
 
 void loadCheck()
 {
-    brightness = 100;
     digits = 999999;
     displayEnabled = true;
     while (!HSS_load)

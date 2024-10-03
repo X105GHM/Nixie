@@ -35,7 +35,6 @@ void onButtonLongPress()
   dacWrite(PIN_JFET, ACP_Voltage); // 190V
   ACP(); // Blockierend
   dacWrite(PIN_JFET, Operating_Voltage); // 160V
-  delay(5000);
 }
 
 void buttonRoutine()
