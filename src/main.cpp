@@ -3,6 +3,7 @@
 #include "ACP/ACP.h"
 #include "Button/Button.h"
 #include "Digit_Control/Digit.h"
+#include "Melody/Melody.h"
 #include "HSS/HSS.h"
 #include "Time/Time.h"
 #include <driver/adc.h>

@@ -3,6 +3,7 @@
 #include "ACP/ACP.h"
 #include "Digit_Control/Digit.h"
 #include "Time/Time.h"
+#include "Melody/Melody.h"
 
 uint32_t buttonPressedTime = 0;
 bool buttonPreviouslyPressed = false;
@@ -74,9 +75,6 @@ bool buttonPressed = digitalRead(BUTTON_PIN) == LOW;
     }
     else
     { // Kurzer Tastendruck
-      digitalWrite(PIN_BUZZER, HIGH);
-      delay(1000);
-      digitalWrite(PIN_BUZZER, LOW);
       ESP.restart();
     }
     buttonPreviouslyPressed = false;

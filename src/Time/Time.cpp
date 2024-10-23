@@ -89,6 +89,17 @@ if (!getLocalTime(&timeInfo))
     {
       displayTime(); // Legt die anzuzeigenden Ziffern fest
     }
+
+    for (int i = 0; i < sizeof(gongHours)/sizeof(gongHours[0]); i++) {
+      if (timeInfo.tm_hour == gongHours[i] && timeInfo.tm_min == gongMinutes[i] && timeInfo.tm_sec == gongSeconds[i]) {
+        playGongTone();  // Gong-Ton abspielen
+      }
+    }
+
+    if(timeInfo.tm_hour > 18 && timeInfo.tm_hour < 6)
+    {
+      digitalWrite(PIN_HSS_CUTOFF, HIGH);
+    }
   }
   if (!displayEnabled)
   {
