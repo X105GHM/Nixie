@@ -19,6 +19,7 @@ constexpr int gongSeconds[numGongTimes] = {0,  0,  0,  0,  0,  0,  0,  0,  0,  0
 extern struct tm timeInfo;
 extern time_t prevTime;
 extern uint32_t lastRefresh;
+extern SemaphoreHandle_t gongSemaphore;
 
 // Funktionsdeklarationen
 void setTimezone(String timezone);

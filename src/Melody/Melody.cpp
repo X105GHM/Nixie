@@ -30,14 +30,8 @@ void playGongTone()
   {
     int divider = melody[thisNote + 1];
     int noteDuration = (divider > 0) ? (wholenote / divider) : (wholenote / abs(divider)) * 1.5;
-
-    // Spiele die Note für 90% der berechneten Dauer
     tone(PIN_BUZZER, melody[thisNote], noteDuration * 0.9);
-
-    // Warte auf das Ende der Note
     delay(noteDuration);
-
-    // Stoppe den Ton
     noTone(PIN_BUZZER);
   }
   delay(1600);

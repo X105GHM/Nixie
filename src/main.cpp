@@ -12,12 +12,47 @@
 //* 160V bis 170V bei allen Helligkeitsstufen, 180V bis 190V bei ACP.
 //  Erinnerung: Z-Diode 200V!!!
 
-
 // Konstanten
 constexpr uint8_t PIN_DIN = 13;
 constexpr uint8_t PIN_CLK = 14;
 
-TaskHandle_t mainTask;
+TaskHandle_t hssTaskHandle;
+TaskHandle_t timeTaskHandle;
+TaskHandle_t gongTaskHandle;
+
+// Task für HSS und Button-Routinen
+void hssTask(void *parameter)
+{
+  while (true)
+  {
+    readHSS();
+    updateHSS();
+    buttonRoutine();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+// Task für Zeitzyklen
+void timeTask(void *parameter)
+{
+  while (true)
+  {
+    timeCycle();
+    vTaskDelay(pdMS_TO_TICKS(10)); 
+  }
+}
+
+// Task für das Abspielen des Gong-Tons
+void gongTask(void *parameter)
+{
+  while (true)
+  {
+    if (xSemaphoreTake(gongSemaphore, portMAX_DELAY) == pdTRUE)
+    {
+      playGongTone();
+    }
+  }
+}
 
 void setup()
 {
@@ -29,10 +64,10 @@ void setup()
   pinMode(PIN_BUZZER, OUTPUT);
   pinMode(PIN_JFET, OUTPUT);
   pinMode(PIN_HV_LED, OUTPUT);
-  pinMode(PIN_RELAY, OUTPUT);  //* Kein Ticker ? ---> Jumper X2 Ziehen          Wenn nicht Tickt aber Jumper steckt ---> U1 (F2)
+  pinMode(PIN_RELAY, OUTPUT); //* Kein Ticker ? ---> Jumper X2 Ziehen          Wenn nicht Tickt aber Jumper steckt ---> U1 (F2)
   adc1_config_width(ADC_WIDTH_BIT_12);
   adc1_config_channel_atten(ADC1_CHANNEL_4, ADC_ATTEN_DB_0);
-  digitalWrite(PIN_OE, LOW);  // erzwingt alle Röhren aus // * Hier entsteht das Leuchten beim einstecken!
+  digitalWrite(PIN_OE, LOW); // erzwingt alle Röhren aus // * Hier entsteht das Leuchten beim einstecken!
   digitalWrite(PIN_HSS_CUTOFF, HIGH);
   dacWrite(PIN_JFET, Operating_Voltage);
 
@@ -53,15 +88,11 @@ void setup()
     digits = 123456; // Demo Modus
     displayEnabled = true;
   }
-}
 
-void loop()
-{
-  readHSS();
+  // FreeRTOS-Tasks
+  xTaskCreatePinnedToCore(hssTask, "HSSTask", 4096, NULL, 1, &hssTaskHandle, 1); // Core 1
+  xTaskCreatePinnedToCore(timeTask, "TimeTask", 4096, NULL, 1, &timeTaskHandle, 0); // Core 0
+  xTaskCreatePinnedToCore(gongTask, "GongTask", 4096, NULL, 1, &gongTaskHandle, 1); // Core 1
 
-  updateHSS();
-
-  buttonRoutine();
-
-  timeCycle();
+  vTaskDelete(NULL);
 }

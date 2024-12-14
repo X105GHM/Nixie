@@ -57,7 +57,7 @@ if (!getLocalTime(&timeInfo))
   }
   time_t nowTime = mktime(&timeInfo);
   if (nowTime != prevTime)
-  { // Aktualisien die Zeit jede Sekunde
+  { // Aktualisiert die Zeit jede Sekunde
     prevTime = nowTime;
 
     Relay_State = !Relay_State;
@@ -92,11 +92,11 @@ if (!getLocalTime(&timeInfo))
 
     for (int i = 0; i < sizeof(gongHours)/sizeof(gongHours[0]); i++) {
       if (timeInfo.tm_hour == gongHours[i] && timeInfo.tm_min == gongMinutes[i] && timeInfo.tm_sec == gongSeconds[i]) {
-        playGongTone();  // Gong-Ton abspielen
+        xSemaphoreGive(gongSemaphore);  // Gong-Ton abspielen
       }
     }
 
-    if(timeInfo.tm_hour > 18 && timeInfo.tm_hour < 6)
+    if(timeInfo.tm_hour > 16 && timeInfo.tm_hour < 6)
     {
       digitalWrite(PIN_HSS_CUTOFF, HIGH);
     }
