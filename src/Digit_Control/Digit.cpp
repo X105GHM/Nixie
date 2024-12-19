@@ -17,29 +17,21 @@ void displayDigits()
 {
     if (!displayEnabled)
     {
-        return;
+        return; // Wenn Display deaktiviert, keine Aktion
     }
 
     long digitsCopy;
     memcpy(&digitsCopy, &digits, sizeof(long));
 
-    digitalWrite(PIN_OE, LOW); // Dateneingabe zulassen (transparenter Modus, alle Ausgänge sind LOW)
+    digitalWrite(PIN_OE, LOW); // Dateneingabe zulassen
     unsigned long var32 = 0;
 
     //---------------------------------- REG 1 -----------------------------------------------
     var32 = 0; // 32 Bit alle auf 0 initialisieren
 
-    if (!runningACP1)
-    {
-        var32 |= (unsigned long)(symbolArray[digitsCopy % 10]) << 20; // s2
-    }
-    digitsCopy /= 10;
-
-    if (!runningACP2)
-    {
-        var32 |= (unsigned long)(symbolArray[digitsCopy % 10]) << 10; // s1
-    }
-    digitsCopy /= 10;
+    // Sekundenziffern explizit deaktivieren
+    var32 |= 0 << 20; // s2 aus
+    var32 |= 0 << 10; // s1 aus
 
     if (!runningACP1)
     {
@@ -78,7 +70,7 @@ void displayDigits()
     SPI.transfer(var32 >> 8);
     SPI.transfer(var32);
 
-    digitalWrite(PIN_OE, HIGH);  // Daten zwischenspeichern (aktiviert HV-Ausgänge entsprechend den Registern)
+    digitalWrite(PIN_OE, HIGH);  // Aktiviert HV-Ausgänge
 }
 
 void updateDisplay()

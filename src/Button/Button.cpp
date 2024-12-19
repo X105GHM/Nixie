@@ -3,6 +3,7 @@
 #include "ACP/ACP.h"
 #include "Digit_Control/Digit.h"
 #include "Time/Time.h"
+#include "Melody/Melody.h"
 
 uint32_t buttonPressedTime = 0;
 bool buttonPreviouslyPressed = false;

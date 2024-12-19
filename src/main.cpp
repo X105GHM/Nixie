@@ -3,20 +3,26 @@
 #include "ACP/ACP.h"
 #include "Button/Button.h"
 #include "Digit_Control/Digit.h"
+#include "Melody/Melody.h"
 #include "HSS/HSS.h"
 #include "Time/Time.h"
 #include <driver/adc.h>
+#include "HTTP-Server/HTTP-Server.h"
 
 //* Der DAC-Wert muss für jede Uhr individuell angepasst werden.
 //* 160V bis 170V bei allen Helligkeitsstufen, 180V bis 190V bei ACP.
 //  Erinnerung: Z-Diode 200V!!!
 
+int32_t currentDigits = 0; // Standardpreis: 2.50 als ganze Zahl (250)
+bool isDisplayActive = false;
 
 // Konstanten
 constexpr uint8_t PIN_DIN = 13;
 constexpr uint8_t PIN_CLK = 14;
 
 TaskHandle_t mainTask;
+
+HTTP_Server httpServer;
 
 void setup()
 {
@@ -41,7 +47,9 @@ void setup()
   SPI.setDataMode(SPI_MODE2);
   SPI.setClockDivider(SPI_CLOCK_DIV8); // SCK = 16MHz/8 = 2MHz
 
-  wifiManager.autoConnect("Nixie Clock");
+  httpServer.begin();
+
+  /***wifiManager.autoConnect("Nixie Clock");
 
   initTime("CET-1CEST,M3.5.0,M10.5.0/3");
 
@@ -52,15 +60,57 @@ void setup()
     digits = 123456; // Demo Modus
     displayEnabled = true;
   }
+  ***/
 }
 
 void loop()
 {
-  readHSS();
+     // Verarbeite HTTP-Anfragen
+    httpServer.handleClient();
 
-  updateHSS();
+    // Prüfe, ob eine neue Zahl eingegeben wurde oder die Röhren ausgeschaltet sind
+    int32_t newDigits = httpServer.getDigits();
+    if (httpServer.isDisplayEnabled() && (newDigits != currentDigits || !displayEnabled))
+    {
+        currentDigits = newDigits;
+        digits = currentDigits;
 
-  buttonRoutine();
+        if (!displayEnabled)
+        {
+            displayEnabled = true;  // Röhren aktivieren
+            isDisplayActive = true;
+        }
 
-  timeCycle();
+        updateHSS();     // Hochspannung aktualisieren
+        updateDisplay(); // Anzeige aktualisieren
+    }
+    else if (!httpServer.isDisplayEnabled() && isDisplayActive)
+    {
+        // Spannung deaktivieren, wenn keine Anzeige
+        displayEnabled = false;
+        isDisplayActive = false;
+        updateHSS();
+    }
+
+    // Buzzer aktivieren
+    if (httpServer.isBuzzerActive())
+    {
+        playGongTone();
+    }
+
+    // HSS überwachen
+    readHSS();
+    updateHSS();
+
+    // HV-LED steuern
+    if (HSS_V > 60.0 && HSS_LED == false) {
+        digitalWrite(PIN_HV_LED, HIGH);
+        HSS_LED = true;
+    } else if (HSS_V < 60.0 && HSS_LED == true) {
+        digitalWrite(PIN_HV_LED, LOW);
+        HSS_LED = false;
+    }
+
+    // buttonRoutine();
+    // timeCycle();
 }

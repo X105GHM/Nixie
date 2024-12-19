@@ -7,7 +7,6 @@
 // Konstanten
 constexpr uint8_t BUTTON_PIN = 0;
 constexpr uint8_t FUNC_BUTTON_PIN = 23;
-constexpr uint8_t PIN_BUZZER = 22;
 constexpr uint8_t PIN_RELAY = 12;
 
 // Globale Variablen
