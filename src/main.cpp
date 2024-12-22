@@ -65,10 +65,8 @@ void setup()
 
 void loop()
 {
-     // Verarbeite HTTP-Anfragen
     httpServer.handleClient();
 
-    // Prüfe, ob eine neue Zahl eingegeben wurde oder die Röhren ausgeschaltet sind
     int32_t newDigits = httpServer.getDigits();
     if (httpServer.isDisplayEnabled() && (newDigits != currentDigits || !displayEnabled))
     {
@@ -77,32 +75,28 @@ void loop()
 
         if (!displayEnabled)
         {
-            displayEnabled = true;  // Röhren aktivieren
+            displayEnabled = true; 
             isDisplayActive = true;
         }
 
-        updateHSS();     // Hochspannung aktualisieren
-        updateDisplay(); // Anzeige aktualisieren
+        updateHSS();    
+        updateDisplay(); 
     }
     else if (!httpServer.isDisplayEnabled() && isDisplayActive)
     {
-        // Spannung deaktivieren, wenn keine Anzeige
         displayEnabled = false;
         isDisplayActive = false;
         updateHSS();
     }
 
-    // Buzzer aktivieren
     if (httpServer.isBuzzerActive())
     {
         playGongTone();
     }
 
-    // HSS überwachen
     readHSS();
     updateHSS();
 
-    // HV-LED steuern
     if (HSS_V > 60.0 && HSS_LED == false) {
         digitalWrite(PIN_HV_LED, HIGH);
         HSS_LED = true;
