@@ -64,7 +64,11 @@ void HTTPHandler::handleInfo() {
     jsonResponse += "  \"SSID\": \"" + ssid + "\",\n";
     jsonResponse += "  \"Password\": \"" + password + "\",\n";
     jsonResponse += "  \"DisplayEnabled\": " + String(displayEnabled ? "true" : "false") + ",\n";
+<<<<<<< HEAD
     jsonResponse += "  \"HSS_Voltage\": " + String(HSS_V * 1.5) + ",\n";
+=======
+    jsonResponse += "  \"HSS_Voltage\": " + String(HSS_V) + ",\n";
+>>>>>>> 2ace3522f15348243c7aeee55c3d62dd9b11a407
     jsonResponse += "  \"Melody\": \"" + String("Nokia") + "\",\n";
     jsonResponse += "  \"FreeHeap\": " + String(freeHeap) + ",\n";
     jsonResponse += "  \"ChipId\": \"" + String(chipId, HEX) + "\",\n";
