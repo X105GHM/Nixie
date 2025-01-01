@@ -9,10 +9,12 @@ struct tm timeInfo;
 time_t prevTime = 0;
 uint32_t lastRefresh = 0;
 
+SemaphoreHandle_t gongSemaphore = xSemaphoreCreateBinary();
+
 void setTimezone(String timezone)
 {
   Serial.printf("  Setting Timezone to %s\n", timezone.c_str());
-  setenv("TZ", timezone.c_str(), 1);    // * Passe die TZ an.  Die Uhreinstellungen werden angepasst, um die neue Ortszeit anzuzeigen
+  setenv("TZ", timezone.c_str(), 1); // * Passe die TZ an.  Die Uhreinstellungen werden angepasst, um die neue Ortszeit anzuzeigen
   tzset();
 }
 
@@ -46,9 +48,9 @@ void blinkError()
   }
 }
 
-void timeCycle() 
+void timeCycle()
 {
-if (!getLocalTime(&timeInfo))
+  if (!getLocalTime(&timeInfo))
   {
     Serial.println("Failed to obtain time");
     blinkError();
@@ -65,14 +67,17 @@ if (!getLocalTime(&timeInfo))
     digitalWrite(PIN_RELAY, Relay_State);
 
     // HV LED
-    if (HSS_V > 60.0 && HSS_LED == false) {
+    if (HSS_V > 60.0 && HSS_LED == false)
+    {
       digitalWrite(PIN_HV_LED, HIGH);
       HSS_LED = true;
-    } else if (HSS_V < 60.0 && HSS_LED == true) {
+    }
+    else if (HSS_V < 60.0 && HSS_LED == true)
+    {
       digitalWrite(PIN_HV_LED, LOW);
       HSS_LED = false;
     }
-  
+
     if (timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 50 && timeInfo.tm_sec < 55)
     {
       displayDate(); // legt die anzuzeigenden Ziffern fest
@@ -90,15 +95,17 @@ if (!getLocalTime(&timeInfo))
       displayTime(); // Legt die anzuzeigenden Ziffern fest
     }
 
-    for (int i = 0; i < sizeof(gongHours)/sizeof(gongHours[0]); i++) {
-      if (timeInfo.tm_hour == gongHours[i] && timeInfo.tm_min == gongMinutes[i] && timeInfo.tm_sec == gongSeconds[i]) {
-        xSemaphoreGive(gongSemaphore);  // Gong-Ton abspielen
+    for (int i = 0; i < sizeof(gongHours) / sizeof(gongHours[0]); i++)
+    {
+      if (timeInfo.tm_hour == gongHours[i] && timeInfo.tm_min == gongMinutes[i] && timeInfo.tm_sec == gongSeconds[i])
+      {
+        xSemaphoreGive(gongSemaphore); // Gong-Ton abspielen
       }
     }
 
-    if(timeInfo.tm_hour > 16 && timeInfo.tm_hour < 6)
+    if (timeInfo.tm_hour > 16 || timeInfo.tm_hour < 6)
     {
-      digitalWrite(PIN_HSS_CUTOFF, HIGH);
+      displayEnabled = false;
     }
   }
 }

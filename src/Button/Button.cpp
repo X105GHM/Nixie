@@ -32,6 +32,7 @@ void onButtonLongPress()
   }
   displayDate();
   delay(5000);
+  displayIP();
   digitalWrite(PIN_RELAY, LOW);
   dacWrite(PIN_JFET, ACP_Voltage); // 190V
   ACP(); // Blockierend

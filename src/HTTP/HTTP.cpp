@@ -1,10 +1,8 @@
 #include "HTTP/HTTP.h"
-#include "HSS/HSS.h"
-#include "Digit_Control/Digit.h"
-#include "Arduino.h"
-#include <WebServer.h>
 #include <WiFiManager.h>
-#include <ArduinoJson.h>
+
+extern bool displayEnabled;
+extern float HSS_V;
 
 HTTPHandler::HTTPHandler(int port) : server(port) {}
 
@@ -29,7 +27,7 @@ void HTTPHandler::begin() {
         xSemaphoreGive(gongSemaphore);
     });
 
-    server.on("/get/info?", HTTP_GET, [this]() {
+    server.on("/get/info", HTTP_GET, [this]() {
         handleInfo();
     });
 
@@ -47,7 +45,6 @@ void HTTPHandler::handleReset() {
 }
 
 void HTTPHandler::handleInfo() {
-
     WiFiManager wm;
     String ssid = wm.getWiFiSSID();
     String password = wm.getWiFiPass();
@@ -62,27 +59,23 @@ void HTTPHandler::handleInfo() {
     uint32_t cpuFreq = ESP.getCpuFreqMHz();
     String sdkVersion = ESP.getSdkVersion();
 
-    StaticJsonDocument<1024> jsonDoc;
-    jsonDoc["Chip"] = chipModel;
-    jsonDoc["SSID"] = ssid;
-    jsonDoc["Password"] = password;
-    jsonDoc["DisplayEnabled"] = displayEnabled;
-    jsonDoc["HSS_Voltage"] = HSS_V;
-    jsonDoc["Melody"] = melodyID;
-    jsonDoc["FreeHeap"] = freeHeap;
-    jsonDoc["ChipId"] = String(chipId, HEX);
-    jsonDoc["FlashSize"] = flashSize;
-    jsonDoc["FlashSpeed"] = flashSpeed;
-    jsonDoc["SketchSize"] = sketchSize;
-    jsonDoc["SketchFreeSpace"] = sketchFreeSpace;
-    jsonDoc["CpuFrequencyMHz"] = cpuFreq;
-    jsonDoc["SdkVersion"] = sdkVersion;
-    jsonDoc["Autor"] = "X105GHM";
-
-    String jsonResponse;
-    serializeJson(jsonDoc, jsonResponse);
+    String jsonResponse = "{\n";
+    jsonResponse += "  \"Chip\": \"" + chipModel + "\",\n";
+    jsonResponse += "  \"SSID\": \"" + ssid + "\",\n";
+    jsonResponse += "  \"Password\": \"" + password + "\",\n";
+    jsonResponse += "  \"DisplayEnabled\": " + String(displayEnabled ? "true" : "false") + ",\n";
+    jsonResponse += "  \"HSS_Voltage\": " + String(HSS_V) + ",\n";
+    jsonResponse += "  \"Melody\": \"" + String("Nokia") + "\",\n";
+    jsonResponse += "  \"FreeHeap\": " + String(freeHeap) + ",\n";
+    jsonResponse += "  \"ChipId\": \"" + String(chipId, HEX) + "\",\n";
+    jsonResponse += "  \"FlashSize\": " + String(flashSize) + ",\n";
+    jsonResponse += "  \"FlashSpeed\": " + String(flashSpeed) + ",\n";
+    jsonResponse += "  \"SketchSize\": " + String(sketchSize) + ",\n";
+    jsonResponse += "  \"SketchFreeSpace\": " + String(sketchFreeSpace) + ",\n";
+    jsonResponse += "  \"CpuFrequencyMHz\": " + String(cpuFreq) + ",\n";
+    jsonResponse += "  \"SdkVersion\": \"" + sdkVersion + "\",\n";
+    jsonResponse += "  \"Autor\": \"" + String("X105GHM") + "\"\n";
+    jsonResponse += "}";
 
     server.send(200, "application/json", jsonResponse);
 }
-
-

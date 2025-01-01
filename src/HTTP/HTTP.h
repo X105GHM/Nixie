@@ -1,10 +1,8 @@
 #ifndef HTTP_HANDLER_H
 #define HTTP_HANDLER_H
+#include <WebServer.h>
 
 extern SemaphoreHandle_t gongSemaphore;
-extern bool displayEnabled;
-extern float HSS_V;
-extern String melodyID;
 
 class HTTPHandler {
 private:
