@@ -13,6 +13,8 @@ bool funcButtonPreviouslyPressed = false;
 
 WiFiManager wifiManager;
 
+extern TaskHandle_t timeTaskHandle;
+
 void onButtonPress()
 {
   if (!runningManualACP)
@@ -25,6 +27,7 @@ void onButtonPress()
 
 void onButtonLongPress()
 {
+  vTaskSuspend(timeTaskHandle);
   if (runningManualACP)
   {
     runningManualACP = false;
@@ -32,10 +35,12 @@ void onButtonLongPress()
   }
   displayDate();
   delay(5000);
+  displayIP();
   digitalWrite(PIN_RELAY, LOW);
   dacWrite(PIN_JFET, ACP_Voltage); // 190V
   ACP(); // Blockierend
   dacWrite(PIN_JFET, Operating_Voltage); // 160V
+  vTaskResume(timeTaskHandle);
 }
 
 void buttonRoutine()

@@ -19,10 +19,12 @@ TaskHandle_t gongTaskHandle;
 TaskHandle_t httpTaskHandle;
 HTTPHandler httpHandler;
 
+bool initWifi = false;
+
 // Task für HSS und Button-Routinen
 void hssTask(void *parameter)
 {
-  while (true)
+  while (init)
   {
     readHSS();
     updateHSS();
@@ -34,7 +36,7 @@ void hssTask(void *parameter)
 // Task für Zeitzyklen
 void timeTask(void *parameter)
 {
-  while (true)
+  while (init)
   {
     timeCycle();
     vTaskDelay(pdMS_TO_TICKS(10)); 
@@ -44,7 +46,7 @@ void timeTask(void *parameter)
 // Task für das Abspielen des Gong-Tons
 void gongTask(void *parameter)
 {
-  while (true)
+  while (init)
   {
     if (xSemaphoreTake(gongSemaphore, portMAX_DELAY) == pdTRUE)
     {
@@ -56,7 +58,7 @@ void gongTask(void *parameter)
 // Task für HTTP-Client
 void httpTask(void *parameter)
 {
-  while (true)
+  while (init)
   {
     httpHandler.handleClient();
     vTaskDelay(pdMS_TO_TICKS(10)); 
@@ -98,17 +100,22 @@ void setup()
     displayEnabled = true;
   }
 
-
   // FreeRTOS-Tasks
   xTaskCreatePinnedToCore(hssTask , "HSSTask" , 4096, NULL, 1, & hssTaskHandle, 1); // Core 1
   xTaskCreatePinnedToCore(timeTask, "TimeTask", 4096, NULL, 1, &timeTaskHandle, 0); // Core 0
   xTaskCreatePinnedToCore(gongTask, "GongTask", 4096, NULL, 1, &gongTaskHandle, 1); // Core 1
-  xTaskCreatePinnedToCore(timeTask, "HTTPTask", 4096, NULL, 2, &httpTaskHandle, 0); // Core 0
-
-  httpHandler.begin();
-
-  Serial.print("Local IP: ");
-  Serial.println(WiFi.localIP().toString());
-
-  vTaskDelete(NULL);
+  xTaskCreatePinnedToCore(httpTask, "HTTPTask", 4096, NULL, 2, &httpTaskHandle, 0); // Core 0
 }
+
+void loop()
+{
+  if(WiFi.status() == WL_CONNECTED)
+  {
+    initWifi = true;
+    httpHandler.begin();
+    Serial.print("Local IP: ");
+    Serial.println(WiFi.localIP().toString());
+    displayEnabled = true;
+    vTaskDelete(NULL);
+  }
+};

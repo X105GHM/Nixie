@@ -5,8 +5,9 @@
 
 bool displayEnabled = false;
 bool Relay_State = false;
+int32_t previousDigits = -1;
 
-int32_t digits = 0; 
+int32_t digits = 0;
 /* Zahl, die angezeigt werden soll, negativ bedeutet, dass nur 4 Ziffern angezeigt werden (zweite Positionen sind leer).
    0-9 ist die erste Röhre links, 10-19 die zweite Röhre usw. */
 
@@ -78,7 +79,7 @@ void displayDigits()
     SPI.transfer(var32 >> 8);
     SPI.transfer(var32);
 
-    digitalWrite(PIN_OE, HIGH);  // Daten zwischenspeichern (aktiviert HV-Ausgänge entsprechend den Registern)
+    digitalWrite(PIN_OE, HIGH); // Daten zwischenspeichern (aktiviert HV-Ausgänge entsprechend den Registern)
 }
 
 void updateDisplay()
@@ -92,43 +93,56 @@ void displayTime()
     digits += timeInfo.tm_hour * 10000;
     digits += timeInfo.tm_min * 100;
     digits += timeInfo.tm_sec;
-    updateDisplay(); 
+    updateDisplay();
 }
 
 void displayDate()
 {
     digits = 0;
     digits += timeInfo.tm_mday * 10000;
-    digits += (timeInfo.tm_mon + 1) * 100;  // Monat ist 0-11, zum Anzeigen +1
+    digits += (timeInfo.tm_mon + 1) * 100; // Monat ist 0-11, zum Anzeigen +1
     digits += (timeInfo.tm_year + 1900) % 100;
     updateDisplay();
 }
 
+void updateIfChanged(int32_t newDigits)
+{
+    if (newDigits != previousDigits)
+    {
+        digits = newDigits;
+        updateDisplay();
+        previousDigits = newDigits;
+    }
+}
+
 void displayIP()
 {
-    digits = 0;
-    runningACP1 = true;
+    bool runningACP2 = true;
 
     IPAddress ip = WiFi.localIP();
-    String ipStr = ip.toString(); 
+    String ipStr = ip.toString();
 
-    String formattedBlock = "000000";
-    int blockIndex = 0; 
+    String formattedBlock = "00000";
+    int blockIndex = 0;
 
-    for (size_t i = 0; i < ipStr.length(); i++) {
-        if (ipStr[i] != '.') {
+    for (size_t i = 0; i < ipStr.length(); i++)
+    {
+        if (ipStr[i] != '.')
+        {
             formattedBlock[blockIndex * 2] = ipStr[i];
-            blockIndex++;
+            blockIndex ++;
         }
 
-        if (ipStr[i] == '.' || i == ipStr.length() - 1) {
-            digits = formattedBlock.toInt(); 
-            delay(5000); 
+        if (ipStr[i] == '.' || i == ipStr.length() - 1)
+        {
+            int32_t currentDigits = formattedBlock.toInt();
+            updateIfChanged(currentDigits);
 
-            formattedBlock = "000000";
+            delay(5000);
+
+            formattedBlock = "00000";
             blockIndex = 0;
         }
     }
-    digits = 0;
-    runningACP1 = false;
+    runningACP2 = false;
 }

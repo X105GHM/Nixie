@@ -5,17 +5,7 @@
 bool runningACP1 = false;
 bool runningACP2 = false;
 bool runningManualACP = false;
-int32_t previousDigits = -1;
 
-void updateIfChanged(int32_t newDigits)
-{
-  if (newDigits != previousDigits)
-  {
-    digits = newDigits;
-    updateDisplay();
-    previousDigits = newDigits;
-  }
-}
 
 void ACP()
 {

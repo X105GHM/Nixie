@@ -14,10 +14,12 @@ extern bool Relay_State;
 extern int32_t digits;
 extern byte singleDigit;
 extern uint32_t symbolArray[10];
+extern int32_t previousDigits;
 
 // Funktionsdeklarationen
 void displayDigits();
 void updateDisplay();
+void updateIfChanged(int32_t newDigits);
 void displayTime();
 void displayDate();
 void displayIP();
