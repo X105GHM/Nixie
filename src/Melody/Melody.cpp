@@ -31,8 +31,7 @@ void playGongTone()
     int divider = melody[thisNote + 1];
     int noteDuration = (divider > 0) ? (wholenote / divider) : (wholenote / abs(divider)) * 1.5;
     tone(PIN_BUZZER, melody[thisNote], noteDuration * 0.9);
-    delay(noteDuration);
+    vTaskDelay(noteDuration);
     noTone(PIN_BUZZER);
   }
-  delay(1600);
 }

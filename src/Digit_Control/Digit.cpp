@@ -53,7 +53,7 @@ void displayDigits()
     SPI.transfer(var32);
 
     //---------------------------------- REG 0 -----------------------------------------------
-    var32 = 0;
+    var32 = 0; // 32 Bit alle auf 0 initialisieren
 
     if (!runningACP2)
     {
@@ -102,4 +102,33 @@ void displayDate()
     digits += (timeInfo.tm_mon + 1) * 100;  // Monat ist 0-11, zum Anzeigen +1
     digits += (timeInfo.tm_year + 1900) % 100;
     updateDisplay();
+}
+
+void displayIP()
+{
+    digits = 0;
+    runningACP1 = true;
+
+    IPAddress ip = WiFi.localIP();
+    String ipStr = ip.toString(); 
+
+    String formattedBlock = "000000";
+    int blockIndex = 0; 
+
+    for (size_t i = 0; i < ipStr.length(); i++) {
+        if (ipStr[i] != '.') {
+            formattedBlock[blockIndex * 2] = ipStr[i];
+            blockIndex++;
+        }
+
+        if (ipStr[i] == '.' || i == ipStr.length() - 1) {
+            digits = formattedBlock.toInt(); 
+            delay(5000); 
+
+            formattedBlock = "000000";
+            blockIndex = 0;
+        }
+    }
+    digits = 0;
+    runningACP1 = false;
 }

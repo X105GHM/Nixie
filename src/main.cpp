@@ -6,19 +6,18 @@
 #include "Melody/Melody.h"
 #include "HSS/HSS.h"
 #include "Time/Time.h"
+#include "HTTP/HTTP.h"
 #include <driver/adc.h>
 
 //* Der DAC-Wert muss für jede Uhr individuell angepasst werden.
 //* 160V bis 170V bei allen Helligkeitsstufen, 180V bis 190V bei ACP.
 //  Erinnerung: Z-Diode 200V!!!
 
-// Konstanten
-constexpr uint8_t PIN_DIN = 13;
-constexpr uint8_t PIN_CLK = 14;
-
 TaskHandle_t hssTaskHandle;
 TaskHandle_t timeTaskHandle;
 TaskHandle_t gongTaskHandle;
+TaskHandle_t httpTaskHandle;
+HTTPHandler httpHandler;
 
 // Task für HSS und Button-Routinen
 void hssTask(void *parameter)
@@ -51,6 +50,16 @@ void gongTask(void *parameter)
     {
       playGongTone();
     }
+  }
+}
+
+// Task für HTTP-Client
+void httpTask(void *parameter)
+{
+  while (true)
+  {
+    httpHandler.handleClient();
+    vTaskDelay(pdMS_TO_TICKS(10)); 
   }
 }
 
@@ -89,10 +98,17 @@ void setup()
     displayEnabled = true;
   }
 
+
   // FreeRTOS-Tasks
-  xTaskCreatePinnedToCore(hssTask, "HSSTask", 4096, NULL, 1, &hssTaskHandle, 1); // Core 1
+  xTaskCreatePinnedToCore(hssTask , "HSSTask" , 4096, NULL, 1, & hssTaskHandle, 1); // Core 1
   xTaskCreatePinnedToCore(timeTask, "TimeTask", 4096, NULL, 1, &timeTaskHandle, 0); // Core 0
   xTaskCreatePinnedToCore(gongTask, "GongTask", 4096, NULL, 1, &gongTaskHandle, 1); // Core 1
+  xTaskCreatePinnedToCore(timeTask, "HTTPTask", 4096, NULL, 2, &httpTaskHandle, 0); // Core 0
+
+  httpHandler.begin();
+
+  Serial.print("Local IP: ");
+  Serial.println(WiFi.localIP().toString());
 
   vTaskDelete(NULL);
 }

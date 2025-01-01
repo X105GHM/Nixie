@@ -4,6 +4,10 @@
 #include <Arduino.h>
 #include <SPI.h>
 
+// Konstanten
+constexpr uint8_t PIN_DIN = 13;
+constexpr uint8_t PIN_CLK = 14;
+
 // Globale Variablen
 extern bool displayEnabled;
 extern bool Relay_State;
@@ -16,5 +20,6 @@ void displayDigits();
 void updateDisplay();
 void displayTime();
 void displayDate();
+void displayIP();
 
 #endif // DISPLAY_CONTROL_H

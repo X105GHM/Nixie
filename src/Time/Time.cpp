@@ -40,9 +40,9 @@ void blinkError()
   for (int i = 0; i < 10; i++)
   {
     digitalWrite(PIN_LED, HIGH);
-    delay(100);
+    vTaskDelay(100);
     digitalWrite(PIN_LED, LOW);
-    delay(100);
+    vTaskDelay(100);
   }
 }
 
@@ -100,9 +100,5 @@ if (!getLocalTime(&timeInfo))
     {
       digitalWrite(PIN_HSS_CUTOFF, HIGH);
     }
-  }
-  if (!displayEnabled)
-  {
-    displayEnabled = true;
   }
 }
