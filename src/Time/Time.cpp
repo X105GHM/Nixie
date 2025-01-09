@@ -78,14 +78,14 @@ void timeCycle()
       HSS_LED = false;
     }
 
-    if (timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 50 && timeInfo.tm_sec < 55)
+    if (timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 50 && timeInfo.tm_sec < 55 && displayEnabled)
     {
       displayDate(); // legt die anzuzeigenden Ziffern fest
     }
-    else if ((timeInfo.tm_min == 57 && timeInfo.tm_sec == 10) || (timeInfo.tm_min == 27 && timeInfo.tm_sec == 10)) // at xx:57:10 and at xx:27:10
+    else if ((timeInfo.tm_min == 57 && timeInfo.tm_sec == 10) || (timeInfo.tm_min == 27 && timeInfo.tm_sec == 10) && displayEnabled) // at xx:57:10 and at xx:27:10
     {
       digitalWrite(PIN_RELAY, LOW);
-      dacWrite(PIN_JFET, 35);
+      dacWrite(PIN_JFET, ACP_Voltage);
       ACP(); // Blockierend
       dacWrite(PIN_JFET, Operating_Voltage);
       digitalWrite(PIN_HSS_CUTOFF, LOW);
@@ -103,9 +103,13 @@ void timeCycle()
       }
     }
 
-    if (timeInfo.tm_hour > 16 || timeInfo.tm_hour < 6)
+    if (timeInfo.tm_hour == 17 && timeInfo.tm_min == 00 && timeInfo.tm_sec == 00)
     {
       displayEnabled = false;
+    }
+    else if (timeInfo.tm_hour == 7 && timeInfo.tm_min == 00 && timeInfo.tm_sec == 00)
+    {
+      displayEnabled = true;
     }
   }
 }

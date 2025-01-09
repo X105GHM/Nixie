@@ -1,8 +1,12 @@
 #include "HTTP/HTTP.h"
+#include "ACP/ACP.h"
+#include "HSS/HSS.h"
+#include "Digit_Control/Digit.h"
 #include <WiFiManager.h>
 
 extern bool displayEnabled;
 extern float HSS_V;
+extern TaskHandle_t timeTaskHandle;
 
 HTTPHandler::HTTPHandler(int port) : server(port) {}
 
@@ -21,6 +25,39 @@ void HTTPHandler::begin() {
 
     server.on("/set/reset", HTTP_GET, [this]() {
         handleReset();
+    });
+
+    server.on("/set/ACP", HTTP_GET, [this]() {
+
+        if(displayEnabled)
+        {
+            vTaskSuspend(timeTaskHandle);
+            server.send(200, "text/plain", "ACP Routine");
+            dacWrite(PIN_JFET, ACP_Voltage);
+            ACP();
+            dacWrite(PIN_JFET, Operating_Voltage);
+            vTaskResume(timeTaskHandle);
+        }
+        else
+        {
+           server.send(200, "text/plain", "Display is not enabled"); 
+        }
+    });
+
+    server.on("/set/DATE", HTTP_GET, [this]() {
+
+        if(displayEnabled)
+        {
+            vTaskSuspend(timeTaskHandle);
+            server.send(200, "text/plain", "Date is shown");
+            displayDate();
+            delay(5000);
+            vTaskResume(timeTaskHandle);
+        }
+        else
+        {
+           server.send(200, "text/plain", "Display is not enabled"); 
+        }
     });
 
     server.on("/set/BUZZER", HTTP_GET, [this]() {

@@ -8,6 +8,9 @@
 #include "Time/Time.h"
 #include "HTTP/HTTP.h"
 #include <driver/adc.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 
 //* Der DAC-Wert muss für jede Uhr individuell angepasst werden.
 //* 160V bis 170V bei allen Helligkeitsstufen, 180V bis 190V bei ACP.
@@ -17,14 +20,11 @@ TaskHandle_t hssTaskHandle;
 TaskHandle_t timeTaskHandle;
 TaskHandle_t gongTaskHandle;
 TaskHandle_t httpTaskHandle;
-HTTPHandler httpHandler;
-
-bool initWifi = false;
 
 // Task für HSS und Button-Routinen
 void hssTask(void *parameter)
 {
-  while (init)
+  while (true)
   {
     readHSS();
     updateHSS();
@@ -36,7 +36,7 @@ void hssTask(void *parameter)
 // Task für Zeitzyklen
 void timeTask(void *parameter)
 {
-  while (init)
+  while (true)
   {
     timeCycle();
     vTaskDelay(pdMS_TO_TICKS(10)); 
@@ -46,7 +46,7 @@ void timeTask(void *parameter)
 // Task für das Abspielen des Gong-Tons
 void gongTask(void *parameter)
 {
-  while (init)
+  while (true)
   {
     if (xSemaphoreTake(gongSemaphore, portMAX_DELAY) == pdTRUE)
     {
@@ -56,9 +56,12 @@ void gongTask(void *parameter)
 }
 
 // Task für HTTP-Client
+
+HTTPHandler httpHandler;
+
 void httpTask(void *parameter)
 {
-  while (init)
+  while (true)
   {
     httpHandler.handleClient();
     vTaskDelay(pdMS_TO_TICKS(10)); 
@@ -111,11 +114,19 @@ void loop()
 {
   if(WiFi.status() == WL_CONNECTED)
   {
-    initWifi = true;
     httpHandler.begin();
     Serial.print("Local IP: ");
     Serial.println(WiFi.localIP().toString());
-    displayEnabled = true;
+    
+    if (timeInfo.tm_hour > 16 || timeInfo.tm_hour < 6)
+    {
+      displayEnabled = false;
+    }
+    else
+    {
+      displayEnabled = true;
+    }
+    
     vTaskDelete(NULL);
   }
 };
