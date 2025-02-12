@@ -87,8 +87,6 @@ void setup()
   digitalWrite(PIN_HSS_CUTOFF, HIGH);
   dacWrite(PIN_JFET, Operating_Voltage);
 
-  gongSemaphore = xSemaphoreCreateBinary();
-
   Serial.begin(115200);
 
   SPI.begin(PIN_CLK, -1, PIN_DIN, -1); // Wir nutzen nur clock und MOSI

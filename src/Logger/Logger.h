@@ -15,7 +15,7 @@ enum class LoggerType {
 
 class Logger {
 public:
-    static void log(LoggerType type, const String &message);
+    static void log(LoggerType type, const __FlashStringHelper* message);
 };
 
 #endif // LOGGER_H

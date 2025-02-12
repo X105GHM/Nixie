@@ -3,24 +3,18 @@
 
 #include <WebServer.h>
 #include "freertos/FreeRTOS.h"
-
-inline SemaphoreHandle_t gongSemaphore = nullptr;
+#include "Time/Time.h"
 
 class HTTPHandler {
 private:
-
     WebServer server;
     void handleReset();
     void handleInfo();
 
-
-
 public:
-
     HTTPHandler(int port = 80);
     void begin();
     void handleClient();
-
 };
 
 #endif // HTTP_HANDLER_H

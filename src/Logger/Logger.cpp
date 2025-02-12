@@ -14,14 +14,14 @@ static const __FlashStringHelper* getLoggerPrefix(LoggerType type) {
     }
 }
 
-void Logger::log(LoggerType type, const String &message) {
+void Logger::log(LoggerType type, const __FlashStringHelper* message) {
     Serial.println();
-    Serial.println(F("================================="));
+    Serial.println(F("========================================"));
     Serial.println(getLoggerPrefix(type));
-    Serial.println(F("--------------------------------------------------------"));
+    Serial.println(F("----------------------------------------"));                                                    
     Serial.println();
     Serial.println(message);
     Serial.println(); 
-    Serial.println(F("================================="));
+    Serial.println(F("========================================"));
     Serial.println();
 }

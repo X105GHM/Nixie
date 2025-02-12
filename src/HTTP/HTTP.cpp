@@ -3,20 +3,17 @@
 #include "HSS/HSS.h"
 #include "Digit_Control/Digit.h"
 #include "Logger/Logger.h"
+#include "Time/Time.h"
 #include <WiFiManager.h>
 
 extern bool displayEnabled;
 extern float HSS_V;
 extern TaskHandle_t timeTaskHandle;
+extern TimeControl timeControl;
 
 HTTPHandler::HTTPHandler(int port) : server(port) {}
 
 void HTTPHandler::begin() {
-    if (gongSemaphore == nullptr) {
-        gongSemaphore = xSemaphoreCreateBinary();
-        if(gongSemaphore == nullptr) 
-            Logger::log(LoggerType::HTTP, F("ERROR: Failed to create gongSemaphore"));
-    }
 
     server.on("/set/OFF", HTTP_GET, [this]() {
         displayEnabled = false;
@@ -66,22 +63,23 @@ void HTTPHandler::begin() {
     });
 
     server.on("/set/BUZZER", HTTP_GET, [this]() {
-    static unsigned long lastBuzzerTime = 0;
-    constexpr unsigned long debounceInterval = 10000;
-
-    unsigned long currentTime = millis();
-    if (currentTime - lastBuzzerTime < debounceInterval) {
-        return;
-    }
-    lastBuzzerTime = currentTime;
-    
-    if(gongSemaphore != nullptr) {
-        xSemaphoreGive(gongSemaphore);
-    } else {
-        Logger::log(LoggerType::HTTP, F("ERROR: gongSemaphore is not available"));
-    }
-});
-
+        static unsigned long lastBuzzerTime = 0;
+        constexpr unsigned long debounceInterval = 10000; // 10 Sekunden
+        unsigned long currentTime = millis();
+        if (currentTime - lastBuzzerTime < debounceInterval) {
+            server.send(200, "text/plain", "Timeout");
+            return;
+        }
+        lastBuzzerTime = currentTime;
+        
+        if (timeControl.getGongSemaphore() != nullptr) {
+            xSemaphoreGive(timeControl.getGongSemaphore());
+            server.send(200, "text/plain", "Ringing the gong");
+        } else {
+            Logger::log(LoggerType::HTTP, F("ERROR: gongSemaphore is not available"));
+            server.send(200, "text/plain", "ERROR: gongSemaphore is not available");
+        }
+    });
 
     server.on("/get/info", HTTP_GET, [this]() {
         Logger::log(LoggerType::HTTP, F("Info requested"));
@@ -97,13 +95,12 @@ void HTTPHandler::handleClient() {
 }
 
 void HTTPHandler::handleReset() {
-    Logger::log(LoggerType::HTTP, F("System reseting..."));
+    Logger::log(LoggerType::HTTP, F("System resetting..."));
     ESP.restart();
 }
 
 void HTTPHandler::handleInfo() {
     WiFiManager wm;
- 
     auto ssid = wm.getWiFiSSID();
     auto password = wm.getWiFiPass();
 
@@ -134,6 +131,6 @@ void HTTPHandler::handleInfo() {
     jsonResponse += String("  \"SdkVersion\": \"") + sdkVersion + String("\",\n");
     jsonResponse += "  \"Autor\": \"" + String("X105GHM") + "\"\n";
     jsonResponse += "}";
-
+    
     server.send(200, "application/json", jsonResponse);
 }
