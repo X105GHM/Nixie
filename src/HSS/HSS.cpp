@@ -9,27 +9,28 @@ bool samplesFilled = false;
 bool HSS_load = false;
 float HSS_V;
 
-void readHSS()
+HSSControl::HSSControl() 
+{}
+
+void HSSControl::readHSS()
 {
   int debuggspannung = analogReadMilliVolts(34);
   HSS_V = (debuggspannung / 1000.0) * 57;
 }
 
-void updateHSS()
+void HSSControl::updateHSS()
 {
   if (displayEnabled || runningACP1 || runningACP2 || runningManualACP)
   {
-    // Wenn die Anzeige aktiv ist oder spezielle Modi laufen, HSS aktivieren
     digitalWrite(PIN_HSS_CUTOFF, LOW);
   }
   else
   {
-    // Sonst HSS abschalten
     digitalWrite(PIN_HSS_CUTOFF, HIGH);
   }
 }
 
-void loadCheck()
+void HSSControl::loadCheck()
 {
     digits = 999999;
     displayEnabled = true;

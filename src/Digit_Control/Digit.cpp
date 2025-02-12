@@ -2,6 +2,12 @@
 #include "HSS/HSS.h"
 #include "ACP/ACP.h"
 #include "Time/Time.h"
+#include <WiFi.h>
+#include <cstring>
+
+extern TimeControl timeControl;
+extern bool runningACP1;
+extern bool runningACP2;
 
 bool displayEnabled = false;
 bool Relay_State = false;
@@ -90,18 +96,18 @@ void updateDisplay()
 void displayTime()
 {
     digits = 0;
-    digits += timeInfo.tm_hour * 10000;
-    digits += timeInfo.tm_min * 100;
-    digits += timeInfo.tm_sec;
+    digits += timeControl.timeInfo.tm_hour * 10000;
+    digits += timeControl.timeInfo.tm_min * 100;
+    digits += timeControl.timeInfo.tm_sec;
     updateDisplay();
 }
 
 void displayDate()
 {
     digits = 0;
-    digits += timeInfo.tm_mday * 10000;
-    digits += (timeInfo.tm_mon + 1) * 100; // Monat ist 0-11, zum Anzeigen +1
-    digits += (timeInfo.tm_year + 1900) % 100;
+    digits += timeControl.timeInfo.tm_mday * 10000;
+    digits += (timeControl.timeInfo.tm_mon + 1) * 100; // Monat ist 0-11, zum Anzeigen +1
+    digits += (timeControl.timeInfo.tm_year + 1900) % 100;
     updateDisplay();
 }
 

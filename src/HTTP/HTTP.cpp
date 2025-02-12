@@ -2,6 +2,7 @@
 #include "ACP/ACP.h"
 #include "HSS/HSS.h"
 #include "Digit_Control/Digit.h"
+#include "Logger/Logger.h"
 #include <WiFiManager.h>
 
 extern bool displayEnabled;
@@ -11,15 +12,21 @@ extern TaskHandle_t timeTaskHandle;
 HTTPHandler::HTTPHandler(int port) : server(port) {}
 
 void HTTPHandler::begin() {
+    if (gongSemaphore == nullptr) {
+        gongSemaphore = xSemaphoreCreateBinary();
+        if(gongSemaphore == nullptr) 
+            Logger::log(LoggerType::HTTP, F("ERROR: Failed to create gongSemaphore"));
+    }
+
     server.on("/set/OFF", HTTP_GET, [this]() {
         displayEnabled = false;
-        Serial.println("Display disabled");
+        Logger::log(LoggerType::HTTP, F("Display disabled"));
         server.send(200, "text/plain", "Display disabled");
     });
 
     server.on("/set/ON", HTTP_GET, [this]() {
         displayEnabled = true;
-        Serial.println("Display enabled");
+        Logger::log(LoggerType::HTTP, F("Display enabled"));
         server.send(200, "text/plain", "Display enabled");
     });
 
@@ -28,48 +35,61 @@ void HTTPHandler::begin() {
     });
 
     server.on("/set/ACP", HTTP_GET, [this]() {
-
-        if(displayEnabled)
-        {
+        if(displayEnabled) {
             vTaskSuspend(timeTaskHandle);
+            Logger::log(LoggerType::HTTP, F("ACP triggered"));
             server.send(200, "text/plain", "ACP Routine");
             dacWrite(PIN_JFET, ACP_Voltage);
             ACP();
             dacWrite(PIN_JFET, Operating_Voltage);
             vTaskResume(timeTaskHandle);
         }
-        else
-        {
-           server.send(200, "text/plain", "Display is not enabled"); 
+        else {
+            Logger::log(LoggerType::HTTP, F("ERROR: Display is not enabled"));
+            server.send(200, "text/plain", "Display is not enabled");
         }
     });
 
     server.on("/set/DATE", HTTP_GET, [this]() {
-
-        if(displayEnabled)
-        {
+        if(displayEnabled) {
             vTaskSuspend(timeTaskHandle);
+            Logger::log(LoggerType::HTTP, F("Date is shown"));
             server.send(200, "text/plain", "Date is shown");
             displayDate();
             delay(5000);
             vTaskResume(timeTaskHandle);
         }
-        else
-        {
-           server.send(200, "text/plain", "Display is not enabled"); 
+        else {
+            Logger::log(LoggerType::HTTP, F("ERROR: Display is not enabled"));
+            server.send(200, "text/plain", "Display is not enabled");
         }
     });
 
     server.on("/set/BUZZER", HTTP_GET, [this]() {
+    static unsigned long lastBuzzerTime = 0;
+    constexpr unsigned long debounceInterval = 10000;
+
+    unsigned long currentTime = millis();
+    if (currentTime - lastBuzzerTime < debounceInterval) {
+        return;
+    }
+    lastBuzzerTime = currentTime;
+    
+    if(gongSemaphore != nullptr) {
         xSemaphoreGive(gongSemaphore);
-    });
+    } else {
+        Logger::log(LoggerType::HTTP, F("ERROR: gongSemaphore is not available"));
+    }
+});
+
 
     server.on("/get/info", HTTP_GET, [this]() {
+        Logger::log(LoggerType::HTTP, F("Info requested"));
         handleInfo();
     });
 
     server.begin();
-    Serial.println("HTTP server started");
+    Logger::log(LoggerType::HTTP, F("HTTP server started"));
 }
 
 void HTTPHandler::handleClient() {
@@ -77,27 +97,28 @@ void HTTPHandler::handleClient() {
 }
 
 void HTTPHandler::handleReset() {
-    Serial.println("System resetting...");
+    Logger::log(LoggerType::HTTP, F("System reseting..."));
     ESP.restart();
 }
 
 void HTTPHandler::handleInfo() {
     WiFiManager wm;
-    String ssid = wm.getWiFiSSID();
-    String password = wm.getWiFiPass();
+ 
+    auto ssid = wm.getWiFiSSID();
+    auto password = wm.getWiFiPass();
 
-    String chipModel = ESP.getChipModel();
-    uint32_t freeHeap = ESP.getFreeHeap();
-    uint64_t chipId = ESP.getEfuseMac();
-    uint32_t flashSize = ESP.getFlashChipSize();
-    uint32_t flashSpeed = ESP.getFlashChipSpeed();
-    uint32_t sketchSize = ESP.getSketchSize();
-    uint32_t sketchFreeSpace = ESP.getFreeSketchSpace();
-    uint32_t cpuFreq = ESP.getCpuFreqMHz();
-    String sdkVersion = ESP.getSdkVersion();
+    auto chipModel = ESP.getChipModel();
+    auto freeHeap = ESP.getFreeHeap();
+    auto chipId = ESP.getEfuseMac();
+    auto flashSize = ESP.getFlashChipSize();
+    auto flashSpeed = ESP.getFlashChipSpeed();
+    auto sketchSize = ESP.getSketchSize();
+    auto sketchFreeSpace = ESP.getFreeSketchSpace();
+    auto cpuFreq = ESP.getCpuFreqMHz();
+    auto sdkVersion = ESP.getSdkVersion();
 
     String jsonResponse = "{\n";
-    jsonResponse += "  \"Chip\": \"" + chipModel + "\",\n";
+    jsonResponse += String("  \"Chip\": \"") + chipModel + String("\",\n");
     jsonResponse += "  \"SSID\": \"" + ssid + "\",\n";
     jsonResponse += "  \"Password\": \"" + password + "\",\n";
     jsonResponse += "  \"DisplayEnabled\": " + String(displayEnabled ? "true" : "false") + ",\n";
@@ -110,7 +131,7 @@ void HTTPHandler::handleInfo() {
     jsonResponse += "  \"SketchSize\": " + String(sketchSize) + ",\n";
     jsonResponse += "  \"SketchFreeSpace\": " + String(sketchFreeSpace) + ",\n";
     jsonResponse += "  \"CpuFrequencyMHz\": " + String(cpuFreq) + ",\n";
-    jsonResponse += "  \"SdkVersion\": \"" + sdkVersion + "\",\n";
+    jsonResponse += String("  \"SdkVersion\": \"") + sdkVersion + String("\",\n");
     jsonResponse += "  \"Autor\": \"" + String("X105GHM") + "\"\n";
     jsonResponse += "}";
 

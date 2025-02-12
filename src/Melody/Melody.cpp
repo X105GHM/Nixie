@@ -1,5 +1,6 @@
-#include "Melody/Melody.h"
-#include "Button/Button.h"
+#include "Melody.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 // Melodie-Array
 int melody[] = {

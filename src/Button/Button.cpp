@@ -4,6 +4,9 @@
 #include "Digit_Control/Digit.h"
 #include "Time/Time.h"
 #include "Melody/Melody.h"
+#include "Logger/Logger.h"
+#include <Arduino.h>
+#include <ESP.h>
 
 uint32_t buttonPressedTime = 0;
 bool buttonPreviouslyPressed = false;
@@ -15,7 +18,10 @@ WiFiManager wifiManager;
 
 extern TaskHandle_t timeTaskHandle;
 
-void onButtonPress()
+ButtonHandler::ButtonHandler()
+{}
+
+void ButtonHandler::onButtonPress()
 {
   if (!runningManualACP)
   {
@@ -25,7 +31,7 @@ void onButtonPress()
   singleDigit = (singleDigit + 1) % 60;
 }
 
-void onButtonLongPress()
+void ButtonHandler::onButtonLongPress()
 {
   vTaskSuspend(timeTaskHandle);
   if (runningManualACP)
@@ -43,10 +49,9 @@ void onButtonLongPress()
   vTaskResume(timeTaskHandle);
 }
 
-void buttonRoutine()
+void ButtonHandler::buttonRoutine()
 {
-bool buttonPressed = digitalRead(BUTTON_PIN) == LOW; 
-
+  bool buttonPressed = digitalRead(BUTTON_PIN) == LOW; 
   bool funcButtonPressed = digitalRead(FUNC_BUTTON_PIN) == LOW;
 
   if (buttonPressed && !buttonPreviouslyPressed)
@@ -72,7 +77,7 @@ bool buttonPressed = digitalRead(BUTTON_PIN) == LOW;
     funcButtonPressedTime = millis();
     funcButtonPreviouslyPressed = true;
   }
-  else if (!buttonPressed && buttonPreviouslyPressed)
+  else if (!funcButtonPressed && funcButtonPreviouslyPressed)
   {
     if (millis() - funcButtonPressedTime > 2000)
     { // Langer Tastendruck
@@ -82,17 +87,17 @@ bool buttonPressed = digitalRead(BUTTON_PIN) == LOW;
     { // Kurzer Tastendruck
       ESP.restart();
     }
-    buttonPreviouslyPressed = false;
+    funcButtonPreviouslyPressed = false;
   }
 }
 
-void eraseWiFiCredentialsAndRestart()
+void ButtonHandler::eraseWiFiCredentialsAndRestart()
 {
-  Serial.println("Lösche gespeicherte WLAN-Daten...");
+  Logger::log(LoggerType::BUTTON, F("Deleting saved WiFi credentials..."));
   wifiManager.resetSettings();
 
   delay(1000);
 
-  Serial.println("Starte ESP32 neu...");
+  Logger::log(LoggerType::BUTTON, F("Restarting ESP32..."));
   ESP.restart();
 }

@@ -1,11 +1,11 @@
 #include "ACP/ACP.h"
 #include "HSS/HSS.h"
 #include "Digit_Control/Digit.h"
+#include "ACP.h"
 
 bool runningACP1 = false;
 bool runningACP2 = false;
 bool runningManualACP = false;
-
 
 void ACP()
 {
@@ -70,15 +70,17 @@ void ACP()
       delay(50);
     }
 
-  	for (int number = 8; number >= 0; number--)
+    for (int number = 8; number >= 0; number--)
     {
       updateIfChanged(111111 * number);
       delay(50);
     }
 
     updateIfChanged(displaySequence[i]);
-    delay(4900);
+    delay(4488);
   }
   digitalWrite(PIN_HSS_CUTOFF, LOW);
   runningACP1 = false;
 }
+
+// total_Time = 60s 
