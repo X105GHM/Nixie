@@ -55,7 +55,7 @@ void gongTask(void *parameter)
   {
     if (xSemaphoreTake(timeControl.getGongSemaphore(), portMAX_DELAY) == pdTRUE)
     {
-      playGongTone();
+      playSelectedMelody(currentMelody);
     }
   }
 }

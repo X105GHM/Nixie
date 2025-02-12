@@ -4,12 +4,14 @@
 #include "Digit_Control/Digit.h"
 #include "Logger/Logger.h"
 #include "Time/Time.h"
+#include "Melody/Melody.h"
 #include <WiFiManager.h>
 
 extern bool displayEnabled;
 extern float HSS_V;
 extern TaskHandle_t timeTaskHandle;
 extern TimeControl timeControl;
+extern MelodyType currentMelody;
 
 HTTPHandler::HTTPHandler(int port) : server(port) {}
 
@@ -62,24 +64,53 @@ void HTTPHandler::begin() {
         }
     });
 
-    server.on("/set/BUZZER", HTTP_GET, [this]() {
-        static unsigned long lastBuzzerTime = 0;
-        constexpr unsigned long debounceInterval = 10000; // 10 Sekunden
+    
+    server.on("/set/BUZZER/gong", HTTP_GET, [this]() {
+        static unsigned long lastGongTime = 0;
+        constexpr unsigned long debounceGong = 10000;
         unsigned long currentTime = millis();
-        if (currentTime - lastBuzzerTime < debounceInterval) {
+        if (currentTime - lastGongTime < debounceGong) {
             server.send(200, "text/plain", "Timeout");
             return;
         }
-        lastBuzzerTime = currentTime;
-        
+        lastGongTime = currentTime;
+    
+        currentMelody = GONG;
+    
         if (timeControl.getGongSemaphore() != nullptr) {
             xSemaphoreGive(timeControl.getGongSemaphore());
-            server.send(200, "text/plain", "Ringing the gong");
+            Logger::log(LoggerType::HTTP, F("Ringing the GONG"));
+            server.send(200, "text/plain", "Ringing the GONG");
         } else {
             Logger::log(LoggerType::HTTP, F("ERROR: gongSemaphore is not available"));
             server.send(200, "text/plain", "ERROR: gongSemaphore is not available");
         }
     });
+
+
+    server.on("/set/BUZZER/mario", HTTP_GET, [this]() {
+        static unsigned long lastMarioTime = 0;
+        constexpr unsigned long debounceMario = 30000;
+        unsigned long currentTime = millis();
+        if (currentTime - lastMarioTime < debounceMario) {
+            server.send(200, "text/plain", "Timeout");
+            return;
+        }
+        lastMarioTime = currentTime;
+    
+        currentMelody = MARIO;
+    
+        if (timeControl.getGongSemaphore() != nullptr) {
+            xSemaphoreGive(timeControl.getGongSemaphore());
+            Logger::log(LoggerType::HTTP, F("Playing Mario melody"));
+            server.send(200, "text/plain", "Playing Mario melody");
+            currentMelody = GONG;
+        } else {
+            Logger::log(LoggerType::HTTP, F("ERROR: gongSemaphore is not available"));
+            server.send(200, "text/plain", "ERROR: gongSemaphore is not available");
+        }
+    });
+
 
     server.on("/get/info", HTTP_GET, [this]() {
         Logger::log(LoggerType::HTTP, F("Info requested"));

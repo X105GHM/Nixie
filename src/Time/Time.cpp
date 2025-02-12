@@ -108,6 +108,7 @@ void TimeControl::timeCycle()
     {
       if (timeInfo.tm_hour == gongHours[i] && timeInfo.tm_min == gongMinutes[i] && timeInfo.tm_sec == gongSeconds[i])
       {
+        currentMelody = GONG;
         Logger::log(LoggerType::TIME, F("Playing Gong"));
         xSemaphoreGive(gongSemaphore); // Gong-Ton abspielen
       }
