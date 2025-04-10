@@ -7,6 +7,7 @@
 #include "Melody/Melody.h"
 #include <WiFiManager.h>
 
+
 extern bool displayEnabled;
 extern float HSS_V;
 extern TaskHandle_t timeTaskHandle;
@@ -87,6 +88,44 @@ void HTTPHandler::begin() {
         }
     });
 
+    server.on("/set/customdigits", HTTP_GET, [this]() {
+        if (!server.hasArg("value") || !server.hasArg("active")) {
+            server.send(400, "text/plain", "Missing 'value' or 'active' parameter.");
+            return;
+        }
+    
+        String customValue = server.arg("value");
+        String activeFlag  = server.arg("active"); 
+    
+        if (customValue.length() != 6) {
+            server.send(400, "text/plain", "Invalid value length. Expected exactly 6 characters (format: xx00xx).");
+            return;
+        }
+    
+
+        if (customValue.substring(2, 4) != "00") {
+            server.send(400, "text/plain", "Invalid format: The 3rd and 4th digits must be '00' to disable minutes.");
+            return;
+        }
+    
+
+        int hh = customValue.substring(0, 2).toInt();
+        int ss = customValue.substring(4, 6).toInt();
+    
+
+        bool customActive = (activeFlag == "1" || activeFlag.equalsIgnoreCase("true"));
+    
+        if (customActive) {
+            vTaskSuspend(timeTaskHandle);  
+            displayCustomDigits(hh, ss);     
+            Logger::log(LoggerType::HTTP, F("Custom digits mode activated: Middle digits blank"));
+            server.send(200, "text/plain", "Custom digits set to: " + customValue);
+        } else {
+            vTaskResume(timeTaskHandle);    
+            Logger::log(LoggerType::HTTP, F("Custom digits mode deactivated, normal time resumed"));
+            server.send(200, "text/plain", "Custom mode deactivated");
+        }
+    });
 
     server.on("/set/BUZZER/mario", HTTP_GET, [this]() {
         static unsigned long lastMarioTime = 0;
@@ -110,7 +149,6 @@ void HTTPHandler::begin() {
             server.send(200, "text/plain", "ERROR: gongSemaphore is not available");
         }
     });
-
 
     server.on("/get/info", HTTP_GET, [this]() {
         Logger::log(LoggerType::HTTP, F("Info requested"));

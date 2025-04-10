@@ -15,6 +15,7 @@ extern uint32_t symbolArray[10];
 extern int32_t previousDigits;
 
 void displayDigits();
+void displayCustomDigits(int hh, int ss);
 void updateDisplay();
 void updateIfChanged(int32_t newDigits);
 void displayTime();

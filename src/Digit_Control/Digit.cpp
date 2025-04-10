@@ -88,6 +88,40 @@ void displayDigits()
     digitalWrite(PIN_OE, HIGH); // Daten zwischenspeichern (aktiviert HV-Ausgänge entsprechend den Registern)
 }
 
+void displayCustomDigits(int hh, int ss) 
+{
+    int h1 = hh / 10;
+    int h2 = hh % 10;
+
+    int s1 = ss / 10;     
+    int s2 = ss % 10;     
+
+    uint32_t blank = 0;
+
+
+    unsigned long reg1 = 0;
+    reg1 |= (unsigned long)(symbolArray[s2]) << 20; 
+    reg1 |= (unsigned long)(symbolArray[s1]) << 10;  
+    reg1 |= blank;                                   
+    
+    SPI.transfer(reg1 >> 24);
+    SPI.transfer(reg1 >> 16);
+    SPI.transfer(reg1 >> 8);
+    SPI.transfer(reg1);
+    
+    unsigned long reg0 = 0;
+    reg0 |= (unsigned long)(blank) << 20;           
+    reg0 |= (unsigned long)(symbolArray[h2]) << 10;  
+    reg0 |= (unsigned long)(symbolArray[h1]);         
+    
+    SPI.transfer(reg0 >> 24);
+    SPI.transfer(reg0 >> 16);
+    SPI.transfer(reg0 >> 8);
+    SPI.transfer(reg0);
+    
+    digitalWrite(PIN_OE, HIGH);
+}
+
 void updateDisplay()
 {
     displayDigits();

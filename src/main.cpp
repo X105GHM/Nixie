@@ -11,6 +11,7 @@
 #include <driver/adc.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <ESPmDNS.h>
 
 //* Der DAC-Wert muss für jede Uhr individuell angepasst werden.
 //* 160V bis 170V bei allen Helligkeitsstufen, 180V bis 190V bei ACP.
@@ -95,6 +96,17 @@ void setup()
 
   WiFiManager wifiManager;
   wifiManager.autoConnect("Nixie Clock");
+
+  if (!MDNS.begin("nixieclock")) 
+  {
+    Serial.println("Fehler beim Starten des mDNS responders");
+
+  } 
+  else 
+  {
+    Serial.println("mDNS responder gestartet");
+    MDNS.addService("http", "tcp", 80);
+  }
 
   timeControl.initTime("CET-1CEST,M3.5.0,M10.5.0/3");
 
