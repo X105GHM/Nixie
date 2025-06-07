@@ -1,0 +1,830 @@
+/* ================================================
+   Reset & Basis
+   ================================================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    font-family: Arial, sans-serif;
+    height: 100%;
+    background-color: #f5f5f5;
+    color: #333;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+/* ================================================
+     Banner
+     ================================================ */
+#banner {
+    background-color: #0084ff;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    text-align: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+}
+
+#banner h1 {
+    font-size: 1.5rem;
+}
+
+#banner #clock {
+    font-size: 1.2rem;
+    margin-top: 0.25rem;
+}
+
+/* ================================================
+     Navigation
+     ================================================ */
+nav {
+    margin-top: 4rem;
+    /* Platz für den Banner */
+    background-color: #333;
+    color: #fff;
+    position: sticky;
+    top: 2.5rem;
+    /* direkt unter Banner */
+    z-index: 999;
+}
+
+.nav-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+}
+
+.menu,
+.mobile-menu {
+    list-style: none;
+}
+
+.menu li {
+    display: inline-block;
+    margin-right: 1rem;
+    cursor: pointer;
+    padding: 0.5rem;
+}
+
+.menu li:last-child {
+    margin-right: 0;
+}
+
+.menu li.active,
+.menu li:hover {
+    background-color: #555;
+    border-radius: 4px;
+}
+
+/* Hamburger (mobil) */
+.hamburger {
+    display: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+/* Mobile-Menü (ausgeblendet) */
+.mobile-menu {
+    display: none;
+    flex-direction: column;
+    background-color: #333;
+}
+
+.mobile-menu li {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #444;
+    cursor: pointer;
+}
+
+.mobile-menu li:hover {
+    background-color: #555;
+}
+
+/* ================================================
+     Hauptbereich & Tabs
+     ================================================ */
+main {
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+h2 {
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #ccc;
+    padding-bottom: 0.5rem;
+}
+
+/* -----------------------------------------------
+     Dashboard
+     ----------------------------------------------- */
+     #general-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+      
+      /* Card-Style */
+      .card {
+        background: #fff;
+        padding: 0.75rem;
+        border-radius: 6px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+
+/* -----------------------------------------------
+     Graphen
+     ----------------------------------------------- */
+.graph-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.graph-controls label {
+    margin-right: 0.25rem;
+}
+
+.graph-controls select,
+.graph-controls button {
+    padding: 0.25rem 0.5rem;
+}
+
+#chartCanvas {
+    max-width: 100%;
+    height: auto;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 0.5rem;
+}
+
+/* ================================================
+   Log-Fenster
+   ================================================ */
+   #networkLogContainer {
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: .5rem;
+    margin-bottom: 1rem;
+  }
+  #networkLog {
+    font-family: monospace;
+    font-size: .9rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  
+  /* ================================================
+     Log Input-Gruppe
+     ================================================ */
+  .log-input-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+    margin-bottom: .5rem;
+  }
+  .log-input-group input[type="text"] {
+    flex: 1;
+    padding: .4rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  .log-input-group button {
+    padding: .4rem .8rem;
+    border: 1px solid #888;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .log-input-group button:hover {
+    background-color: #e0e0e0;
+  }
+
+/* -----------------------------------------------
+   Einstellungen
+   ----------------------------------------------- */
+.settings-group {
+    margin-bottom: 1.5rem;
+    background-color: #fff;
+    padding: 1rem;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+.settings-group h3 {
+    margin-bottom: 0.75rem;
+}
+
+.device-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.device-setting label {
+    flex: 1;
+    font-weight: 500;
+}
+
+.device-setting .switch {
+    flex: none;
+}
+
+.device-setting>label:first-child {
+    flex: none;
+    margin-right: 1rem;
+    white-space: nowrap;
+}
+
+.device-setting button {
+    padding: 0.4rem 0.8rem;
+    font-size: 1rem;
+    border: 1px solid #888;
+    background-color: #f0f0f0;
+    color: #000;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.device-setting button:hover {
+    background-color: #e0e0e0;
+    border-color: #777;
+}
+
+
+
+/* -----------------------------------------------
+   Helligkeits-Slider
+   ----------------------------------------------- */
+.device-setting.brightness-slider-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.device-setting.brightness-slider-setting>label:first-child {
+    flex: none;
+    margin-right: 1rem;
+    white-space: nowrap;
+}
+
+#brightnessSlider {
+    flex: 1;
+    /* Slider dehnt sich aus, bleibt aber eingerahmt */
+    margin-right: 0.75rem;
+    /* Abstand zum Wert-Span */
+    cursor: pointer;
+}
+
+#brightnessValue {
+    flex: none;
+    width: 2.5rem;
+    /* ausreichend Platz für "100" */
+    text-align: center;
+    font-weight: 500;
+}
+
+
+
+
+/* Input-Feld für ZIP Code – etwa Höhe wie Dropdown/Buttons */
+#zipInput {
+    flex: none;
+    /* nicht dehnen */
+    padding: 0.4rem 0.6rem;
+    /* vertikal/horizontal */
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #333;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    margin-right: 0.75rem;
+    /* Abstand zum Button */
+    width: 100px;
+    /* feste Breite für ZIP (kann angepasst werden) */
+}
+
+/* Hover/Focus für ZIP-Input */
+#zipInput:hover,
+#zipInput:focus {
+    border-color: #888;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Button-Element für ZIP – gleiche Höhe wie Input */
+#applyZip {
+    flex: none;
+    /* nicht dehnen */
+    padding: 0.4rem 0.8rem;
+    font-size: 1rem;
+    border: 1px solid #4CAF50;
+    border-radius: 4px;
+    background-color: #4CAF50;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+/* Hover/Active für ZIP-Button */
+#applyZip:hover {
+    background-color: #45A049;
+    border-color: #45A049;
+}
+
+#applyZip:active {
+    background-color: #388E3C;
+    border-color: #388E3C;
+}
+
+
+/* ================================================
+   Log-Config-Gruppe (vertikal)
+   ================================================ */
+.log-config-group {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    background-color: #fafafa;
+    margin-bottom: 1rem;
+}
+
+.log-config-group h4 {
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* ALTE GRID-Definition entfernen oder überschreiben */
+/* .log-config-switches { … }  */
+
+/* Neue vertikale Anordnung: */
+.log-config-switches-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    /* Abstand zwischen den einzelnen Einträgen */
+}
+
+/* Jeder Eintrag in der vertikalen Liste: Label + Switch rechts */
+.log-config-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Label bleibt links, darf nicht expandieren */
+.log-config-item>label:first-child {
+    flex: none;
+    margin-right: 0.5rem;
+    white-space: nowrap;
+}
+
+/* Switch-Container: feste Breite, nicht wachsen lassen */
+.log-config-item .switch {
+    flex: none;
+}
+
+/* -----------------------------------------------
+   Firmware-Update
+   ----------------------------------------------- */
+.device-setting.firmware-setting {
+    margin-bottom: 1rem;
+    /* Abstand nach unten */
+}
+
+#firmwareSelect {
+    flex: none;
+    /* nicht dehnen */
+    padding: 0.4rem 0.6rem;
+    /* vertikales und horizontales Padding */
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #333;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    margin-right: 0.75rem;
+    /* Abstand zum Button */
+}
+
+/* Hover/Focus für Select */
+#firmwareSelect:hover,
+#firmwareSelect:focus {
+    border-color: #888;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Button-Element: gleiche Höhe wie Select, optisch passend */
+#applyFirmware {
+    flex: none;
+    /* nicht dehnen */
+    padding: 0.4rem 0.8rem;
+    font-size: 1rem;
+    border: 1px solid #2196F3;
+    border-radius: 4px;
+    background-color: #2196F3;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+/* Hover/Active für Button */
+#applyFirmware:hover {
+    background-color: #1a7bcc;
+    border-color: #1a7bcc;
+}
+
+#applyFirmware:active {
+    background-color: #1569a5;
+    border-color: #1569a5;
+}
+
+/* -----------------------------------------------
+     OTA-Update Button
+     ----------------------------------------------- */
+.device-setting.ota-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    /* Abstand nach unten */
+}
+
+.device-setting.ota-setting>label:first-child {
+    flex: none;
+    margin-right: 1rem;
+    white-space: nowrap;
+}
+
+#otaUpdateButton {
+    flex: none;
+    padding: 0.4rem 0.8rem;
+    font-size: 1rem;
+    border: 1px solid #d32f2f;
+    border-radius: 4px;
+    background-color: #d32f2f;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+#otaUpdateButton:hover {
+    background-color: #b71c1c;
+    border-color: #b71c1c;
+}
+
+#otaUpdateButton:active {
+    background-color: #8e0000;
+    border-color: #8e0000;
+}
+
+/* -----------------------------------------------
+     Toggle-Switch (für alle Checkboxen)
+     ----------------------------------------------- */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 24px;
+    margin-left: 0.5rem;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    border-radius: 24px;
+    transition: 0.4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #fff;
+    border-radius: 50%;
+    transition: 0.4s;
+}
+
+input:checked+.slider {
+    background-color: #2196F3;
+}
+
+input:checked+.slider:before {
+    transform: translateX(26px);
+}
+
+
+
+/* -----------------------------------------------
+     Dark Mode
+     ----------------------------------------------- */
+body.dark {
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+body.dark #banner {
+    background-color: #000;
+}
+
+body.dark nav {
+    background-color: #1d1d1d;
+}
+
+body.dark .menu li:hover,
+body.dark .menu li.active,
+body.dark .mobile-menu li:hover {
+    background-color: #333;
+}
+
+body.dark main {
+    background-color: #121212;
+}
+
+/* Boxen dunkel machen */
+body.dark .settings-group {
+    background-color: #1e1e1e;
+    border-color: #333;
+    color: #e0e0e0;
+}
+
+body.dark .device-setting {
+    color: #e0e0e0;
+}
+
+body.dark #general-info ul,
+body.dark #general-info li {
+    background-color: transparent;
+    color: #e0e0e0;
+}
+
+body.dark #log-container {
+    background-color: #1e1e1e;
+    border-color: #333;
+}
+
+body.dark #log-output {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+}
+
+body.dark #chartCanvas {
+    background-color: #1e1e1e;
+    border-color: #333;
+}
+
+body.dark .log-config-group {
+    background-color: #1e1e1e;
+    border-color: #444;
+}
+
+body.dark .log-config-group h4 {
+    color: #e0e0e0;
+}
+
+body.dark .log-config-item {
+    color: #e0e0e0;
+}
+
+body.dark .mobile-menu,
+body.dark .menu li:hover,
+body.dark .menu li.active,
+body.dark .mobile-menu li:hover {
+    background-color: #2a2a2a;
+}
+
+body.dark .tab-content {
+    background-color: transparent;
+    color: #e0e0e0;
+}
+
+body.dark button {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border: 1px solid #444;
+}
+
+body.dark button:hover {
+    background-color: #3a3a3a;
+}
+
+body.dark input,
+body.dark select {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border: 1px solid #333;
+}
+
+body.dark input::placeholder {
+    color: #aaa;
+}
+
+/* Anpassung im Dark Mode */
+body.dark #firmwareSelect {
+    background-color: #1e1e1e;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark #firmwareSelect:hover,
+body.dark #firmwareSelect:focus {
+    border-color: #666;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+}
+
+body.dark #applyFirmware {
+    background-color: #2a6ebb;
+    border-color: #2a6ebb;
+    color: #fff;
+}
+
+body.dark #applyFirmware:hover {
+    background-color: #1e4e8b;
+    border-color: #1e4e8b;
+}
+
+body.dark #applyFirmware:active {
+    background-color: #173e6b;
+    border-color: #173e6b;
+}
+
+/* Dark Mode–Anpassungen für ZIP-Eingabe und Button */
+body.dark #zipInput {
+    background-color: #1e1e1e;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark #zipInput:hover,
+body.dark #zipInput:focus {
+    border-color: #666;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+}
+
+body.dark #applyZip {
+    background-color: #388E3C;
+    border-color: #388E3C;
+    color: #fff;
+}
+
+body.dark #applyZip:hover {
+    background-color: #2E7D32;
+    border-color: #2E7D32;
+}
+
+body.dark #applyZip:active {
+    background-color: #1B5E20;
+    border-color: #1B5E20;
+}
+
+/* Dark Mode–Anpassungen */
+body.dark #brightnessSlider {
+    accent-color: #2196F3;
+    /* Hellblauer Slider im Dark Mode */
+}
+
+body.dark #brightnessValue {
+    color: #e0e0e0;
+}
+
+
+/* Dark Mode für die zusätzlichen Buttons */
+body.dark .device-setting button {
+    background-color: #2a2a2a;
+    border-color: #444;
+    color: #e0e0e0;
+}
+
+body.dark .device-setting button:hover {
+    background-color: #3a3a3a;
+}
+
+/* Dark Mode nur für #dashboard */
+body.dark #dashboard {
+    background-color: #121212;
+    color: #e0e0e0;
+  }
+  
+  /* Überschriften im Dashboard */
+  body.dark #dashboard h2 {
+    border-color: #444;
+    color: #e0e0e0;
+  }
+  
+  /* Karten im Dashboard */
+  body.dark #dashboard .card {
+    background-color: #1e1e1e;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    color: #e0e0e0;
+  }
+  
+  /* Starke Labels in den Cards */
+  body.dark #dashboard .card strong {
+    color: #bbb;
+  }
+  
+  /* Textwerte in den Cards */
+  body.dark #dashboard .card span {
+    color: #e0e0e0;
+  }
+  
+  /* Grid-Hintergrund entfernen */
+  body.dark #dashboard .grid {
+    background: none;
+  }
+  
+  /* Chart-Canvases dunkler */
+  body.dark #dashboard canvas {
+    background-color: #1e1e1e !important;
+  }
+
+  /* Dark Mode für Logger */
+body.dark #networkLogContainer {
+    background-color: #1e1e1e;
+    border-color: #444;
+  }
+  
+  body.dark #networkLog {
+    background-color: transparent;
+    color: #e0e0e0;
+  }
+  
+  /* Dark Mode Eingabe-Gruppe */
+  body.dark .log-input-group input[type="text"] {
+    background-color: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #444;
+  }
+  
+  body.dark .log-input-group input[type="text"]::placeholder {
+    color: #888;
+  }
+  
+  body.dark .log-input-group button {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+  
+  body.dark .log-input-group button:hover {
+    background-color: #3a3a3a;
+  }
+
+/* ================================================
+     Responsive
+     ================================================ */
+@media (max-width: 767px) {
+    .menu {
+        display: none;
+    }
+
+    .hamburger {
+        display: block;
+    }
+}
