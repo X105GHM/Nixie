@@ -138,6 +138,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // === Device Controls ====================================================
   const displayToggle = document.getElementById("displayToggle"),
+    ResetButton = document.getElementById("resetBtn"),
+    ACPButton = document.getElementById("acpBtn"),
+    DateButton = document.getElementById("dateBtn"),
+    WeatherButton = document.getElementById("weatherBtn"),
     tickerToggle = document.getElementById("tickerToggle"),
     timeLimitToggle = document.getElementById("timeLimitToggle"),
     silentToggle = document.getElementById("silentToggle"),
@@ -186,6 +190,47 @@ document.addEventListener("DOMContentLoaded", () => {
   makeToggleHandler(timeLimitToggle, "timeLimit");
   makeToggleHandler(silentToggle, "silentMode");
   makeToggleHandler(weatherToggle, "weatherUpdate");
+
+  // Reset Button
+  ResetButton.addEventListener("click", async () => {
+    try {
+      await fetch("/set/reset");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Zurücksetzen des Geräts.");
+    }
+
+  });
+
+  // ACP Button
+  ACPButton.addEventListener("click", async () => {
+    try {
+      await fetch("/set/acp");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Auslösen des ACP-Events.");
+    }
+  });
+
+  // Date Button
+  DateButton.addEventListener("click", async () => {
+    try {
+      await fetch("/set/date");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Setzen des Datums.");
+    }
+  });
+
+  // Weather Button
+  WeatherButton.addEventListener("click", async () => {
+    try {
+      await fetch("/set/tempDisplay");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Abrufen der Wetterdaten.");
+    }
+  });
 
   // Brightness
   function syncBrightnessUI(enabled, val) {

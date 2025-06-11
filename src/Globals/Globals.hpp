@@ -53,6 +53,8 @@ namespace Globals
 
     std::string getFirmwareUrl(FirmwareTarget target);
 
+    std::string getManifestUrl(FirmwareTarget target);
+
     inline void enableAllLogging()
     {
         logConfig = 

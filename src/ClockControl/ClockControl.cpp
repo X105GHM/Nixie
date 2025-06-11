@@ -88,24 +88,8 @@ void ClockControl::timeCycle() noexcept
             {
                 WeatherClient weather(std::string(OPENWEATHER_API_KEY));
 
-                const std::string &zip = Globals::zipCode;
-
-                float temp = weather.getTemperatureByZip(zip);
-                if (!std::isnan(temp))
-                {
-                    Logger::log(LoggerType::TIME, "Temperature: %.2f °C for PLZ %s", temp, zip.c_str());
-
-                    int temp100 = static_cast<int>(roundf(temp * 100.0f));
-                    if (temp100 < 0)
-                    {
-                        temp100 = 0;
-                    }
-                    digits = temp100;
-                }
-                else
-                {
-                    Logger::log(LoggerType::TIME, "Weather update failed for PLZ %s", zip.c_str());
-                }
+                displayWeather();
+                vTaskDelay(pdMS_TO_TICKS(5000));
             }
             else
             {

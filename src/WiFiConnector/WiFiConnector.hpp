@@ -14,5 +14,5 @@ public:
 private:
     const char *apSsid_;
     const char *apPass_;
-    static constexpr LoggerType logType_ = LoggerType::GENERAL;
+    static constexpr LoggerType logType_ = LoggerType::WiFi;
 };

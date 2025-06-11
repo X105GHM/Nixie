@@ -8,8 +8,7 @@ bool displayEnabled = false;
 std::int32_t digits = 0;
 std::uint8_t singleDigit = 0;
 std::uint32_t brightness = 100;
-const std::uint32_t symbolArray[10] = {
-    512, 1, 2, 4, 8, 16, 32, 64, 128, 256};
+const std::uint32_t symbolArray[10] = {512, 1, 2, 4, 8, 16, 32, 64, 128, 256};
 
 static inline void initPinOe() noexcept
 {
@@ -36,6 +35,7 @@ void displayDigitsTask(void *pvParameters) noexcept
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
+
         if (runningManualACP)
         {
             gpio_set_level(PIN_OE, 0);
@@ -71,9 +71,18 @@ void displayDigitsTask(void *pvParameters) noexcept
             vTaskDelay(pdMS_TO_TICKS(200));
             continue;
         }
+
         std::int64_t copy = digits;
         gpio_set_level(PIN_OE, 0);
         std::uint32_t var32 = 0;
+
+        //---------------------------------- REG 1 -----------------------------------------------
+
+        // 00 0000000000 0000000000 0000000000 00 0000000000 0000000000 0000000000
+        //        s2         s1         m2            m1         h2         h1
+        // -- 0987654321 0987654321 0987654321 -- 0987654321 0987654321 0987654321
+
+
         if (!runningACP1)
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
@@ -93,26 +102,34 @@ void displayDigitsTask(void *pvParameters) noexcept
         SPI.transfer(var32 >> 16);
         SPI.transfer(var32 >> 8);
         SPI.transfer(var32);
+
+        //---------------------------------- REG 0 -----------------------------------------------
+
         var32 = 0;
+
         if (!runningACP2)
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
         }
         copy /= 10;
+
         if (!runningACP1)
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
         }
         copy /= 10;
+
         if (!runningACP2)
         {
             var32 |= symbolArray[copy % 10];
         }
         copy /= 10;
+
         SPI.transfer(var32 >> 24);
         SPI.transfer(var32 >> 16);
         SPI.transfer(var32 >> 8);
         SPI.transfer(var32);
+
         if (ADAPTIVE_BRIGHTNESS && (!runningACP1 || !runningACP2))
         {
             std::uint32_t b = std::min(brightness, static_cast<std::uint32_t>(100));
@@ -147,4 +164,27 @@ void displayDate() noexcept
     digits += timeInfo.tm_mday * 10000;
     digits += (timeInfo.tm_mon + 1) * 100;
     digits += (timeInfo.tm_year + 1900) % 100;
+}
+
+void displayWeather() noexcept
+{
+    WeatherClient weather(std::string(OPENWEATHER_API_KEY));
+    const std::string &zip = Globals::zipCode;
+
+    float temp = weather.getTemperatureByZip(zip);
+    if (!std::isnan(temp))
+    {
+        int temp100 = static_cast<int>(roundf(temp * 100.0f));  // z. B. 23.45°C → 2345
+
+        if (temp100 < 0)
+        {
+            temp100 = 0;
+        }
+
+        digits = temp100; 
+    }
+    else
+    {
+        digits = 0;
+    }
 }

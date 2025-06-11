@@ -5,6 +5,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
+#include "Globals/Globals.hpp"
+#include "TimeWeather/WeatherClient/WeatherClient.hpp"
 #include "ACP/ACP.hpp"
 #include <algorithm>
 #include <ctime>
@@ -23,3 +25,4 @@ extern const std::uint32_t symbolArray[10];
 void displayDigitsTask(void* pvParameters) noexcept;
 void displayTime() noexcept;
 void displayDate() noexcept;
+void displayWeather() noexcept;

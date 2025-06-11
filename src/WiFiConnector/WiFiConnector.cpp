@@ -9,34 +9,30 @@ void WiFiConnector::connect() noexcept
 {
     if (WiFi.status() == WL_CONNECTED)
     {
-        Logger::log(LoggerType::WiFi,
-                    "WiFi already connected: %s",
-                    WiFi.localIP().toString().c_str());
+        Logger::log(logType_,"WiFi already connected: %s", WiFi.localIP().toString().c_str());
         return;
     }
 
-    Logger::log(LoggerType::WiFi,
-                "WiFi not connected, starting AP: %s",
-                apSsid_);
+    Logger::log(logType_,"WiFi not connected, starting AP: %s", apSsid_);
     WiFiManager wm;
     wm.setTimeout(180);
+    
     if (!wm.autoConnect(apSsid_, apPass_))
     {
-        Logger::log(LoggerType::WiFi,
-                    "WiFiManager timeout, restarting");
+        Logger::log(logType_,"WiFiManager timeout, restarting");
         delay(3000);
         ESP.restart();
         return;
     }
-    Logger::log(LoggerType::WiFi,"WiFi connected, IP=%s",WiFi.localIP().toString().c_str());
+    Logger::log(logType_,"WiFi connected, IP=%s",WiFi.localIP().toString().c_str());
 
     if (!MDNS.begin("nixieclock"))
     {
-        Logger::log(LoggerType::WiFi, F("Fehler beim Starten des mDNS responders"));
+        Logger::log(logType_, F("Fehler beim Starten des mDNS responders"));
     }
     else
     {
-        Logger::log(LoggerType::WiFi, F("mDNS responder gestartet"));
+        Logger::log(logType_, F("mDNS responder gestartet"));
         MDNS.addService("http", "tcp", 80);
     }
 }

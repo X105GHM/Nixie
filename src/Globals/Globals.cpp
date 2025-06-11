@@ -14,7 +14,7 @@ namespace Globals
 
     std::string HardwareVersion = "V6.0.1";  //Mem
 
-    std::string SoftwareVersion = "V6.0.0";
+    std::string SoftwareVersion = SOFTWARE_VERSION;
 
     uint32_t logConfig =                     //Mem
         LOG_HTTP      |
@@ -69,5 +69,25 @@ namespace Globals
             return std::string();
         }
         return std::string(firmwareUrlTable[idx]);
+    }
+
+    static constexpr const char* manifestUrlTable[] = {
+        /* NixieV6_std */ "https://update.server.com/nixiev6/standard/manifest.json",
+        /* NixieV6_dev */ "https://update.server.com/nixiev6/development/manifest.json",
+        /* NixieV6_BOS */ "https://update.server.com/nixiev6/branch/BOS/manifest.json"
+    };
+
+    static_assert(
+        static_cast<size_t>(Globals::FirmwareTarget::COUNT) == (sizeof(manifestUrlTable) / sizeof(manifestUrlTable[0])),
+        "Enum FirmwareTarget und manifestUrlTable müssen dieselbe Länge haben!"
+    );
+
+    std::string getManifestUrl(FirmwareTarget target)
+    {
+        size_t idx = static_cast<size_t>(target);
+        if (idx >= static_cast<size_t>(FirmwareTarget::COUNT)) {
+            return std::string();
+        }
+        return std::string(manifestUrlTable[idx]);
     }
 }

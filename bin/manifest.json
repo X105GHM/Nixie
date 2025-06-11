@@ -1,0 +1,8 @@
+{
+  "version": "Nixie_V.6.0.2",
+  "timestamp": "2025-06-11 19:42:18",
+  "files": {
+    "firmware.bin": "98de6d1167357cd93f91fd104a6d16b6a446bf107e74e66c3f6e9daf60dfddac",
+    "spiffs.bin": "aa7792b25cf79c4b5726f54a017b2536bdf48f2c487832b9d2c500111731bfc1"
+  }
+}

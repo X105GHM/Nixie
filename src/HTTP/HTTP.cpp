@@ -73,6 +73,22 @@ void HTTPHandler::begin() noexcept
         server_.send(200, "text/plain", "ACP routine completed");
     });
 
+    server_.on("/set/tempDisplay", HTTP_GET, [this]() noexcept {
+        if (!displayEnabled) {
+            Logger::log(LOGTYPE, F("Error: Display not enabled for temperature display"));
+            server_.send(400, "text/plain", "Display not enabled");
+            return;
+        }
+        vTaskSuspend(clockTaskHandle);
+        Logger::log(LOGTYPE, F("Temperature display triggered via HTTP"));
+        WeatherClient weather(std::string(OPENWEATHER_API_KEY));
+        displayWeather();
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskResume(clockTaskHandle);
+
+        server_.send(200, "text/plain", "Temperature display completed");
+    });
+
     server_.on("/set/DATE", HTTP_GET, [this]() noexcept {
         if (!displayEnabled) {
             Logger::log(LOGTYPE, F("Error: Display not enabled for DATE"));
@@ -224,26 +240,28 @@ void HTTPHandler::begin() noexcept
 
     server_.on("/set/ota", HTTP_GET, [this]() noexcept {
         Globals::FirmwareTarget target = Globals::currentFirmwareTarget;
-        std::string url = Globals::getFirmwareUrl(target);
-        if (url.empty()) {
+        std::string firmwareUrl = Globals::getFirmwareUrl(target);
+        std::string manifestUrl  = Globals::getManifestUrl(target);
+
+        if (firmwareUrl.empty() || manifestUrl.empty()) {
             server_.send(400, "text/plain", "Invalid firmware target");
-            Logger::log(LOGTYPE, "OTA fehlgeschlagen: ungültiges Firmware-Target");
+            Logger::log(LOGTYPE, "OTA fehlgeschlagen: ungültige URLs");
             return;
         }
-        Logger::log(LOGTYPE, "Starte OTA-Update von URL: %s", url.c_str());
+
+        Logger::log(LOGTYPE, "Prüfe OTA für Firmware: %s", firmwareUrl.c_str());
         OTAManager ota;
-        esp_err_t result = ota.performUpdate(url);
+        esp_err_t result = ota.checkAndUpdate(manifestUrl, firmwareUrl); // <- Versionsprüfung
 
         if (result == ESP_OK) {
-            Logger::log(LOGTYPE, "OTA-Update erfolgreich");
-            server_.send(200, "text/plain", "OTA successful");
-        } 
-        else 
-        {
-            Logger::log(LOGTYPE, "OTA-Update fehlgeschlagen (Error %d)", result);
-            server_.send(500, "text/plain", "OTA failed");
+            Logger::log(LOGTYPE, "OTA abgeschlossen oder nicht notwendig");
+            server_.send(200, "text/plain", "OTA erfolgreich oder nicht notwendig");
+        } else {
+            Logger::log(LOGTYPE, "OTA fehlgeschlagen (Error %d)", result);
+            server_.send(500, "text/plain", "OTA fehlgeschlagen");
         }
     });
+
 
     server_.on("/set/zip", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("zip")) {
