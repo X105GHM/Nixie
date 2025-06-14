@@ -9,7 +9,7 @@
 class Brownout
 {
 public:
-    Brownout(SupplyWatch &sw, HSS &hss, PersistentStorage &storage, uint32_t interval_us = 1000) noexcept;
+    Brownout(SupplyWatch &sw, HSS &hss, Memory::PersistentStorage &storage, uint32_t interval_us = 1000) noexcept;
     void start() noexcept;
     void stop() noexcept;
 
@@ -18,7 +18,7 @@ private:
 
     SupplyWatch &sw_;
     HSS &hss_;
-    PersistentStorage &storage_;
+    Memory::PersistentStorage &storage_;
     esp_timer_handle_t timer_;
     uint32_t interval_us_;
 };

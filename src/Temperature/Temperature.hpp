@@ -1,10 +1,7 @@
 #pragma once
 
-#include "driver/adc.h"
-#include "esp_adc_cal.h"
-#include "esp_log.h"
+#include <Arduino.h>
 #include <cmath>
-
 
 class NtcThermistor {
 public:
@@ -12,19 +9,17 @@ public:
     float readTemperatureC() const noexcept;
 
 private:
-    static constexpr adc1_channel_t ADC_CH   = ADC1_CHANNEL_5; // IO6
-    static constexpr adc1_channel_t ADC_VREF = ADC1_CHANNEL_9; // internal Vref
-    static constexpr adc_bits_width_t ADC_W  = ADC_WIDTH_BIT_12;
-    static constexpr adc_atten_t      ADC_A  = ADC_ATTEN_DB_12;
-    static constexpr uint32_t         VREF   = 0;
+    // IO-Pin, entsprechend ADC1_CHANNEL_5 → IO6
+    static constexpr int PIN_NTC = 6;
 
-    esp_adc_cal_characteristics_t     adc_chars_;
+    // NTC-Kennwerte
+    static constexpr float R_FIXED     = 10000.0f;  // Oberwiderstand im Spannungsteiler
+    static constexpr float R_NOMINAL   = 10000.0f;  // Nennwert des NTC @ 25 °C
+    static constexpr float BETA        = 3977.0f;   // B-Konstante
+    static constexpr float T0          = 298.15f;   // 25 °C in Kelvin
+    static constexpr float T_OFFSET    = -3.0f;     // Offset zur Kalibrierung
 
-    static constexpr float R_FIXED   = 10000.0f;
-    static constexpr float R_NOMINAL = 10000.0f;
-    static constexpr float BETA      = 3977.0f;
-    static constexpr float T0        = 298.15f;
-    static constexpr float T_OFFSET  = -3.0f;
-
-    uint32_t measureVrefMv() const noexcept;
+    static inline float mvToVolt(uint32_t mv) {
+      return static_cast<float>(mv) / 1000.0f;
+    }
 };

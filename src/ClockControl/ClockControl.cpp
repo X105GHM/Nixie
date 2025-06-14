@@ -48,16 +48,30 @@ void ClockControl::timeCycle() noexcept
                 lastState160 = currentState160;
             }
 
+            if (Globals::timeLimitEnabled)
+            {
+                time_t now = time(nullptr);
+                struct tm timeInfo;
+                localtime_r(&now, &timeInfo);
+
+                if (!ntpClient.isWithinTimeLimit(timeInfo))
+                {
+                    Logger::log(LoggerType::TIME, "Zeit außerhalb des erlaubten Bereichs (%s - %s)",
+                                Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
+                    return;
+                }
+            }
+
             if (Globals::tickerEnabled)
             {
                 relay.toggle();
             }
 
-            if ((timeInfo.tm_hour < 6 || timeInfo.tm_hour >= 22) && Globals::manualBrightnessEnabled)
+            if ((timeInfo.tm_hour < 6 || timeInfo.tm_hour >= 22) && !Globals::manualBrightnessEnabled)
             {
                 brightness = 10;
             }
-            else if ((timeInfo.tm_hour < 8 || timeInfo.tm_hour >= 20) && Globals::manualBrightnessEnabled)
+            else if ((timeInfo.tm_hour < 8 || timeInfo.tm_hour >= 20) && !Globals::manualBrightnessEnabled)
             {
                 brightness = 75;
             }

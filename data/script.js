@@ -153,7 +153,11 @@ document.addEventListener("DOMContentLoaded", () => {
     firmwareSelect = document.getElementById("firmwareSelect"),
     applyFirmware = document.getElementById("applyFirmware"),
     zipInput = document.getElementById("zipInput"),
-    applyZip = document.getElementById("applyZip");
+    applyZip = document.getElementById("applyZip"),
+    timeLimitSettings = document.getElementById("timeLimitSettings"),
+    timeLimitFromInput = document.getElementById("timeLimitFromInput"),
+    timeLimitToInput = document.getElementById("timeLimitToInput"),
+    setOTA = document.getElementById("otaUpdateButton");
 
   // Display ON/OFF special
   displayToggle.addEventListener("change", async () => {
@@ -205,7 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ACP Button
   ACPButton.addEventListener("click", async () => {
     try {
-      await fetch("/set/acp");
+      await fetch("/set/ACP");
     } catch (e) {
       console.error(e);
       alert("Fehler beim Auslösen des ACP-Events.");
@@ -215,7 +219,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Date Button
   DateButton.addEventListener("click", async () => {
     try {
-      await fetch("/set/date");
+      await fetch("/set/DATE");
     } catch (e) {
       console.error(e);
       alert("Fehler beim Setzen des Datums.");
@@ -231,6 +235,29 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("Fehler beim Abrufen der Wetterdaten.");
     }
   });
+
+
+
+  [timeLimitFromInput, timeLimitToInput].forEach(input => {
+    input.addEventListener("change", async () => {
+      skipSync.add(input.id);
+      const from = timeLimitFromInput.value;
+      const to = timeLimitToInput.value;
+      try {
+        await fetch(
+          `/set/timeLimit?value=${timeLimitToggle.checked ? 1 : 0}` +
+          `&from=${encodeURIComponent(from)}` +
+          `&to=${encodeURIComponent(to)}`
+        );
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setTimeout(() => skipSync.delete(input.id), 2000);
+      }
+    });
+  });
+
+
 
   // Brightness
   function syncBrightnessUI(enabled, val) {
@@ -267,6 +294,10 @@ document.addEventListener("DOMContentLoaded", () => {
   firmwareSelect.addEventListener('focus', () => skipSync.add('firmwareSelect'));
   firmwareSelect.addEventListener('blur', () => skipSync.delete('firmwareSelect'));
 
+  timeLimitFromInput.addEventListener('focus', () => skipSync.add('timeLimitFrom'));
+  timeLimitToInput.addEventListener('focus', () => skipSync.add('timeLimitTo'));
+
+
   // Firmware & ZIP
   applyFirmware.addEventListener("click", async () => {
     skipSync.add("firmwareSelect");
@@ -292,6 +323,37 @@ document.addEventListener("DOMContentLoaded", () => {
       const bits = logIds.map(i => document.getElementById(i).checked ? '1' : '0').join("");
       await fetch(`/set/logConfig?value=${parseInt(bits, 2)}`);
       setTimeout(() => skipSync.delete(id), 2000);
+    });
+  });
+
+  // OTA Update Button
+  setOTA.addEventListener("click", async () => {
+    try {
+      await fetch("/set/ota");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Starten des OTA-Updates.");
+    }
+  });
+
+  [timeLimitFromInput, timeLimitToInput].forEach(input => {
+    input.addEventListener("change", async () => {
+      // Flag setzen, damit fetchInfo nicht drüber schreibt
+      skipSync.add('timeLimitFrom');
+      skipSync.add('timeLimitTo');
+      try {
+        await fetch(
+          `/set/timeLimit?value=${timeLimitToggle.checked ? 1 : 0}` +
+          `&from=${encodeURIComponent(timeLimitFromInput.value)}` +
+          `&to=${encodeURIComponent(timeLimitToInput.value)}`
+        );
+      } catch (e) {
+        console.error(e);
+      } finally {
+        // erst nach abgeschlossener Anfrage wieder freigeben
+        skipSync.delete('timeLimitFrom');
+        skipSync.delete('timeLimitTo');
+      }
     });
   });
 
@@ -357,6 +419,18 @@ document.addEventListener("DOMContentLoaded", () => {
       // firmware & zip
       if (!skipSync.has("firmwareSelect")) firmwareSelect.value = data.Firmware_Target;
       if (!skipSync.has("zipInput")) zipInput.value = data.zipCode;
+
+      timeLimitSettings.style.display = data.timeLimitEnabled ? "flex" : "none";
+
+
+      if (data.timeLimitEnabled) {
+        if (!skipSync.has("timeLimitFrom")) {
+          timeLimitFromInput.value = data.timeLimitFrom || "00:00:00";
+        }
+        if (!skipSync.has("timeLimitTo")) {
+          timeLimitToInput.value = data.timeLimitTo || "00:00:00";
+        }
+      }
 
     } catch (e) {
       console.warn("Info polling error:", e);

@@ -61,46 +61,60 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/ACP", HTTP_GET, [this]() noexcept {
-        if (!displayEnabled) {
-            Logger::log(LOGTYPE, F("Error: Display not enabled for ACP"));
+        if (!displayEnabled && !Globals::loadDetected) 
+        {
             server_.send(400, "text/plain", "Display not enabled");
             return;
         }
-        vTaskSuspend(clockTaskHandle);
-        Logger::log(LOGTYPE, F("ACP triggered via HTTP"));
-        ACP();
-        vTaskResume(clockTaskHandle);
-        server_.send(200, "text/plain", "ACP routine completed");
+
+        Logger::log(LOGTYPE, "ACP gestartet via HTTP");
+        hssController.enable190();
+        vTaskDelay(pdMS_TO_TICKS(10));
+        hssController.enableResistorReduction();
+        vTaskDelay(pdMS_TO_TICKS(10));
+        runWithClockSuspended(clockTaskHandle, ACP);
+        hssController.disableResistorReduction();
+        vTaskDelay(pdMS_TO_TICKS(10));
+        hssController.disable190();
+        vTaskDelay(pdMS_TO_TICKS(10));
+        Logger::log(LOGTYPE, F("ACP fertiggestellt via HTTP"));
+        server_.send(200, "text/plain", "ACP gestartet");
     });
 
     server_.on("/set/tempDisplay", HTTP_GET, [this]() noexcept {
-        if (!displayEnabled) {
+        if (!displayEnabled) 
+        {
             Logger::log(LOGTYPE, F("Error: Display not enabled for temperature display"));
             server_.send(400, "text/plain", "Display not enabled");
             return;
         }
-        vTaskSuspend(clockTaskHandle);
-        Logger::log(LOGTYPE, F("Temperature display triggered via HTTP"));
-        WeatherClient weather(std::string(OPENWEATHER_API_KEY));
-        displayWeather();
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        vTaskResume(clockTaskHandle);
 
-        server_.send(200, "text/plain", "Temperature display completed");
+        Logger::log(LOGTYPE, F("Temperature display requested via HTTP"));
+
+        server_.send(200, "text/plain", "Temperature display started");
+
+            runWithClockSuspended(clockTaskHandle, [this]() {
+            displayWeather(); 
+            vTaskDelay(pdMS_TO_TICKS(5000)); 
+        });
     });
 
     server_.on("/set/DATE", HTTP_GET, [this]() noexcept {
-        if (!displayEnabled) {
+        if (!displayEnabled) 
+        {
             Logger::log(LOGTYPE, F("Error: Display not enabled for DATE"));
             server_.send(400, "text/plain", "Display not enabled");
             return;
         }
-        vTaskSuspend(clockTaskHandle);
+
         Logger::log(LOGTYPE, F("Date display requested via HTTP"));
-        displayDate(); 
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        vTaskResume(clockTaskHandle);
-        server_.send(200, "text/plain", "Date shown");
+
+        server_.send(200, "text/plain", "Date display started");
+
+        runWithClockSuspended(clockTaskHandle, [this]() {
+            displayDate();
+            vTaskDelay(pdMS_TO_TICKS(5000));
+        });
     });
 
     server_.on("/set/zip", HTTP_GET, [this]() noexcept {
@@ -129,32 +143,88 @@ void HTTPHandler::begin() noexcept
                      String("tickerEnabled=") + (Globals::tickerEnabled ? "1" : "0"));
     });
 
-    server_.on("/set/timeLimit", HTTP_GET, [this]() noexcept {
+    server_.on("/set/timeLimit", HTTP_GET, [this]() noexcept{
         if (!server_.hasArg("value")) {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
             Logger::log(LOGTYPE, F("HTTP /set/timeLimit fehlte Parameter 'value'"));
             return;
         }
-        String val = server_.arg("value");
-        Globals::timeLimitEnabled = (val != "0");
+
+        Globals::timeLimitEnabled = (server_.arg("value") != "0");
+
+        std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$)");
+
+        if (server_.hasArg("from")) 
+        {
+            std::string from = server_.arg("from").c_str();
+            if (std::regex_match(from, timeRegex)) 
+            {
+                Globals::timeLimitFrom = from;
+                } 
+                else
+                {
+                server_.send(400, "text/plain", "Invalid 'from' time format (expected HH:MM:SS)");
+                Logger::log(LOGTYPE, "Ungültiges 'from'-Format: %s", from.c_str());
+                return;
+            }
+        }
+
+        if (server_.hasArg("to")) 
+        {
+            std::string to = server_.arg("to").c_str();
+            if (std::regex_match(to, timeRegex)) 
+            {
+                Globals::timeLimitTo = to;
+            } 
+            else 
+            {
+                server_.send(400, "text/plain", "Invalid 'to' time format (expected HH:MM:SS)");
+                Logger::log(LOGTYPE, "Ungültiges 'to'-Format: %s", to.c_str());
+                return;
+            }
+        }
+
         Logger::log(LOGTYPE, "timeLimitEnabled set to %s via HTTP", 
-                    Globals::timeLimitEnabled ? "true" : "false");
-        server_.send(200, "text/plain", 
-                     String("timeLimitEnabled=") + (Globals::timeLimitEnabled ? "1" : "0"));
+                Globals::timeLimitEnabled ? "true" : "false");
+        Logger::log(LOGTYPE, "timeLimit active from %s to %s", 
+                Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
+
+        server_.send(200, "text/plain",
+            String("timeLimitEnabled=") + (Globals::timeLimitEnabled ? "1" : "0") +
+            "\nfrom=" + Globals::timeLimitFrom.c_str() +
+            "\nto=" + Globals::timeLimitTo.c_str()
+        ); 
     });
 
-    server_.on("/set/silentMode", HTTP_GET, [this]() noexcept {
-        if (!server_.hasArg("value")) {
+    server_.on("/set/silentMode", HTTP_GET, [this]() noexcept{
+        if (!server_.hasArg("value")) 
+        {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
             Logger::log(LOGTYPE, F("HTTP /set/silentMode fehlte Parameter 'value'"));
             return;
         }
+
         String val = server_.arg("value");
-        Globals::SilentlModeEnabled = (val != "0");
-        Logger::log(LOGTYPE, "silentModeEnabled set to %s via HTTP", 
-                    Globals::SilentlModeEnabled ? "true" : "false");
-        server_.send(200, "text/plain", 
-                     String("SilentModeEnabled=") + (Globals::SilentlModeEnabled ? "1" : "0"));
+        Globals::SilentModeEnabled = (val != "0");
+        Logger::log(LOGTYPE, "silentModeEnabled set to %s via HTTP",
+                    Globals::SilentModeEnabled ? "true" : "false");
+
+        gpio_config_t io_conf = {
+            .pin_bit_mask = (1ULL << 40),
+            .mode = Globals::SilentModeEnabled ? GPIO_MODE_INPUT : GPIO_MODE_OUTPUT,
+            .pull_up_en = GPIO_PULLUP_DISABLE,
+            .pull_down_en = Globals::SilentModeEnabled ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
+            .intr_type = GPIO_INTR_DISABLE
+        };
+        gpio_config(&io_conf);
+
+        if (!Globals::SilentModeEnabled) 
+        {
+            gpio_set_level(GPIO_NUM_40, 0);
+        }
+
+        server_.send(200, "text/plain",
+                     String("SilentModeEnabled=") + (Globals::SilentModeEnabled ? "1" : "0")); 
     });
 
     server_.on("/set/manualBrightness", HTTP_GET, [this]() noexcept {
@@ -251,7 +321,7 @@ void HTTPHandler::begin() noexcept
 
         Logger::log(LOGTYPE, "Prüfe OTA für Firmware: %s", firmwareUrl.c_str());
         OTAManager ota;
-        esp_err_t result = ota.checkAndUpdate(manifestUrl, firmwareUrl); // <- Versionsprüfung
+        esp_err_t result = ota.checkAndUpdate(manifestUrl, firmwareUrl); 
 
         if (result == ESP_OK) {
             Logger::log(LOGTYPE, "OTA abgeschlossen oder nicht notwendig");
@@ -360,12 +430,14 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse += "  \"zipCode\": \""            + String(Globals::zipCode.c_str()) + "\",\n";
     jsonResponse += "  \"tickerEnabled\": "       + String(Globals::tickerEnabled) + ",\n";
     jsonResponse += "  \"timeLimitEnabled\": "    + String(Globals::timeLimitEnabled) + ",\n";
-    jsonResponse += "  \"silentModeEnabled\": "   + String(Globals::SilentlModeEnabled) + ",\n";
+    jsonResponse += "  \"silentModeEnabled\": "   + String(Globals::SilentModeEnabled) + ",\n";
     jsonResponse += "  \"manualBrightnessEnabled\": " + String(Globals::manualBrightnessEnabled) + ",\n";
     jsonResponse += "  \"WeatherUpdateEnabled\": "    + String(Globals::WeatherUpdateEnabled) + ",\n";
     jsonResponse += "  \"logConfigBinary\": \""    + binStr                         + "\",\n";
     jsonResponse += "  \"loadDetected\": "        + String(Globals::loadDetected)  + ",\n";
-    jsonResponse += "  \"Brightness\": "          + String(brightness)             + "\n";
+    jsonResponse += "  \"Brightness\": "          + String(brightness)             + ",\n";
+    jsonResponse += "  \"timeLimitFrom\": \""   + String(Globals::timeLimitFrom.c_str()) + "\",\n";
+    jsonResponse += "  \"timeLimitTo\": \""     + String(Globals::timeLimitTo.c_str()) + "\"\n";
     jsonResponse += "}";
 
     server_.send(200, "application/json", jsonResponse);

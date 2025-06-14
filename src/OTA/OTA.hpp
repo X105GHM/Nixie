@@ -14,6 +14,8 @@
 #include <string>
 #include <optional>
 #include "Globals/Globals.hpp"
+#include "Logger/Logger.hpp"
+#include "HTTP/certs.hpp"
 
 class OTAManager
 {

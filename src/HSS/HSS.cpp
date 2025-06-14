@@ -69,9 +69,7 @@ bool HSS::testLoad(const std::function<float()> &readVoltage, uint32_t timeoutMs
     Logger::log(logType, F("testLoad: Lade auf 160V und messe Entladen..."));
 
     enable160();
-
-    vTaskDelay(pdMS_TO_TICKS(100));
-
+    vTaskDelay(pdMS_TO_TICKS(100)); 
     disable160();
 
     TickType_t startTick = xTaskGetTickCount();
@@ -80,18 +78,12 @@ bool HSS::testLoad(const std::function<float()> &readVoltage, uint32_t timeoutMs
 
     if (voltage < thresholdV)
     {
-        Logger::log(logType, "testLoad: Spannung schon unter Threshold => Keine Last");
+        Logger::log(logType, "testLoad: Spannung schon unter Threshold => Last aber hoch => Keine Last erkannt");
         return false;
     }
 
     while (true)
     {
-        if ((xTaskGetTickCount() - startTick) * portTICK_PERIOD_MS >= timeoutMs)
-        {
-            Logger::log(logType, "testLoad: Timeout erreicht, Spannung immer noch %.2f V => Keine Last", voltage);
-            return false;
-        }
-
         voltage = readVoltage();
 
         if (voltage < thresholdV)
@@ -99,6 +91,13 @@ bool HSS::testLoad(const std::function<float()> &readVoltage, uint32_t timeoutMs
             Logger::log(logType, "testLoad: Spannung bei %.2f V < Threshold => Last erkannt", voltage);
             return true;
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+
+         if ((xTaskGetTickCount() - startTick) * portTICK_PERIOD_MS >= timeoutMs)
+        {
+            Logger::log(logType, "testLoad: Timeout erreicht, Spannung immer noch %.2f V => Keine Last", voltage);
+            return false;
+        }
+
+        delay(10);
     }
 }

@@ -25,7 +25,7 @@ namespace Globals
 
     extern bool timeLimitEnabled;
 
-    extern bool SilentlModeEnabled;
+    extern bool SilentModeEnabled;
 
     extern bool manualBrightnessEnabled;
 
@@ -38,6 +38,11 @@ namespace Globals
     extern std::string HardwareVersion;
 
     extern std::string SoftwareVersion;
+
+    extern std::string timeLimitFrom; 
+
+    extern std::string timeLimitTo;
+
 
     void applyLogConfig();
 

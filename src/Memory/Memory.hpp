@@ -1,42 +1,42 @@
 #pragma once
 
-#include <cstdint>
 #include <string>
 #include "esp_err.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "Logger/Logger.hpp"
+#include "Globals/Globals.hpp"
 
-
-class PersistentStorage
+namespace Memory
 {
-public:
-    PersistentStorage() noexcept;
+    class PersistentStorage
+    {
+    public:
+        esp_err_t init() noexcept;
+        esp_err_t load() noexcept;
+        esp_err_t save() noexcept;
 
-    ~PersistentStorage() noexcept;
+        void setIntValue(int val) noexcept;
+        int getIntValue() const noexcept;
 
-    esp_err_t init() noexcept;
+        void setFloatValue(float val) noexcept;
+        float getFloatValue() const noexcept;
 
-    esp_err_t load() noexcept;
+        void setStringValue(const std::string &val) noexcept;
+        std::string getStringValue() const noexcept;
 
-    esp_err_t save() noexcept;
+    private:
+        static constexpr const char *NVS_NAMESPACE = "storage";
+        static constexpr const char *KEY_INT = "int_val";
+        static constexpr const char *KEY_FLOAT = "float_val";
+        static constexpr const char *KEY_STRING = "str_val";
 
-    void setIntValue(int val) noexcept;
-    int getIntValue() const noexcept;
+        int intValue_;
+        float floatValue_;
+        std::string stringValue_;
+    };
 
-    void setFloatValue(float val) noexcept;
-    float getFloatValue() const noexcept;
+    void loadGlobals() noexcept;
 
-    void setStringValue(const std::string &val) noexcept;
-    std::string getStringValue() const noexcept;
-
-private:
-    static constexpr const char *NVS_NAMESPACE = "storage";
-    static constexpr const char *KEY_INT = "int_val";
-    static constexpr const char *KEY_FLOAT = "float_val";
-    static constexpr const char *KEY_STRING = "str_val";
-
-    int intValue_;
-    float floatValue_;
-    std::string stringValue_;
-};
+    void saveGlobals() noexcept;
+}

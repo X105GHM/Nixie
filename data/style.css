@@ -279,6 +279,19 @@ h2 {
     border-color: #777;
 }
 
+/* -----------------------------------------------
+   Time-Boxes
+   ----------------------------------------------- */
+   .time-limit-settings {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .time-limit-settings label {
+    white-space: nowrap;
+  }
+  
 
 
 /* -----------------------------------------------
@@ -814,6 +827,11 @@ body.dark #networkLogContainer {
   
   body.dark .log-input-group button:hover {
     background-color: #3a3a3a;
+  }
+
+  body.dark .time-limit-settings {
+    background-color: #1e1e1e;
+    border: 1px solid #333;
   }
 
 /* ================================================

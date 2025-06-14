@@ -19,8 +19,6 @@
 #include "Globals/SharedObjects.hpp"
 
 static constexpr LoggerType LOGTYPE = LoggerType::GENERAL;
-static constexpr uint32_t LOAD_TEST_TIMEOUT_MS = 500;
-static constexpr float    LOAD_TEST_THRESHOLD_V = 130.0f;
 
 static void initTime() 
 {
@@ -58,10 +56,9 @@ static void brownoutStarter(void *pvParameters)
 void setup() 
 {
     Serial.begin(115200);
+
     Logger::begin(Serial);
     Logger::log(LOGTYPE, F("System start"));
-
-    gpio_set_level(GPIO_NUM_13, 0);
 
     if (storage.init() != ESP_OK) 
     {
@@ -69,7 +66,7 @@ void setup()
     }
     else 
     {
-        storage.load();
+        Memory::loadGlobals();
     }
 
     WiFi.mode(WIFI_STA);
@@ -77,36 +74,34 @@ void setup()
 
     initTime();
 
-    // Trigger load test
     {
         auto readVoltage = []() -> float {
             return supplyWatch.readUHSS();
         };
-        bool hasLoad = hssController.testLoad(readVoltage, LOAD_TEST_TIMEOUT_MS, LOAD_TEST_THRESHOLD_V);
+        bool hasLoad = hssController.testLoad(readVoltage, 200/*ms*/, 127.0f/*V*/);
         Globals::loadDetected = hasLoad;
         Logger::log(LoggerType::HSS, hasLoad ? F("LoadTest: Last erkannt") : F("LoadTest: Keine Last erkannt"));
     }
-/*
-    // Tasks erstellen
-    xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 3, &displayTaskHandle, 0);
-    Logger::log(LOGTYPE, F("DisplayDigits Task started"));
-*/
-    xTaskCreatePinnedToCore(ClockControl::clockTask, "ClockTask", 2048, &clockControl, 2, &clockTaskHandle, 1);
-    Logger::log(LOGTYPE, F("ClockTask started"));
-
-    xTaskCreatePinnedToCore(buttonTask, "ButtonTask", 2048, nullptr, 1, &buttonTaskHandle, 1);
-    Logger::log(LOGTYPE, F("ButtonTask started"));
-
-    xTaskCreatePinnedToCore(brownoutStarter, "BrownoutStarter", 2048, nullptr, 4, &brownoutTaskHandle, 1);
-    Logger::log(LOGTYPE, F("BrownoutStarter Task started"));
-
-    xTaskCreatePinnedToCore(httpTask, "HTTPTask", 4096, nullptr, 0, &httpTaskHandle, 1);
-    Logger::log(LOGTYPE, F("HTTPTask started"));
 
     displayEnabled = true;
+
+    xTaskCreatePinnedToCore(ClockControl::clockTask, "ClockTask", 2048, &clockControl, 2, &clockTaskHandle, 0);
+    Logger::log(LOGTYPE, F("ClockTask started"));
+
+    xTaskCreatePinnedToCore(buttonTask, "ButtonTask", 2048, nullptr, 1, &buttonTaskHandle, 0);
+    Logger::log(LOGTYPE, F("ButtonTask started"));
+
+    xTaskCreatePinnedToCore(brownoutStarter, "BrownoutStarter", 2048, nullptr, 4, &brownoutTaskHandle, 0);
+    Logger::log(LOGTYPE, F("BrownoutStarter Task started"));
+
+    xTaskCreatePinnedToCore(httpTask, "HTTPTask", 8192, nullptr, 0, &httpTaskHandle, 0);
+    Logger::log(LOGTYPE, F("HTTPTask started"));
+
+    xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 3, &displayTaskHandle, 1);
+    Logger::log(LOGTYPE, F("DisplayDigits Task started"));
 }
 
 void loop() 
 {
-    vTaskDelay(pdMS_TO_TICKS(10000));
+    vTaskDelay(pdMS_TO_TICKS(1000));
 }

@@ -2,7 +2,7 @@
 
 static const char *TAG = "Brownout";
 
-Brownout::Brownout(SupplyWatch &sw, HSS &hss, PersistentStorage &storage, uint32_t interval_us) noexcept
+Brownout::Brownout(SupplyWatch &sw, HSS &hss, Memory::PersistentStorage &storage, uint32_t interval_us) noexcept
     : sw_(sw), hss_(hss), storage_(storage), timer_(nullptr), interval_us_(interval_us)
 {
 }
@@ -36,7 +36,7 @@ void Brownout::timerCallback(void *arg)
         self->hss_.disable190();
         self->hss_.disable160();
         self->hss_.disableResistorReduction();
-        self->storage_.save();
+        Memory::saveGlobals();
         esp_timer_stop(self->timer_);
     }
 }

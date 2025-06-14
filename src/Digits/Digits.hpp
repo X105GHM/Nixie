@@ -4,10 +4,12 @@
 #include <SPI.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "esp_task_wdt.h"
 
 #include "Globals/Globals.hpp"
 #include "TimeWeather/WeatherClient/WeatherClient.hpp"
 #include "ACP/ACP.hpp"
+#include "Logger/Logger.hpp"
 #include <algorithm>
 #include <ctime>
 #include <cstring>

@@ -21,7 +21,7 @@ public:
 
     void disableResistorReduction() const noexcept;
 
-    bool testLoad(const std::function<float()>& readVoltage, uint32_t timeoutMs = 500, float thresholdV = 100.0f) const noexcept;
+    bool testLoad(const std::function<float()>& readVoltage, uint32_t timeoutMs, float thresholdV) const noexcept;
 
     mutable bool enableResistor = false;
 
