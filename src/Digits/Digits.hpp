@@ -20,7 +20,7 @@ constexpr bool ADAPTIVE_BRIGHTNESS = true;
 
 extern bool displayEnabled;
 extern std::int32_t digits; 
-extern std::uint8_t singleDigit;
+extern std::int32_t lastdigits;
 extern std::uint32_t brightness;   // 0..100
 extern const std::uint32_t symbolArray[10];
 

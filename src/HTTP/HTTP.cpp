@@ -2,6 +2,8 @@
 
 static constexpr LoggerType LOGTYPE = LoggerType::Webserver;
 
+static const std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$)");
+
 HTTPHandler::HTTPHandler(int port) noexcept
     : server_(port)
 {}
@@ -58,6 +60,17 @@ void HTTPHandler::begin() noexcept
     server_.on("/set/reset", HTTP_GET, [this]() noexcept {
         Logger::log(LOGTYPE, F("System reset requested via HTTP"));       
         handleReset();
+    });
+
+    server_.on("/set/setOldValue", HTTP_GET, [this]() noexcept {
+        Logger::log(LOGTYPE, F("System reset requested via HTTP"));       
+        Memory::loadGlobals();
+        Globals::applyLogConfig();
+    });
+
+    server_.on("/set/resetValue", HTTP_GET, [this]() noexcept {
+        Logger::log(LOGTYPE, F("System reset requested via HTTP"));       
+        Memory::StorageReset();
     });
 
     server_.on("/set/ACP", HTTP_GET, [this]() noexcept {
@@ -143,6 +156,20 @@ void HTTPHandler::begin() noexcept
                      String("tickerEnabled=") + (Globals::tickerEnabled ? "1" : "0"));
     });
 
+    server_.on("/set/NixiePWM", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("value")) {
+            server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
+            Logger::log(LOGTYPE, F("HTTP /set/NixiePWM fehlte Parameter 'value'"));
+            return;
+        }
+        String val = server_.arg("value");
+        Globals::PWM_disabled = (val != "0");
+        Logger::log(LOGTYPE, "tickerEnabled set to %s via HTTP", 
+                    Globals::PWM_disabled ? "true" : "false");
+        server_.send(200, "text/plain", 
+                     String("tickerEnabled=") + (Globals::PWM_disabled ? "1" : "0"));
+    });
+
     server_.on("/set/timeLimit", HTTP_GET, [this]() noexcept{
         if (!server_.hasArg("value")) {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
@@ -152,48 +179,42 @@ void HTTPHandler::begin() noexcept
 
         Globals::timeLimitEnabled = (server_.arg("value") != "0");
 
-        std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$)");
-
-        if (server_.hasArg("from")) 
+        if (server_.hasArg("from"))
         {
             std::string from = server_.arg("from").c_str();
-            if (std::regex_match(from, timeRegex)) 
+            if (std::regex_match(from, timeRegex))
             {
                 Globals::timeLimitFrom = from;
-                } 
-                else
-                {
-                server_.send(400, "text/plain", "Invalid 'from' time format (expected HH:MM:SS)");
+            }
+            else
+            {
+                server_.send(400, "text/plain",
+                             "Invalid 'from' time format (expected HH:MM:SS)");
                 Logger::log(LOGTYPE, "Ungültiges 'from'-Format: %s", from.c_str());
                 return;
             }
         }
 
-        if (server_.hasArg("to")) 
+        if (server_.hasArg("to"))
         {
             std::string to = server_.arg("to").c_str();
-            if (std::regex_match(to, timeRegex)) 
+            if (std::regex_match(to, timeRegex))
             {
                 Globals::timeLimitTo = to;
-            } 
-            else 
+            }
+            else
             {
-                server_.send(400, "text/plain", "Invalid 'to' time format (expected HH:MM:SS)");
+                server_.send(400, "text/plain","Invalid 'to' time format (expected HH:MM:SS)");
                 Logger::log(LOGTYPE, "Ungültiges 'to'-Format: %s", to.c_str());
                 return;
             }
         }
 
-        Logger::log(LOGTYPE, "timeLimitEnabled set to %s via HTTP", 
-                Globals::timeLimitEnabled ? "true" : "false");
-        Logger::log(LOGTYPE, "timeLimit active from %s to %s", 
-                Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
+        Logger::log(LOGTYPE, "timeLimitEnabled set to %s via HTTP",Globals::timeLimitEnabled ? "true" : "false");
 
-        server_.send(200, "text/plain",
-            String("timeLimitEnabled=") + (Globals::timeLimitEnabled ? "1" : "0") +
-            "\nfrom=" + Globals::timeLimitFrom.c_str() +
-            "\nto=" + Globals::timeLimitTo.c_str()
-        ); 
+        Logger::log(LOGTYPE, "timeLimit active from %s to %s",Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
+
+        server_.send(200, "text/plain",String("timeLimitEnabled=") + (Globals::timeLimitEnabled ? "1" : "0") +"\nfrom=" + Globals::timeLimitFrom.c_str() +"\nto=" + Globals::timeLimitTo.c_str());
     });
 
     server_.on("/set/silentMode", HTTP_GET, [this]() noexcept{
@@ -259,7 +280,8 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/logConfig", HTTP_GET, [this]() noexcept {
-        if (!server_.hasArg("value")) {
+        if (!server_.hasArg("value")) 
+        {
             server_.send(400, "text/plain", "Missing 'value' parameter");
             Logger::log(LOGTYPE, F("HTTP /set/logConfig fehlte Parameter 'value'"));
             return;
@@ -267,15 +289,24 @@ void HTTPHandler::begin() noexcept
         String val = server_.arg("value");
         char* endptr = nullptr;
         unsigned long newConfig = strtoul(val.c_str(), &endptr, 10);
-        if (endptr == val.c_str() || *endptr != '\0') {
+        if (endptr == val.c_str() || *endptr != '\0') 
+        {
             server_.send(400, "text/plain", "Invalid 'value' (not a number)");
             Logger::log(LOGTYPE, "HTTP /set/logConfig ungültiger Wert: %s", val.c_str());
             return;
         }
         Globals::logConfig = static_cast<uint32_t>(newConfig);
         Globals::applyLogConfig();
-        Logger::log(LOGTYPE, "logConfig auf %u gesetzt und übernommen", Globals::logConfig);
-        server_.send(200, "text/plain", String("logConfig=") + String(Globals::logConfig));
+
+        String binStr;
+        binStr.reserve(9);
+        for (int i = 8; i >= 0; --i) 
+        {
+            binStr += ((Globals::logConfig >> i) & 1) ? '1' : '0';
+        }
+
+        Logger::log(LOGTYPE, "logConfig auf %s gesetzt und übernommen", binStr.c_str());
+        server_.send(200, "text/plain", String("logConfig=") + binStr);
     });
 
     server_.on("/set/firmware", HTTP_GET, [this]() noexcept {
@@ -309,27 +340,47 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/ota", HTTP_GET, [this]() noexcept {
-        Globals::FirmwareTarget target = Globals::currentFirmwareTarget;
-        std::string firmwareUrl = Globals::getFirmwareUrl(target);
-        std::string manifestUrl  = Globals::getManifestUrl(target);
+        Logger::log(LOGTYPE, F("SPIFFS für OTA unmounten..."));
+        SPIFFS.end();
 
-        if (firmwareUrl.empty() || manifestUrl.empty()) {
-            server_.send(400, "text/plain", "Invalid firmware target");
-            Logger::log(LOGTYPE, "OTA fehlgeschlagen: ungültige URLs");
+        Globals::FirmwareTarget target = Globals::currentFirmwareTarget;
+        std::string baseUrl = Globals::getFirmwareUrl(target);
+        if (baseUrl.empty())
+        {
+            Logger::log(LOGTYPE, F("OTA fehlgeschlagen: ungültiges Firmware-Ziel"));
+            SPIFFS.begin(true);
+            server_.begin();
+            server_.send(400, "text/plain", "Ungültiges Firmware-Ziel");
             return;
         }
 
-        Logger::log(LOGTYPE, "Prüfe OTA für Firmware: %s", firmwareUrl.c_str());
+        Logger::log(LOGTYPE, "Prüfe OTA im Ordner: %s", baseUrl.c_str());
         OTAManager ota;
-        esp_err_t result = ota.checkAndUpdate(manifestUrl, firmwareUrl); 
+        esp_err_t result = ota.checkAndUpdate(baseUrl);
 
-        if (result == ESP_OK) {
-            Logger::log(LOGTYPE, "OTA abgeschlossen oder nicht notwendig");
+        Logger::log(LOGTYPE, F("SPIFFS mounten..."));
+        if (!SPIFFS.begin())
+        {
+            Logger::log(LOGTYPE, F("SPIFFS.begin() fehlgeschlagen"));
+        }
+        else
+        {
+            Logger::log(LOGTYPE, F("SPIFFS remounted"));
+        }
+
+        if (result == ESP_OK)
+        {
+            Logger::log(LOGTYPE, F("OTA abgeschlossen oder nicht notwendig"));
             server_.send(200, "text/plain", "OTA erfolgreich oder nicht notwendig");
-        } else {
-            Logger::log(LOGTYPE, "OTA fehlgeschlagen (Error %d)", result);
+        }
+        else
+        {
+            Logger::log(LOGTYPE, "OTA fehlgeschlagen (%s)", esp_err_to_name(result));
             server_.send(500, "text/plain", "OTA fehlgeschlagen");
         }
+
+        server_.begin();
+        Logger::log(LOGTYPE, F("Webserver neu gestartet"));
     });
 
 
@@ -360,7 +411,7 @@ void HTTPHandler::handleClient() noexcept {
 
 void HTTPHandler::handleReset() noexcept {
     Logger::log(LOGTYPE, F("Performing system reset..."));
-    storage.save();
+    Memory::saveGlobals();
     ESP.restart();
 }
 
@@ -391,7 +442,8 @@ void HTTPHandler::handleInfo() noexcept
     auto cfg             = Globals::logConfig;
     String binStr;
     binStr.reserve(9);
-    for (int i = 8; i >= 0; --i) {
+    for (int i = 8; i >= 0; --i) 
+    {
         binStr += ((cfg >> i) & 1) ? '1' : '0';
     }
 
@@ -437,7 +489,8 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse += "  \"loadDetected\": "        + String(Globals::loadDetected)  + ",\n";
     jsonResponse += "  \"Brightness\": "          + String(brightness)             + ",\n";
     jsonResponse += "  \"timeLimitFrom\": \""   + String(Globals::timeLimitFrom.c_str()) + "\",\n";
-    jsonResponse += "  \"timeLimitTo\": \""     + String(Globals::timeLimitTo.c_str()) + "\"\n";
+    jsonResponse += "  \"timeLimitTo\": \""     + String(Globals::timeLimitTo.c_str()) + "\",\n";
+    jsonResponse += "  \"NixiePWM\": "       + String(Globals::PWM_disabled) + "\n";
     jsonResponse += "}";
 
     server_.send(200, "application/json", jsonResponse);

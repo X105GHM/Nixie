@@ -1,7 +1,6 @@
 #pragma once
 
 #include "driver/gpio.h"
-#include <Arduino.h>
 
 class Relay
 {

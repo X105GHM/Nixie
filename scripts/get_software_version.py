@@ -1,7 +1,7 @@
 Import("env") # type: ignore
 
 def read_version():
-    with open("bin/version.txt") as f:
+    with open("version.txt") as f:
         return f.read().strip()
 
 env.Append( # type: ignore

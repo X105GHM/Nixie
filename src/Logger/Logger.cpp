@@ -148,7 +148,7 @@ void Logger::log(LoggerType type, const char *format, ...) noexcept
     if (!enabled)
         return;
 
-    char buffer[128];
+    char buffer[512];
     va_list args;
     va_start(args, format);
     std::vsnprintf(buffer, sizeof(buffer), format, args);

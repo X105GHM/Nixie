@@ -15,6 +15,9 @@ namespace Memory
         esp_err_t init() noexcept;
         esp_err_t load() noexcept;
         esp_err_t save() noexcept;
+        esp_err_t clearAll() noexcept;
+
+        void resetGlobals() noexcept;
 
         void setIntValue(int val) noexcept;
         int getIntValue() const noexcept;
@@ -39,4 +42,6 @@ namespace Memory
     void loadGlobals() noexcept;
 
     void saveGlobals() noexcept;
+
+    void StorageReset() noexcept;
 }

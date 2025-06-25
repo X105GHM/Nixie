@@ -2,10 +2,11 @@
 #include <cstring>
 
 Relay::Relay() noexcept
-    : state_(false)
+    : state_(false)  
 {
-    pinMode((int)RELAY_PIN, OUTPUT);
-    digitalWrite((int)RELAY_PIN, LOW);
+    gpio_pad_select_gpio(RELAY_PIN);
+    gpio_set_direction(RELAY_PIN, GPIO_MODE_OUTPUT);
+    setLevel(state_);
 }
 
 void Relay::setLevel(bool level) noexcept

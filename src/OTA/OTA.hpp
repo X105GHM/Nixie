@@ -10,6 +10,7 @@
 
 #include <string>
 #include <cstdlib>
+#include <memory>
 #include <cstring>
 #include <string>
 #include <optional>
@@ -22,10 +23,10 @@ class OTAManager
 public:
     OTAManager() noexcept;
 
-    esp_err_t checkAndUpdate(const std::string &manifestUrl, const std::string &firmwareUrl) noexcept;
+    esp_err_t checkAndUpdate(const std::string &baseUrl) noexcept;
 
 private:
     std::optional<std::string> fetchManifestVersion(const std::string &manifestUrl) noexcept;
-
-    esp_err_t performUpdate(const std::string &firmwareUrl) noexcept;
+    esp_err_t performFirmwareUpdate(const std::string &firmwareUrl) noexcept;
+    esp_err_t performSPIFFSUpdate(const std::string &spiffsUrl) noexcept;
 };

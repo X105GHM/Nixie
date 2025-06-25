@@ -60,6 +60,10 @@
               <div class="card"><strong>Firmware:</strong> <span id="firmwareTarget">–</span></div>
               <div class="card"><strong>Hardware:</strong> <span id="hardwareVersion">–</span></div>
               <div class="card"><strong>Software:</strong> <span id="softwareVersion">–</span></div>
+              <div class="card"><strong>Display Status:</strong> <span id="DisplayEnabled">–</span></div>
+              <div class="card"><strong>Ruhemodus:</strong> <span id="silentModeEnabled">–</span></div>
+              <div class="card"><strong>Wetter Updates:</strong> <span id="WeatherUpdateEnabled">–</span></div>
+              <div class="card"><strong>Ticker:</strong> <span id="tickerEnabled">–</span></div>
               <div class="card"><strong>Autor:</strong> <span id="autor">–</span></div>
               <div class="card"><strong>SSID:</strong> <span id="ssid">–</span></div>
               <div class="card"><strong>ZIP-Code:</strong> <span id="zipCode">–</span></div>
@@ -68,6 +72,12 @@
               <div class="card"><strong>Freier Sketch:</strong> <span id="sketchFreeSpace">–</span></div>
               <div class="card"><strong>Flash-Größe:</strong> <span id="flashSize">–</span></div>
               <div class="card"><strong>Flash-Speed:</strong> <span id="flashSpeed">–</span></div>
+              <div class="card"><strong>Nixie PWM:</strong> <span id="nixiePWM">–</span></div>
+              <div class="card"><strong>Manuelle Helligkeit:</strong> <span id="manualBrightnessEnabled">–</span></div>
+              <div class="card"><strong>Helligkeit:</strong> <span id="brightness">–</span></div>
+              <div class="card"><strong>Zeitabhänige Anzeige:</strong> <span id="timeLimitEnabled">–</span></div>
+              <div class="card"><strong>Anzeige Startzeit:</strong> <span id="timeLimitFrom">–</span></div>
+              <div class="card"><strong>Anzeige Stop:</strong> <span id="timeLimitTo">–</span></div> 
             </div>
           </section>
 
@@ -95,6 +105,7 @@
             <canvas id="chart_energy_Wh"></canvas>
             <canvas id="chart_temperature"></canvas>
             <canvas id="chart_freeHeap"></canvas>
+            <canvas id="chart_sketchSize"></canvas>
         </section>
 
         <!-- Log -->
@@ -159,6 +170,16 @@
             </div>
 
             <div class="device-setting">
+                <label for="displayToggle">Voreinstellungen</label>
+                <button id="startValue">Setzen</button>
+            </div>
+
+            <div class="device-setting">
+                <label for="displayToggle">Reset Einstellungen</label>
+                <button id="rstValue">Reset</button>
+            </div>
+
+            <div class="device-setting">
                 <label for="tickerToggle">Ticker aktivieren</label>
                 <label class="switch">
                     <input type="checkbox" id="tickerToggle" />
@@ -185,6 +206,14 @@
                 <label for="silentToggle">Silent Mode</label>
                 <label class="switch">
                     <input type="checkbox" id="silentToggle" />
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="device-setting">
+                <label for="PWMToggle">Nixie PWM</label>
+                <label class="switch">
+                    <input type="checkbox" id="PWMToggle" />
                     <span class="slider"></span>
                 </label>
             </div>

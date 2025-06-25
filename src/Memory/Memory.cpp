@@ -6,7 +6,6 @@ namespace Memory
 {
     static PersistentStorage storage;
 
-    // Persistenz initialisieren (falls extern benötigt)
     esp_err_t PersistentStorage::init() noexcept
     {
         esp_err_t err = nvs_flash_init();
@@ -51,7 +50,15 @@ namespace Memory
 
         nvs_set_i32(handle, KEY_INT, intValue_);
         nvs_set_i32(handle, KEY_FLOAT, static_cast<int32_t>(floatValue_ * 10000));
-        nvs_set_str(handle, KEY_STRING, stringValue_.c_str());
+
+        std::string packed =
+            Globals::zipCode + "|" +
+            Globals::HardwareVersion + "|" +
+            std::to_string(static_cast<int>(Globals::currentFirmwareTarget)) + "|" +
+            Globals::timeLimitFrom + "|" +
+            Globals::timeLimitTo;
+
+        nvs_set_str(handle, KEY_STRING, packed.c_str());
         nvs_commit(handle);
         nvs_close(handle);
         return ESP_OK;
@@ -66,6 +73,45 @@ namespace Memory
     void PersistentStorage::setStringValue(const std::string &val) noexcept { stringValue_ = val; }
     std::string PersistentStorage::getStringValue() const noexcept           { return stringValue_; }
 
+    esp_err_t PersistentStorage::clearAll() noexcept
+    {
+        nvs_handle_t handle;
+        esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+        if (err != ESP_OK) return err;
+
+        err = nvs_erase_all(handle);
+        if (err == ESP_OK) {
+            err = nvs_commit(handle);
+        }
+        nvs_close(handle);
+        return err;
+    }
+
+    void PersistentStorage::resetGlobals() noexcept
+    {
+        if (auto err = storage.clearAll(); err != ESP_OK) 
+        {
+            Logger::log(LoggerType::GENERAL,"resetGlobals: erase failed: %s",esp_err_to_name(err));
+        }
+
+        Globals::tickerEnabled           = false;
+        Globals::timeLimitEnabled        = false;
+        Globals::SilentModeEnabled       = false;
+        Globals::manualBrightnessEnabled = false;
+        Globals::WeatherUpdateEnabled    = false;
+        Globals::PWM_disabled            = false;
+
+        Globals::zipCode                 = "88457";
+        Globals::HardwareVersion         = "V6.0.1";
+        Globals::currentFirmwareTarget   = Globals::FirmwareTarget::NixieV6_std;
+        Globals::timeLimitFrom           = "06:00:00";
+        Globals::timeLimitTo             = "00:00:00";
+
+        Globals::logConfig               =0;
+
+        saveGlobals();
+    }
+
     void saveGlobals() noexcept
     {
         int flags =
@@ -73,14 +119,18 @@ namespace Memory
             (Globals::timeLimitEnabled        ? 1 << 1 : 0) |
             (Globals::SilentModeEnabled       ? 1 << 2 : 0) |
             (Globals::manualBrightnessEnabled ? 1 << 3 : 0) |
-            (Globals::WeatherUpdateEnabled    ? 1 << 4 : 0);
+            (Globals::WeatherUpdateEnabled    ? 1 << 4 : 0) |
+            (Globals::PWM_disabled            ? 1 << 5 : 0);
         storage.setIntValue(flags);
 
         storage.setFloatValue(static_cast<float>(Globals::logConfig));
 
-        std::string packed = Globals::zipCode + "|" +
-                             Globals::HardwareVersion + "|" +
-                             std::to_string(static_cast<int>(Globals::currentFirmwareTarget));
+        std::string packed =
+            Globals::zipCode + "|" +
+            Globals::HardwareVersion + "|" +
+            std::to_string(static_cast<int>(Globals::currentFirmwareTarget)) + "|" +
+            Globals::timeLimitFrom + "|" +
+            Globals::timeLimitTo;
         storage.setStringValue(packed);
 
         if (auto err = storage.save(); err != ESP_OK)
@@ -107,18 +157,29 @@ namespace Memory
         Globals::SilentModeEnabled       = flags & (1 << 2);
         Globals::manualBrightnessEnabled = flags & (1 << 3);
         Globals::WeatherUpdateEnabled    = flags & (1 << 4);
+        Globals::PWM_disabled            = flags & (1 << 5);
 
         Globals::logConfig = static_cast<uint32_t>(storage.getFloatValue());
 
         std::string packed = storage.getStringValue();
         size_t p1 = packed.find('|');
         size_t p2 = packed.find('|', p1 + 1);
-        if (p1 != std::string::npos && p2 != std::string::npos)
+        size_t p3 = packed.find('|', p2 + 1);
+        size_t p4 = packed.find('|', p3 + 1);
+
+        if (p1!=std::string::npos && p2!=std::string::npos&& p3!=std::string::npos && p4!=std::string::npos)
         {
-            Globals::zipCode              = packed.substr(0, p1);
-            Globals::HardwareVersion      = packed.substr(p1 + 1, p2 - p1 - 1);
-            Globals::currentFirmwareTarget =
-                static_cast<Globals::FirmwareTarget>(std::stoi(packed.substr(p2 + 1)));
+            Globals::zipCode                = packed.substr(0, p1);
+            Globals::HardwareVersion        = packed.substr(p1+1, p2-p1-1);
+            Globals::currentFirmwareTarget  = static_cast<Globals::FirmwareTarget>(std::stoi(packed.substr(p2+1, p3-p2-1)));
+            Globals::timeLimitFrom          = packed.substr(p3+1, p4-p3-1);
+            Globals::timeLimitTo            = packed.substr(p4+1);
         }
+    }
+
+    void StorageReset() noexcept
+    {
+        storage.resetGlobals();
+        Logger::log(LoggerType::GENERAL, "PersistentStorage zurückgesetzt und Globals neu geladen");
     }
 }

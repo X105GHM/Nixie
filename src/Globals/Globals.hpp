@@ -1,3 +1,7 @@
+#ifndef SOFTWARE_VERSION
+  #define SOFTWARE_VERSION "0.0.0"
+#endif
+
 #pragma once
 
 #include <cstdint>
@@ -31,6 +35,8 @@ namespace Globals
 
     extern bool WeatherUpdateEnabled;
 
+    extern bool PWM_disabled;
+
     extern bool loadDetected;
 
     extern std::string zipCode;
@@ -57,8 +63,6 @@ namespace Globals
     extern FirmwareTarget currentFirmwareTarget;
 
     std::string getFirmwareUrl(FirmwareTarget target);
-
-    std::string getManifestUrl(FirmwareTarget target);
 
     inline void enableAllLogging()
     {

@@ -2,23 +2,24 @@
 
 namespace Globals
 {
-    bool tickerEnabled = false;           // Mem
-    bool timeLimitEnabled = false;        // Mem
-    bool SilentModeEnabled = false;      // Mem
-    bool manualBrightnessEnabled = false; // Mem wenn aktiv auch brightness merken
-    bool WeatherUpdateEnabled = false;    // Mem
+    bool tickerEnabled              = false; // Mem
+    bool timeLimitEnabled           = false; // Mem
+    bool SilentModeEnabled          = false; // Mem
+    bool manualBrightnessEnabled    = false; // Mem wenn aktiv auch brightness merken
+    bool WeatherUpdateEnabled       = false; // Mem
+    bool PWM_disabled               = false; // Mem
 
-    bool loadDetected = false;
+    bool loadDetected               = false;
 
-    std::string zipCode = "88457"; // Mem
+    std::string zipCode             = "88457"; // Mem
 
-    std::string HardwareVersion = "V6.0.1"; // Mem soll immer nur geladen werden
+    std::string HardwareVersion     = "V6.0.1"; 
 
-    std::string SoftwareVersion = SOFTWARE_VERSION;
+    std::string SoftwareVersion     = SOFTWARE_VERSION;
 
-    std::string timeLimitFrom = "06:00:00";
+    std::string timeLimitFrom       = "06:00:00"; // Mem
 
-    std::string timeLimitTo = "00:00:00";
+    std::string timeLimitTo         = "00:00:00"; // Mem
 
     uint32_t logConfig = // Mem
         LOG_HTTP |
@@ -55,9 +56,9 @@ namespace Globals
     FirmwareTarget currentFirmwareTarget = FirmwareTarget::NixieV6_std; // Mem
 
     static constexpr const char *firmwareUrlTable[] = {
-        /* NixieV6_std */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6/bin/firmware.bin",
-        /* NixieV6_dev */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6/bin/firmware.bin",
-        /* NixieV6_BOS */ "https://update.server.com/nixiev6/branch/BOS/firmware.bin"
+        /* NixieV6_std */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6/bin",
+        /* NixieV6_dev */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6_dev/bin",
+        /* NixieV6_BOS */ "https://update.server.com/nixiev6/branch/V.6_BOS/bin"
 
     };
 
@@ -74,24 +75,4 @@ namespace Globals
         }
         return std::string(firmwareUrlTable[idx]);
     }
-
-    static constexpr const char *manifestUrlTable[] = {
-        /* NixieV6_std */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6/bin/manifest.json",
-        /* NixieV6_dev */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6/bin/manifest.json",
-        /* NixieV6_BOS */ "https://update.server.com/nixiev6/branch/BOS/manifest.json"};
-
-    static_assert(
-        static_cast<size_t>(Globals::FirmwareTarget::COUNT) == (sizeof(manifestUrlTable) / sizeof(manifestUrlTable[0])),
-        "Enum FirmwareTarget und manifestUrlTable müssen dieselbe Länge haben!");
-
-    std::string getManifestUrl(FirmwareTarget target)
-    {
-        size_t idx = static_cast<size_t>(target);
-        if (idx >= static_cast<size_t>(FirmwareTarget::COUNT))
-        {
-            return std::string();
-        }
-        return std::string(manifestUrlTable[idx]);
-    }
-
 }

@@ -8,14 +8,14 @@ static SPISettings dispSPISettings(2'000'000, MSBFIRST, SPI_MODE2);
 
 bool displayEnabled = false;
 std::int32_t digits = 0;
-std::uint8_t singleDigit = 0;
+std::int32_t lastdigits = 717111; // zufälliger Startwert, damit Display initialisiert wird
 std::uint32_t brightness = 100;
 const std::uint32_t symbolArray[10] = {512, 1, 2, 4, 8, 16, 32, 64, 128, 256};
 
 static inline void initPinOe() noexcept
 {
     pinMode((int)PIN_OE, OUTPUT);
-    digitalWrite((int)PIN_OE, LOW);   
+    digitalWrite((int)PIN_OE, LOW);
 }
 
 static inline void initSPI() noexcept
@@ -32,51 +32,98 @@ void displayDigitsTask(void *pvParameters) noexcept
 
     for (;;)
     {
-        delayMicroseconds(ON_TIME_US);
+        if (!ACP_enabled)
+            delayMicroseconds(ON_TIME_US);
+
         if (!displayEnabled)
         {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
         }
 
-        SPI.beginTransaction(dispSPISettings);
-
-        if (runningManualACP)
+        if (ACP_enabled == true || Globals::PWM_disabled)
         {
+            if(lastdigits == digits)
+            continue;
+
+            lastdigits = digits;
+
+            SPI.beginTransaction(dispSPISettings);
+
+            std::int64_t copy = digits;
             gpio_set_level(PIN_OE, 0);
             std::uint32_t var32 = 0;
-            if (singleDigit < 30)
+
+            //---------------------------------- REG 1 -----------------------------------------------
+
+            // 00 0000000000 0000000000 0000000000 00 0000000000 0000000000 0000000000
+            //        s2         s1         m2            m1         h2         h1
+            // -- 0987654321 0987654321 0987654321 -- 0987654321 0987654321 0987654321
+
+            if (!runningACP1)
             {
-                SPI.transfer(var32 >> 24);
-                SPI.transfer(var32 >> 16);
-                SPI.transfer(var32 >> 8);
-                SPI.transfer(var32);
-                var32 |= (symbolArray[singleDigit % 10]
-                          << (singleDigit - (singleDigit % 10)));
-                SPI.transfer(var32 >> 24);
-                SPI.transfer(var32 >> 16);
-                SPI.transfer(var32 >> 8);
-                SPI.transfer(var32);
+                var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
             }
-            else
+
+            copy /= 10;
+
+            if (!runningACP2)
             {
-                var32 |= (symbolArray[singleDigit % 10]
-                          << (singleDigit - (singleDigit % 10) - 30));
-                SPI.transfer(var32 >> 24);
-                SPI.transfer(var32 >> 16);
-                SPI.transfer(var32 >> 8);
-                SPI.transfer(var32);
-                var32 = 0;
-                SPI.transfer(var32 >> 24);
-                SPI.transfer(var32 >> 16);
-                SPI.transfer(var32 >> 8);
-                SPI.transfer(var32);
+                var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
             }
-            gpio_set_level(PIN_OE, 1);
+
+            copy /= 10;
+
+            if (!runningACP1)
+            {
+                var32 |= symbolArray[copy % 10];
+            }
+
+            copy /= 10;
+
+            SPI.transfer(var32 >> 24);
+            SPI.transfer(var32 >> 16);
+            SPI.transfer(var32 >> 8);
+            SPI.transfer(var32);
+
+            //---------------------------------- REG 0 -----------------------------------------------
+
+            var32 = 0;
+
+            if (!runningACP2)
+            {
+                var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
+            }
+
+            copy /= 10;
+
+            if (!runningACP1)
+            {
+                var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
+            }
+
+            copy /= 10;
+
+            if (!runningACP2)
+            {
+                var32 |= symbolArray[copy % 10];
+            }
+
+            copy /= 10;
+
+            SPI.transfer(var32 >> 24);
+            SPI.transfer(var32 >> 16);
+            SPI.transfer(var32 >> 8);
+            SPI.transfer(var32);
+
             SPI.endTransaction();
-            delay(200);
+
+            gpio_set_level(PIN_OE, 1);
+
             continue;
         }
+
+        SPI.beginTransaction(dispSPISettings);
 
         std::int64_t copy = digits;
         gpio_set_level(PIN_OE, 0);
@@ -88,22 +135,27 @@ void displayDigitsTask(void *pvParameters) noexcept
         //        s2         s1         m2            m1         h2         h1
         // -- 0987654321 0987654321 0987654321 -- 0987654321 0987654321 0987654321
 
-
         if (!runningACP1)
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
         }
+
         copy /= 10;
+
         if (!runningACP2)
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
         }
+
         copy /= 10;
+
         if (!runningACP1)
         {
             var32 |= symbolArray[copy % 10];
         }
+
         copy /= 10;
+
         SPI.transfer(var32 >> 24);
         SPI.transfer(var32 >> 16);
         SPI.transfer(var32 >> 8);
@@ -117,18 +169,21 @@ void displayDigitsTask(void *pvParameters) noexcept
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
         }
+
         copy /= 10;
 
         if (!runningACP1)
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
         }
+
         copy /= 10;
 
         if (!runningACP2)
         {
             var32 |= symbolArray[copy % 10];
         }
+
         copy /= 10;
 
         SPI.transfer(var32 >> 24);
@@ -181,6 +236,8 @@ void displayWeather() noexcept
     WeatherClient weather(std::string(OPENWEATHER_API_KEY));
     const std::string &zip = Globals::zipCode;
 
+    Logger::log(LoggerType::GENERAL, "displayWeather(): going to fetch temp for ZIP: %s", zip.c_str());
+
     float temp = weather.getTemperatureByZip(zip);
     if (!std::isnan(temp))
     {
@@ -191,10 +248,12 @@ void displayWeather() noexcept
             temp100 = 0;
         }
 
-        digits = temp100; 
+        digits = temp100;
     }
     else
     {
         digits = 0;
+
+        Logger::log(LoggerType::DIGIT, "Fehler beim Abrufen der Wetterdaten für ZIP: %s", zip.c_str());
     }
 }

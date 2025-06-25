@@ -44,6 +44,88 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  // === Kurz-Syntax Command-Parser ================================
+  sendBtn.addEventListener("click", () => {
+    const txt = inputEl.value.trim();
+    if (!txt) return;
+
+    const parts = txt.split('/');
+    let url = null;
+
+    if (parts[0] === 'set') {
+      switch (parts[1]) {
+        case 'ON':
+        case 'OFF':
+        case 'reset':
+        case 'setOldValue':
+        case 'resetValue':
+        case 'ACP':
+        case 'tempDisplay':
+        case 'DATE':
+          url = `/set/${parts[1]}`;
+          break;
+
+        case 'zip':
+          if (parts[2]) url = `/set/zip?zip=${encodeURIComponent(parts[2])}`;
+          break;
+
+        case 'ticker':
+        case 'silentMode':
+        case 'weatherUpdate':
+          if (parts[2] === '0' || parts[2] === '1') {
+            url = `/set/${parts[1]}?value=${parts[2]}`;
+          }
+          break;
+
+        case 'timeLimit':
+          if (parts[2] === '0' || parts[2] === '1') {
+            url = `/set/timeLimit?value=${parts[2]}`;
+            if (parts[3] && parts[4]) {
+              url += `&from=${encodeURIComponent(parts[3])}&to=${encodeURIComponent(parts[4])}`;
+            }
+          }
+          break;
+
+        case 'manualBrightness':
+          // manualBrightness/value/brightness
+          if (parts[2]) {
+            url = `/set/manualBrightness?value=${encodeURIComponent(parts[2])}`;
+            if (parts[3]) {
+              url += `&brightness=${encodeURIComponent(parts[3])}`;
+            }
+          }
+          break;
+
+        case 'logConfig':
+          if (parts[2] && /^\d+$/.test(parts[2])) {
+            url = `/set/logConfig?value=${parts[2]}`;
+          }
+          break;
+
+        case 'firmware':
+          if (parts[2]) {
+            url = `/set/firmware?target=${encodeURIComponent(parts[2])}`;
+          }
+          break;
+
+        case 'ota':
+          url = `/set/ota`;
+          break;
+      }
+    }
+    else if (parts[0] === 'get' && parts[1] === 'info') {
+      url = `/get/info`;
+    }
+
+    if (url) {
+      fetch(url);
+      inputEl.value = '';
+    } else {
+      logToUI(`Ungültiger Befehl: ${txt}`);
+    }
+  });
+
+
   // === Navigation & Tabs ===========================================
   const tabs = document.querySelectorAll("nav .menu li"),
     mobileTabs = document.querySelectorAll("#mobileMenu li"),
@@ -142,9 +224,12 @@ document.addEventListener("DOMContentLoaded", () => {
     ACPButton = document.getElementById("acpBtn"),
     DateButton = document.getElementById("dateBtn"),
     WeatherButton = document.getElementById("weatherBtn"),
+    StartValuesButton = document.getElementById("startValue"),
+    ResetStartValuesButton = document.getElementById("rstValue"),
     tickerToggle = document.getElementById("tickerToggle"),
     timeLimitToggle = document.getElementById("timeLimitToggle"),
     silentToggle = document.getElementById("silentToggle"),
+    PWMToggle = document.getElementById("PWMToggle"),
     weatherToggle = document.getElementById("weatherToggle"),
     brightnessToggle = document.getElementById("brightnessToggle"),
     brightnessSlider = document.getElementById("brightnessSlider"),
@@ -194,6 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
   makeToggleHandler(timeLimitToggle, "timeLimit");
   makeToggleHandler(silentToggle, "silentMode");
   makeToggleHandler(weatherToggle, "weatherUpdate");
+  makeToggleHandler(PWMToggle, "NixiePWM");
 
   // Reset Button
   ResetButton.addEventListener("click", async () => {
@@ -236,7 +322,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  StartValuesButton.addEventListener("click", async () => {
+    try {
+      await fetch("/set/setOldValue");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Setzen der Startwerte.");
+    }
+  });
 
+  ResetStartValuesButton.addEventListener("click", async () => {
+    try {
+      await fetch("/set//set/resetValue");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Zurücksetzen der Startwerte.");
+    }
+  });
 
   [timeLimitFromInput, timeLimitToInput].forEach(input => {
     input.addEventListener("change", async () => {
@@ -256,8 +358,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   });
-
-
 
   // Brightness
   function syncBrightnessUI(enabled, val) {
@@ -285,7 +385,7 @@ document.addEventListener("DOMContentLoaded", () => {
     )
 
 
-    setTimeout(() => skipSync.delete("brightnessSlider"), 2000);
+    setTimeout(() => skipSync.delete("brightnessSlider"), 5000);
   });
 
   zipInput.addEventListener('focus', () => skipSync.add('zipInput'));
@@ -368,7 +468,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Dashboard mapping
       const map = {
         Chip: 'chipModel', SSID: 'ssid', Password: 'password',
-        DisplayEnabled: 'displayStatus', Melody: 'melody', FreeHeap: 'freeHeap',
+        Melody: 'melody', FreeHeap: 'freeHeap',
         ChipId: 'chipId', FlashSize: 'flashSize', FlashSpeed: 'flashSpeed',
         SketchSize: 'sketchSize', SketchFreeSpace: 'sketchFreeSpace',
         CpuFrequencyMHz: 'cpuFreq', SdkVersion: 'sdkVersion',
@@ -378,14 +478,24 @@ document.addEventListener("DOMContentLoaded", () => {
         HSS_Enabled: 'HSS_Enabled', HSS_190V: 'HSS_190V', HSS_Resistor: 'HSS_Resistor',
         CaseTemperature_C: 'temperature', Firmware_Target: 'firmwareTarget',
         Hardware_Version: 'hardwareVersion', Software_Version: 'softwareVersion',
-        zipCode: 'zipCode', tickerEnabled: 'tickerEnabled',
-        timeLimitEnabled: 'timeLimitEnabled', silentModeEnabled: 'silentModeEnabled',
-        manualBrightnessEnabled: 'manualBrightnessEnabled', WeatherUpdateEnabled: 'weatherEnabled',
-        loadDetected: 'loadDetected', Brightness: 'brightness'
+        zipCode: 'zipCode',
+        manualBrightnessEnabled: 'manualBrightnessEnabled',
+        loadDetected: 'loadDetected', Brightness: 'brightness', timeLimitFrom: 'timeLimitFrom', timeLimitTo: 'timeLimitTo',
+        DisplayEnabled: 'DisplayEnabled', tickerEnabled: 'tickerEnabled', timeLimitEnabled: 'timeLimitEnabled', 
+        silentModeEnabled: 'silentModeEnabled', WeatherUpdateEnabled: 'WeatherUpdateEnabled', NixiePWM: 'nixiePWM'
       };
+
+      const boolFields = ['DisplayEnabled', 'tickerEnabled', 'timeLimitEnabled', 'silentModeEnabled', 'WeatherUpdateEnabled', 'manualBrightnessEnabled','nixiePWM'];
+
       Object.entries(map).forEach(([k, id]) => {
         const el = document.getElementById(id);
-        if (el && !skipSync.has(id)) el.textContent = data[k];
+        if (!el || skipSync.has(id)) return;
+
+        let val = data[k];
+        if (boolFields.includes(k)) {
+          val = val == 1 ? 'on' : 'off';
+        }
+        el.textContent = val;
       });
 
       // sync brightness
@@ -409,6 +519,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!skipSync.has("timeLimitToggle")) timeLimitToggle.checked = !!data.timeLimitEnabled;
       if (!skipSync.has("silentToggle")) silentToggle.checked = !!data.silentModeEnabled;
       if (!skipSync.has("weatherToggle")) weatherToggle.checked = !!data.WeatherUpdateEnabled;
+      if (!skipSync.has("PWMToggle")) PWMToggle.checked = !!data.NixiePWM;
 
       // logConfig
       const bin = data.logConfigBinary.padStart(9, '0');
@@ -437,7 +548,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  async function pollInfo() {
+    await fetchInfo();
+    setTimeout(pollInfo, 500);
+  }
+
+  pollInfo();
   initCharts();
-  fetchInfo();
-  setInterval(fetchInfo, 1000);
 });

@@ -1,3 +1,5 @@
+#define configCHECK_FOR_STACK_OVERFLOW 2
+
 #include <WiFi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -66,7 +68,10 @@ void setup()
     }
     else 
     {
+        /*
         Memory::loadGlobals();
+        Globals::applyLogConfig();
+        */
     }
 
     WiFi.mode(WIFI_STA);
@@ -75,9 +80,7 @@ void setup()
     initTime();
 
     {
-        auto readVoltage = []() -> float {
-            return supplyWatch.readUHSS();
-        };
+        auto readVoltage = []() -> float {return supplyWatch.readUHSS();};
         bool hasLoad = hssController.testLoad(readVoltage, 200/*ms*/, 127.0f/*V*/);
         Globals::loadDetected = hasLoad;
         Logger::log(LoggerType::HSS, hasLoad ? F("LoadTest: Last erkannt") : F("LoadTest: Keine Last erkannt"));
@@ -85,17 +88,27 @@ void setup()
 
     displayEnabled = true;
 
-    xTaskCreatePinnedToCore(ClockControl::clockTask, "ClockTask", 2048, &clockControl, 2, &clockTaskHandle, 0);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    xTaskCreatePinnedToCore(ClockControl::clockTask, "ClockTask", 4096, &clockControl, 2, &clockTaskHandle, 0);
     Logger::log(LOGTYPE, F("ClockTask started"));
 
-    xTaskCreatePinnedToCore(buttonTask, "ButtonTask", 2048, nullptr, 1, &buttonTaskHandle, 0);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    xTaskCreatePinnedToCore(buttonTask, "ButtonTask", 4096, nullptr, 0, &buttonTaskHandle, 0);
     Logger::log(LOGTYPE, F("ButtonTask started"));
+
+    vTaskDelay(pdMS_TO_TICKS(100));
 
     xTaskCreatePinnedToCore(brownoutStarter, "BrownoutStarter", 2048, nullptr, 4, &brownoutTaskHandle, 0);
     Logger::log(LOGTYPE, F("BrownoutStarter Task started"));
 
-    xTaskCreatePinnedToCore(httpTask, "HTTPTask", 8192, nullptr, 0, &httpTaskHandle, 0);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    xTaskCreatePinnedToCore(httpTask, "HTTPTask", 16384, nullptr, 1, &httpTaskHandle, 0);
     Logger::log(LOGTYPE, F("HTTPTask started"));
+
+    vTaskDelay(pdMS_TO_TICKS(100));
 
     xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 3, &displayTaskHandle, 1);
     Logger::log(LOGTYPE, F("DisplayDigits Task started"));

@@ -2,10 +2,11 @@
 
 bool runningACP1 = false;
 bool runningACP2 = false;
-bool runningManualACP = false;
+bool ACP_enabled = false;
 
 void ACP() noexcept
 {
+    ACP_enabled = true;
     uint8_t lastBrightness = brightness;
     brightness = 100;
 
@@ -65,6 +66,7 @@ void ACP() noexcept
     int32_t displaySequence[] = {306060, 407070, 508080, 609090, 706060, 807070, 908080, 309090};
     for (int i = 0; i < 8; i++)
     {
+
         for (int number = 0; number <= 9; number++)
         {
             digits = 111111 * number;
@@ -76,10 +78,12 @@ void ACP() noexcept
             digits = 111111 * number;
             vTaskDelay(pdMS_TO_TICKS(50));
         }
-
+        ACP_enabled = false;
         digits = displaySequence[i];
         vTaskDelay(pdMS_TO_TICKS(4488));
+        ACP_enabled = true;
     }
     runningACP1 = false;
     brightness = lastBrightness;
+    ACP_enabled = false;
 }

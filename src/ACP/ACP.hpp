@@ -8,6 +8,6 @@
 
 extern bool runningACP1;
 extern bool runningACP2;
-extern bool runningManualACP;
+extern bool ACP_enabled;
 
 void ACP() noexcept;

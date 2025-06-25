@@ -34,7 +34,9 @@ void ClockControl::timeCycle() noexcept
 
             static bool lastState160 = false;
 
-            bool currentState160 = displayEnabled && Globals::loadDetected;
+            static bool inTime = true; 
+
+            bool currentState160 = displayEnabled && Globals::loadDetected && inTime;
             if (currentState160 != lastState160)
             {
                 if (currentState160)
@@ -58,10 +60,14 @@ void ClockControl::timeCycle() noexcept
                 {
                     Logger::log(LoggerType::TIME, "Zeit außerhalb des erlaubten Bereichs (%s - %s)",
                                 Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
-                    return;
+                    vTaskDelay(pdMS_TO_TICKS(200));
+                    inTime = false;
+                    continue;
                 }
-            }
 
+                inTime = true;
+            }
+                       
             if (Globals::tickerEnabled)
             {
                 relay.toggle();
