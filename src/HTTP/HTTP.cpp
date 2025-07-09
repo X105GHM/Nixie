@@ -4,6 +4,10 @@ static constexpr LoggerType LOGTYPE = LoggerType::Webserver;
 
 static const std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$)");
 
+static const char* tzNames[] = {"CET","EET","WET","UTC","EST","CST","MST","PST","HST","JST","IST","AEST","AWST"};
+
+constexpr int tzCount = sizeof(tzNames) / sizeof(tzNames[0]);
+
 HTTPHandler::HTTPHandler(int port) noexcept
     : server_(port)
 {}
@@ -15,6 +19,7 @@ String HTTPHandler::getContentType(const String &filename) noexcept {
     if (filename.endsWith(".png"))   return "image/png";
     if (filename.endsWith(".jpg"))   return "image/jpeg";
     if (filename.endsWith(".ico"))   return "image/x-icon";
+    if (filename.endsWith(".pdf"))   return "application/pdf";
     return "text/plain";
 }
 
@@ -80,7 +85,7 @@ void HTTPHandler::begin() noexcept
             return;
         }
 
-        Logger::log(LOGTYPE, "ACP gestartet via HTTP");
+        Logger::log(LOGTYPE, "ACP started via HTTP");
         hssController.enable190();
         vTaskDelay(pdMS_TO_TICKS(10));
         hssController.enableResistorReduction();
@@ -90,8 +95,8 @@ void HTTPHandler::begin() noexcept
         vTaskDelay(pdMS_TO_TICKS(10));
         hssController.disable190();
         vTaskDelay(pdMS_TO_TICKS(10));
-        Logger::log(LOGTYPE, F("ACP fertiggestellt via HTTP"));
-        server_.send(200, "text/plain", "ACP gestartet");
+        Logger::log(LOGTYPE, F("ACP completed via HTTP"));
+        server_.send(200, "text/plain", "ACP started");
     });
 
     server_.on("/set/tempDisplay", HTTP_GET, [this]() noexcept {
@@ -107,8 +112,14 @@ void HTTPHandler::begin() noexcept
         server_.send(200, "text/plain", "Temperature display started");
 
             runWithClockSuspended(clockTaskHandle, [this]() {
-            displayWeather(); 
-            vTaskDelay(pdMS_TO_TICKS(5000)); 
+            zipMaskingEnabled = true;
+            digits = Globals::zipCode.empty() ? 0 : std::stoi(Globals::zipCode)*10;
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            displayWeather();
+            tempMaskingEnabled = true;
+            zipMaskingEnabled = false;
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            tempMaskingEnabled = false;
         });
     });
 
@@ -133,19 +144,19 @@ void HTTPHandler::begin() noexcept
     server_.on("/set/zip", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("zip")) {
             server_.send(400, "text/plain", "Missing 'zip' parameter");
-            Logger::log(LOGTYPE, F("HTTP /set/zip fehlte Parameter 'zip'"));
+            Logger::log(LOGTYPE, F("HTTP /set/zip missing parameter 'zip'"));
             return;
         }
         String zipArg = server_.arg("zip");
         Globals::zipCode = std::string(zipArg.c_str());
-        Logger::log(LOGTYPE, "ZIP-Code per HTTP gesetzt auf %s", zipArg.c_str());
+        Logger::log(LOGTYPE, "ZIP code set via HTTP to %s", zipArg.c_str());
         server_.send(200, "text/plain", "ZIP-Code updated");
     });
 
     server_.on("/set/ticker", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("value")) {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/ticker fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, F("HTTP /set/ticker missing parameter 'value'"));
             return;
         }
         String val = server_.arg("value");
@@ -156,24 +167,86 @@ void HTTPHandler::begin() noexcept
                      String("tickerEnabled=") + (Globals::tickerEnabled ? "1" : "0"));
     });
 
+    server_.on("/set/singleDigitControl", HTTP_GET, [this]() noexcept{
+        bool handled = false;
+
+        if (server_.hasArg("value"))
+        {
+            String v = server_.arg("value");
+            singleDigitACP = (v == "1");
+            Logger::log(LOGTYPE, "singleDigitACP set to %s via HTTP",
+                        singleDigitACP ? "true" : "false");
+            handled = true;
+        }
+
+        if (server_.hasArg("digit"))
+        {
+            int d = server_.arg("digit").toInt();
+            if (d >= 0 && d < 60)
+            {
+                singleDigit = static_cast<uint8_t>(d);
+                Logger::log(LOGTYPE, "singleDigit set to %d via HTTP", singleDigit);
+                handled = true;
+            }
+            else
+            {
+                server_.send(400, "text/plain", "Invalid 'digit' (must be 0–59)");
+                return;
+            }
+        }
+
+        if (handled)
+        {
+            server_.send(200, "text/plain", "OK");
+        }
+        else
+        {
+            server_.send(400, "text/plain", "Missing 'value' or 'digit'");
+        } 
+    });
+
     server_.on("/set/NixiePWM", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("value")) {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/NixiePWM fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, F("HTTP /set/NixiePWM missing parameter 'value'"));
             return;
         }
         String val = server_.arg("value");
         Globals::PWM_disabled = (val != "0");
         Logger::log(LOGTYPE, "tickerEnabled set to %s via HTTP", 
                     Globals::PWM_disabled ? "true" : "false");
-        server_.send(200, "text/plain", 
-                     String("tickerEnabled=") + (Globals::PWM_disabled ? "1" : "0"));
+        server_.send(200, "text/plain", String("tickerEnabled=") + (Globals::PWM_disabled ? "1" : "0"));
+    });
+
+    server_.on("/set/PWMPeriod", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("value")) 
+        {
+            server_.send(400, "text/plain", "Missing 'value' parameter (µs)");
+            Logger::log(LOGTYPE, F("HTTP /set/PWMPeriod fehlte Parameter 'value'"));
+            return;
+        }
+
+        const String val = server_.arg("value");
+        const std::uint32_t newPeriod = val.toInt();
+
+        if (newPeriod == 0) 
+        {
+            server_.send(400, "text/plain", "Invalid value");
+            Logger::log(LOGTYPE, F("HTTP /set/PWMPeriod invalid value"));
+            return;
+        }
+
+        PWM_PERIOD_US = newPeriod;
+        Logger::log(LOGTYPE, "PWM_PERIOD_US set to %lu µs via HTTP", static_cast<unsigned long>(newPeriod));
+
+        server_.send(200, "text/plain", String("PWM_PERIOD_US=") + newPeriod);
     });
 
     server_.on("/set/timeLimit", HTTP_GET, [this]() noexcept{
-        if (!server_.hasArg("value")) {
+        if (!server_.hasArg("value")) 
+        {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/timeLimit fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, F("HTTP /set/timeLimit missing parameter 'value'"));
             return;
         }
 
@@ -188,9 +261,8 @@ void HTTPHandler::begin() noexcept
             }
             else
             {
-                server_.send(400, "text/plain",
-                             "Invalid 'from' time format (expected HH:MM:SS)");
-                Logger::log(LOGTYPE, "Ungültiges 'from'-Format: %s", from.c_str());
+                server_.send(400, "text/plain", "Invalid 'from' time format (expected HH:MM:SS)");
+                Logger::log(LOGTYPE, "Invalid 'from' format: %s", from.c_str());
                 return;
             }
         }
@@ -205,7 +277,7 @@ void HTTPHandler::begin() noexcept
             else
             {
                 server_.send(400, "text/plain","Invalid 'to' time format (expected HH:MM:SS)");
-                Logger::log(LOGTYPE, "Ungültiges 'to'-Format: %s", to.c_str());
+                Logger::log(LOGTYPE, "Invalid 'to' format: %s", to.c_str());
                 return;
             }
         }
@@ -249,12 +321,14 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/manualBrightness", HTTP_GET, [this]() noexcept {
-        if (server_.hasArg("value")) {
+        if (server_.hasArg("value")) 
+        {
             String v = server_.arg("value");
             Globals::manualBrightnessEnabled = (v == "true");
             Logger::log(LOGTYPE, "manualBrightnessEnabled=%s", Globals::manualBrightnessEnabled ? "true" : "false");
         }
-        if (server_.hasArg("brightness")) {
+        if (server_.hasArg("brightness")) 
+        {
             String b = server_.arg("brightness");
             long lv = strtol(b.c_str(), nullptr, 10);
             if (lv < 0) lv = 0;
@@ -266,24 +340,23 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/weatherUpdate", HTTP_GET, [this]() noexcept {
-        if (!server_.hasArg("value")) {
+        if (!server_.hasArg("value")) 
+        {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
             Logger::log(LOGTYPE, F("HTTP /set/weatherUpdate fehlte Parameter 'value'"));
             return;
         }
         String val = server_.arg("value");
         Globals::WeatherUpdateEnabled = (val != "0");
-        Logger::log(LOGTYPE, "WeatherUpdateEnabled set to %s via HTTP", 
-                    Globals::WeatherUpdateEnabled ? "true" : "false");
-        server_.send(200, "text/plain", 
-                     String("WeatherUpdateEnabled=") + (Globals::WeatherUpdateEnabled ? "1" : "0"));
+        Logger::log(LOGTYPE, "WeatherUpdateEnabled set to %s via HTTP", Globals::WeatherUpdateEnabled ? "true" : "false");
+        server_.send(200, "text/plain", String("WeatherUpdateEnabled=") + (Globals::WeatherUpdateEnabled ? "1" : "0"));
     });
 
     server_.on("/set/logConfig", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("value")) 
         {
             server_.send(400, "text/plain", "Missing 'value' parameter");
-            Logger::log(LOGTYPE, F("HTTP /set/logConfig fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, F("HTTP /set/logConfig missing parameter 'value'"));
             return;
         }
         String val = server_.arg("value");
@@ -292,7 +365,7 @@ void HTTPHandler::begin() noexcept
         if (endptr == val.c_str() || *endptr != '\0') 
         {
             server_.send(400, "text/plain", "Invalid 'value' (not a number)");
-            Logger::log(LOGTYPE, "HTTP /set/logConfig ungültiger Wert: %s", val.c_str());
+            Logger::log(LOGTYPE, "HTTP /set/logConfig invalid value: %s", val.c_str());
             return;
         }
         Globals::logConfig = static_cast<uint32_t>(newConfig);
@@ -305,12 +378,13 @@ void HTTPHandler::begin() noexcept
             binStr += ((Globals::logConfig >> i) & 1) ? '1' : '0';
         }
 
-        Logger::log(LOGTYPE, "logConfig auf %s gesetzt und übernommen", binStr.c_str());
+        Logger::log(LOGTYPE, "logConfig set to %s and applied", binStr.c_str());
         server_.send(200, "text/plain", String("logConfig=") + binStr);
     });
 
     server_.on("/set/firmware", HTTP_GET, [this]() noexcept {
-        if (!server_.hasArg("target")) {
+        if (!server_.hasArg("target")) 
+        {
             server_.send(400, "text/plain", "Missing 'target' parameter");
             Logger::log(LOGTYPE, "HTTP /set/firmware fehlte Parameter 'target'");
             return;
@@ -330,12 +404,12 @@ void HTTPHandler::begin() noexcept
 
         if (newTarget == Globals::FirmwareTarget::COUNT) {
             server_.send(400, "text/plain", "Invalid 'target' value");
-            Logger::log(LOGTYPE, "HTTP /set/firmware ungültiger Wert: %s", arg.c_str());
+            Logger::log(LOGTYPE, "HTTP /set/firmware invalid value: %s", arg.c_str());
             return;
         }
 
         Globals::currentFirmwareTarget = newTarget;
-        Logger::log(LOGTYPE, "FirmwareTarget gesetzt auf %s", arg.c_str());
+        Logger::log(LOGTYPE, "Firmware target set to %s", arg.c_str());
         server_.send(200, "text/plain", String("firmwareTarget=") + arg);
     });
 
@@ -345,56 +419,172 @@ void HTTPHandler::begin() noexcept
 
         Globals::FirmwareTarget target = Globals::currentFirmwareTarget;
         std::string baseUrl = Globals::getFirmwareUrl(target);
-        if (baseUrl.empty())
+
+        if (baseUrl.empty()) 
         {
-            Logger::log(LOGTYPE, F("OTA fehlgeschlagen: ungültiges Firmware-Ziel"));
+            Logger::log(LOGTYPE, F("OTA failed: invalid firmware target"));
             SPIFFS.begin(true);
-            server_.begin();
-            server_.send(400, "text/plain", "Ungültiges Firmware-Ziel");
+            server_.send(400, "text/plain", "Invalid firmware target");
             return;
         }
 
-        Logger::log(LOGTYPE, "Prüfe OTA im Ordner: %s", baseUrl.c_str());
+        Logger::log(LOGTYPE, "Checking OTA in folder: %s", baseUrl.c_str());
         OTAManager ota;
         esp_err_t result = ota.checkAndUpdate(baseUrl);
 
         Logger::log(LOGTYPE, F("SPIFFS mounten..."));
-        if (!SPIFFS.begin())
+        if (!SPIFFS.begin(/*formatOnFail=*/ true)) 
         {
-            Logger::log(LOGTYPE, F("SPIFFS.begin() fehlgeschlagen"));
+            Logger::log(LOGTYPE, F("SPIFFS.begin(true) failed"));
+            server_.send(500, "text/plain", "SPIFFS remount & format failed");
+            return;
         }
-        else
-        {
-            Logger::log(LOGTYPE, F("SPIFFS remounted"));
-        }
+        Logger::log(LOGTYPE, F("SPIFFS remounted"));
 
-        if (result == ESP_OK)
+        if (result == ESP_OK) 
         {
-            Logger::log(LOGTYPE, F("OTA abgeschlossen oder nicht notwendig"));
-            server_.send(200, "text/plain", "OTA erfolgreich oder nicht notwendig");
-        }
-        else
+            Logger::log(LOGTYPE, F("OTA completed or not required"));
+            server_.send(200, "text/plain", "OTA successful or not required");
+        } 
+        else 
         {
-            Logger::log(LOGTYPE, "OTA fehlgeschlagen (%s)", esp_err_to_name(result));
-            server_.send(500, "text/plain", "OTA fehlgeschlagen");
+            Logger::log(LOGTYPE, "OTA failed (%s)", esp_err_to_name(result));
+            server_.send(500, "text/plain", "OTA failed");
         }
-
-        server_.begin();
-        Logger::log(LOGTYPE, F("Webserver neu gestartet"));
     });
 
 
     server_.on("/set/zip", HTTP_GET, [this]() noexcept {
-        if (!server_.hasArg("zip")) {
+        if (!server_.hasArg("zip")) 
+        {
             server_.send(400, "text/plain", "Missing 'zip' parameter");
-            Logger::log(LOGTYPE, F("HTTP /set/zip fehlte Parameter 'zip'"));
+            Logger::log(LOGTYPE, F("HTTP /set/zip missing parameter 'zip'"));
             return;
         }
         String zipArg = server_.arg("zip");
         Globals::zipCode = std::string(zipArg.c_str());
-        Logger::log(LOGTYPE, "ZIP-Code per HTTP gesetzt auf %s", zipArg.c_str());
+        Logger::log(LOGTYPE, F("HTTP /set/zip missing parameter 'zip'"));
         server_.send(200, "text/plain", "ZIP-Code updated to " + zipArg);
     });
+
+    server_.on("/set/timezone", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("tz")) 
+        {
+            server_.send(400, "text/plain", "Missing 'tz' parameter");
+            Logger::log(LOGTYPE, F("HTTP /set/timezone missing parameter 'tz'"));
+            return;
+        }   
+
+        String tzArg = server_.arg("tz");
+        Globals::TimeZone newTz = Globals::TimeZone::CET;
+        bool ok = false;
+
+        int idx = tzArg.toInt();
+        if (tzArg == String(idx) && idx >= 0 && idx < tzCount) 
+        {
+            newTz = static_cast<Globals::TimeZone>(idx);
+            ok = true;
+        }
+        else 
+        {  
+            for (int i = 0; i < tzCount; ++i) 
+            {
+                if (tzArg.equalsIgnoreCase(tzNames[i])) 
+                {
+                    newTz = static_cast<Globals::TimeZone>(i);
+                    ok = true;
+                    break;
+                }
+            }
+        }
+
+        if (!ok) 
+        {
+            server_.send(400, "text/plain", "Invalid 'tz' parameter");
+            Logger::log(LOGTYPE, "HTTP /set/timezone invalid 'tz': %s", tzArg.c_str());
+            return;
+        }
+
+        Globals::currentTimeZone = newTz;
+
+        const char* spec = Globals::getPosixTZ(newTz);
+        Logger::log(LOGTYPE, "TimeZone set via HTTP (volatile): %d -> %s", static_cast<int>(newTz), spec);
+
+        server_.send(200, "application/json","{\n""  \"status\": \"ok\",\n""  \"CurrentTimeZoneIndex\": " + String(static_cast<int>(newTz)) + ",\n""  \"CurrentTimeZoneSpec\": \"" + String(spec) + "\"\n""}\n");
+    });
+
+    server_.on("/set/timer", HTTP_GET, [this]() {
+        if (!server_.hasArg("enabled")) 
+        {
+            server_.send(400, "text/plain", "Missing 'enabled' parameter");
+            return;
+        }
+
+        bool enable = server_.arg("enabled") == "1";
+
+        if (enable) 
+        {
+            if (!server_.hasArg("seconds")) 
+            {
+                server_.send(400, "text/plain", "Missing 'seconds' parameter");
+                return;
+            }
+
+            uint32_t seconds = server_.arg("seconds").toInt();
+            timer.start(seconds, [&]() {
+            buzzer.startAlarm(3);
+            });
+
+            server_.send(200, "text/plain", "Timer started");
+        } 
+        else 
+        {
+            timer.stop();
+            server_.send(200, "text/plain", "Timer stopped");
+        }
+    });
+
+    server_.on("/set/alarm", HTTP_GET, [this]() {
+        if (!server_.hasArg("enabled")) 
+        {
+            server_.send(400, "text/plain", "Missing 'enabled' parameter");
+            return;
+        }
+
+        bool enable = server_.arg("enabled") == "1";
+
+        if (enable) 
+        {
+            if (!server_.hasArg("time")) 
+            {
+                server_.send(400, "text/plain", "Missing 'time' parameter");
+                return;
+            }
+
+            String t = server_.arg("time");
+            int sep = t.indexOf(':');
+            if (sep < 0 || sep >= t.length() - 1) 
+            {
+                server_.send(400, "text/plain", "Invalid time format (HH:MM)");
+                return;
+            }
+
+            int h = t.substring(0, sep).toInt();
+            int m = t.substring(sep + 1).toInt();
+
+            alarmClock.setAlarm(h, m, [&]() {
+            buzzer.startAlarm(5);
+            });
+
+            server_.send(200, "text/plain", "Alarm set");
+        } 
+        else     
+        {
+            alarmClock.removeAlarm();
+            server_.send(200, "text/plain", "Alarm cleared");
+        }
+    });
+
 
     server_.on("/get/info", HTTP_GET, [this]() noexcept {
         Logger::log(LOGTYPE, F("Info requested via HTTP"));
@@ -418,6 +608,7 @@ void HTTPHandler::handleReset() noexcept {
 void HTTPHandler::handleInfo() noexcept
 {
     WiFiManager wm;
+    auto &sm = StatsMonitor::instance();
     auto ssid            = wm.getWiFiSSID();
     auto password        = wm.getWiFiPass();
     auto chipModel       = ESP.getChipModel();
@@ -440,6 +631,14 @@ void HTTPHandler::handleInfo() noexcept
     auto case_temp       = temperatureSensor.readTemperatureC();
     auto ftName          = firmwareTargetToString(Globals::currentFirmwareTarget);
     auto cfg             = Globals::logConfig;
+    auto pwmFreq         = 1e6 / PWM_PERIOD_US;
+    auto timerActive     = timer.isRunning();
+    auto timerPreset     = timer.getConfiguredSeconds();
+    auto alarmSet        = alarmClock.isAlarmConfigured();
+    AlarmTime at         = alarmClock.getAlarmTime();
+    char alarmTimeBuf[6];
+
+    snprintf(alarmTimeBuf, sizeof(alarmTimeBuf), "%02u:%02u", at.hour, at.minute);
     String binStr;
     binStr.reserve(9);
     for (int i = 8; i >= 0; --i) 
@@ -456,6 +655,9 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse += "  \"DisplayEnabled\": "      + String(displayEnabled)         + ",\n";
     jsonResponse += "  \"Melody\": \""             + String("Nokia")                + "\",\n";
     jsonResponse += "  \"FreeHeap\": "            + String(freeHeap)               + ",\n";
+    jsonResponse += "  \"CoreLoad0\": "            + String(sm.coreLoad0_)         + ",\n";
+    jsonResponse += "  \"CoreLoad1\": "            + String(sm.coreLoad1_)         + ",\n";
+    jsonResponse += "  \"TotalLoad\": "            + String(sm.totalLoad_)         + ",\n";
     jsonResponse += "  \"ChipId\": \""             + String(chipId, HEX)            + "\",\n";
     jsonResponse += "  \"FlashSize\": "           + String(flashSize)              + ",\n";
     jsonResponse += "  \"FlashSpeed\": "          + String(flashSpeed)             + ",\n";
@@ -490,7 +692,15 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse += "  \"Brightness\": "          + String(brightness)             + ",\n";
     jsonResponse += "  \"timeLimitFrom\": \""   + String(Globals::timeLimitFrom.c_str()) + "\",\n";
     jsonResponse += "  \"timeLimitTo\": \""     + String(Globals::timeLimitTo.c_str()) + "\",\n";
-    jsonResponse += "  \"NixiePWM\": "       + String(Globals::PWM_disabled) + "\n";
+    jsonResponse += "  \"SingleACP\": "         + String(singleDigitACP) + ",\n";
+    jsonResponse += "  \"NixiePWM\": "          + String(Globals::PWM_disabled)  + ",\n";
+    jsonResponse += "  \"PWM_Frequenzy\": "          + String(pwmFreq)  + ",\n";
+    jsonResponse += "  \"SingleDigits\": "       + String(singleDigit) + ",\n";
+    jsonResponse += "  \"CurrentTimeZone\": "       + String(static_cast<uint8_t>(Globals::currentTimeZone)) + ",\n";
+    jsonResponse += "  \"TimerActive\": "       + String(timerActive ? "true" : "false") + ",\n";
+    jsonResponse += "  \"TimerConfiguredSeconds\": " + String(timerPreset) + ",\n";
+    jsonResponse += "  \"AlarmActive\": "       + String(alarmSet ? "true" : "false") + ",\n";
+    jsonResponse += "  \"AlarmTime\": \""       + String(alarmTimeBuf) + "\"\n";
     jsonResponse += "}";
 
     server_.send(200, "application/json", jsonResponse);

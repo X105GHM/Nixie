@@ -22,9 +22,7 @@ esp_err_t ButtonPoll::init() noexcept
     }
 
     lastState_ = (gpio_get_level(pin_) != 0);
-    Logger::log(logType, "ButtonPoll on GPIO%d initialized, startState=%s",
-                static_cast<int>(pin_),
-                lastState_ ? "HIGH" : "LOW");
+    Logger::log(logType, "ButtonPoll on GPIO%d initialized, startState=%s",static_cast<int>(pin_),lastState_ ? "HIGH" : "LOW");
     return ESP_OK;
 }
 

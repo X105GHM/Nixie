@@ -20,4 +20,7 @@ Brownout*           brownoutInstance = nullptr;
 Relay               relay;
 OTAManager          otaManager;
 NtcThermistor       temperatureSensor;
+Timer               timer;
+AlarmClock          alarmClock;
+Buzzer              buzzer;
 

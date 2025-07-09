@@ -14,6 +14,9 @@
 #include "Brownout/Brownout.hpp"
 #include "Button/Button.hpp"
 #include "WiFiConnector/WiFiConnector.hpp"
+#include "Acoustics/Buzzer/Buzzer.hpp"
+#include "Timer/Timer.hpp"
+#include "AlarmClock/AlarmClock.hpp"
 
 extern TaskHandle_t displayTaskHandle;
 extern TaskHandle_t clockTaskHandle;
@@ -35,3 +38,6 @@ extern Brownout*         brownoutInstance;
 extern Relay             relay;
 extern OTAManager        otaManager;
 extern NtcThermistor     temperatureSensor;
+extern Timer             timer;
+extern AlarmClock        alarmClock;
+extern Buzzer            buzzer;

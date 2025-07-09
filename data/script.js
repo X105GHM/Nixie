@@ -5,12 +5,23 @@ document.addEventListener("DOMContentLoaded", () => {
   // === Netzwerk-Logger ===========================================
   const netLogEl = document.getElementById("networkLog");
   const clearBtn = document.getElementById("clearNetworkLog");
+  const trimCheckbox = document.getElementById("logTrimToggle");
   const logToUI = msg => {
     if (!netLogEl) return;
+
     const ts = new Date().toLocaleTimeString("de-DE");
     netLogEl.textContent += `[${ts}] ${msg}\n`;
+
+    if (trimCheckbox.checked) {
+      const lines = netLogEl.textContent.split("\n");
+      if (lines.length > 255) {
+        netLogEl.textContent = lines.slice(lines.length - 255).join("\n");
+      }
+    }
+
     netLogEl.parentElement.scrollTop = netLogEl.parentElement.scrollHeight;
   };
+
   clearBtn.addEventListener("click", () => {
     netLogEl.textContent = "";
   });
@@ -87,7 +98,6 @@ document.addEventListener("DOMContentLoaded", () => {
           break;
 
         case 'manualBrightness':
-          // manualBrightness/value/brightness
           if (parts[2]) {
             url = `/set/manualBrightness?value=${encodeURIComponent(parts[2])}`;
             if (parts[3]) {
@@ -111,6 +121,12 @@ document.addEventListener("DOMContentLoaded", () => {
         case 'ota':
           url = `/set/ota`;
           break;
+
+        case 'pwmPeriod':
+          if (parts[2] && /^\d+$/.test(parts[2])) {
+            url = `/set/PWMPeriod?value=${parts[2]}`;
+          }
+          break;
       }
     }
     else if (parts[0] === 'get' && parts[1] === 'info') {
@@ -125,13 +141,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-
   // === Navigation & Tabs ===========================================
   const tabs = document.querySelectorAll("nav .menu li"),
     mobileTabs = document.querySelectorAll("#mobileMenu li"),
     tabContents = document.querySelectorAll(".tab-content"),
     hamburger = document.getElementById("hamburger"),
     mobileMenu = document.getElementById("mobileMenu");
+
   function activateTab(id) {
     tabs.forEach(t => t.classList.toggle("active", t.dataset.tab === id));
     mobileTabs.forEach(t => t.classList.toggle("active", t.dataset.tab === id));
@@ -140,14 +156,17 @@ document.addEventListener("DOMContentLoaded", () => {
       : sec.classList.remove("active")
     );
   }
+
   tabs.forEach(t => t.addEventListener("click", () => activateTab(t.dataset.tab)));
   mobileTabs.forEach(t => t.addEventListener("click", () => {
     activateTab(t.dataset.tab);
     mobileMenu.style.display = mobileMenu.style.display === "flex" ? "none" : "flex";
   }));
+
   hamburger.addEventListener("click", () => {
     mobileMenu.style.display = mobileMenu.style.display === "flex" ? "none" : "flex";
   });
+
   activateTab("dashboard");
 
   // === Live Clock =======================================================
@@ -165,6 +184,101 @@ document.addEventListener("DOMContentLoaded", () => {
     localStorage.setItem("darkMode", themeToggle.checked);
   });
 
+  // === Nixie-Single-Digit-Flow unter ACP-Panel ======================
+  const acpToggle = document.getElementById('acpToggle');
+  const acpControls = document.getElementById('acpControls');
+  const nixieContainer = document.getElementById('acpNixieContainer');
+  const nixieTubes = Array.from(nixieContainer.querySelectorAll('.nixie-tube'));
+  const applyBtn = document.getElementById('acpCleanButton');
+
+  let selectedTube = null;
+
+  // 0) Initialzustand
+  acpControls.style.display = 'none';
+  nixieContainer.classList.add('hidden');
+  applyBtn.classList.add('hidden');
+
+  // 1) Toggle umschalten → nur Panel öffnen/schließen, kein HTTP beim AN
+  acpToggle.addEventListener('change', () => {
+    const on = acpToggle.checked;
+
+    // UI
+    acpControls.style.display = on ? 'block' : 'none';
+    nixieContainer.classList.toggle('hidden', !on);
+    applyBtn.classList.toggle('hidden', !on);
+    if (on) initNixie();
+
+    // Haupt-ACP-, Datum-, Wetter-, Startwerte-Buttons deaktivieren
+    [ACPButton, DateButton, WeatherButton, StartValuesButton].forEach(btn => {
+      btn.disabled = on;
+    });
+
+    // Beim AUSschalten** senden wir value=0
+    if (!on) {
+      fetch('/set/singleDigitControl?value=0')
+        .then(res => {
+          if (!res.ok) console.error('singleDigitControl:value=0 failed', res.status);
+        })
+        .catch(err => console.error('Network error (value=0):', err));
+    }
+  });
+
+  // 2) Init-Funktion: alle Röhren leeren, erste auf „0“
+  function initNixie() {
+    nixieTubes.forEach((tube, idx) => {
+      const span = tube.querySelector('.digit');
+      span.textContent = '';
+      tube.classList.remove('selected');
+      if (idx === 0) {
+        span.textContent = '0';
+        tube.classList.add('selected');
+        selectedTube = tube;
+        applyBtn.disabled = false;
+      }
+    });
+  }
+  initNixie();
+
+  // 3) Klick auf Röhre → Ziffer inkrementieren & Auswahl aktivieren
+  nixieTubes.forEach(tube => {
+    tube.addEventListener('click', () => {
+      nixieTubes.forEach(t => {
+        if (t !== tube) {
+          t.querySelector('.digit').textContent = '';
+          t.classList.remove('selected');
+        }
+      });
+      const span = tube.querySelector('.digit');
+      const num = span.textContent === ''
+        ? 0
+        : (parseInt(span.textContent, 10) + 1) % 10;
+      span.textContent = num;
+      tube.classList.add('selected');
+      selectedTube = tube;
+      applyBtn.disabled = false;
+    });
+  });
+
+  // 4) „Anwenden“-Button → senden value=1 & digit=…
+  applyBtn.addEventListener('click', () => {
+    if (!selectedTube) return;
+
+    const idx = Number(selectedTube.dataset.index) - 1; // 0…5
+    const digit = parseInt(selectedTube.querySelector('.digit').textContent, 10);
+    const singleDigit = idx * 10 + digit;                // 0…59
+
+    fetch(`/set/singleDigitControl?value=1&digit=${singleDigit}`)
+      .then(res => {
+        if (!res.ok) {
+          console.error('singleDigitControl:value=1 failed', res.status);
+        } else {
+          console.log('singleDigitControl OK');
+          // Panel bleibt offen, Toggle bleibt an
+        }
+      })
+      .catch(err => console.error('Network error:', err));
+  });
+
   // === Charts Setup ======================================================
   const configs = [
     { key: "voltage_12V", canvasId: "chart_voltage_12V", label: "Spannung 12 V (V)" },
@@ -176,12 +290,46 @@ document.addEventListener("DOMContentLoaded", () => {
     { key: "power_W", canvasId: "chart_power_W", label: "Leistung (W)" },
     { key: "energy_Wh", canvasId: "chart_energy_Wh", label: "Energie (Wh)" },
     { key: "temperature", canvasId: "chart_temperature", label: "Case-Temperatur (°C)" },
-    { key: "freeHeap", canvasId: "chart_freeHeap", label: "FreeHeap (Bytes)" }
+    { key: "freeHeap", canvasId: "chart_freeHeap", label: "FreeHeap (Bytes)" },
+    { key: "totalLoad", canvasId: "chart_totalLoad", label: "CPU Auslastung (0-100%)" },
+    { key: "coreLoad0", canvasId: "chart_coreLoad0", label: "Kern 0 (0-100%)" },
+    { key: "coreLoad1", canvasId: "chart_coreLoad1", label: "Kern 1 (0-100%)" }
   ];
   const chartData = {}, charts = {};
   function getColor(i) {
-    return ["#2196F3", "#FF9800", "#4CAF50", "#E91E63", "#9C27B0", "#00BCD4", "#FFC107", "#795548", "#607D8B", "#F44336"][i % 10];
+    return ["#2196F3", "#FF9800", "#4CAF50", "#E91E63", "#9C27B0", "#00BCD4", "#FFC107", "#795548", "#607D8B", "#F44336", "#3F51B5", "#009688", "#FF5722"][i % 13];
   }
+
+  const timeRangeSelect = document.getElementById('timeRange');
+
+  function updateChartTimeWindow() {
+    const now = Date.now();
+    let spanMs;
+
+    switch (timeRangeSelect.value) {
+      case '1h': spanMs = 1 * 60 * 60 * 1000; break;
+      case '6h': spanMs = 6 * 60 * 60 * 1000; break;
+      case '24h': spanMs = 24 * 60 * 60 * 1000; break;
+      case '7d': spanMs = 7 * 24 * 60 * 60 * 1000; break;
+      default: spanMs = null;
+    }
+
+    configs.forEach(cfg => {
+      const chart = charts[cfg.key];
+      const dataArr = chartData[cfg.key];
+      if (spanMs && dataArr.length > 0 && now - dataArr[0].x > spanMs) {
+        chart.options.scales.x.min = now - spanMs;
+        chart.options.scales.x.max = now;
+      } else {
+        delete chart.options.scales.x.min;
+        delete chart.options.scales.x.max;
+      }
+      chart.update('none');
+    });
+  }
+
+  timeRangeSelect.addEventListener('change', updateChartTimeWindow);
+
   function initCharts() {
     configs.forEach((cfg, i) => {
       chartData[cfg.key] = [];
@@ -242,7 +390,17 @@ document.addEventListener("DOMContentLoaded", () => {
     timeLimitSettings = document.getElementById("timeLimitSettings"),
     timeLimitFromInput = document.getElementById("timeLimitFromInput"),
     timeLimitToInput = document.getElementById("timeLimitToInput"),
-    setOTA = document.getElementById("otaUpdateButton");
+    setOTA = document.getElementById("otaUpdateButton"),
+    timezoneSelect = document.getElementById("timezoneSelect"),
+    applyTimezoneButton = document.getElementById("applyTimezoneSelect"),
+    timerToggle = document.getElementById("timerToggle"),
+    timerTimeInput = document.getElementById("timerTimeInput"),
+    timerSettings = document.getElementById("timerSettings"),
+    alarmToggle = document.getElementById("alarmToggle"),
+    alarmTimeInput = document.getElementById("alarmTimeInput"),
+    alarmSettings = document.getElementById("alarmSettings");
+
+  const tzNames = ["CET", "EET", "WET", "UTC", "EST", "CST", "MST", "PST", "HST", "JST", "IST", "AEST", "AWST"];
 
   // Display ON/OFF special
   displayToggle.addEventListener("change", async () => {
@@ -275,6 +433,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
   makeToggleHandler(tickerToggle, "ticker");
   makeToggleHandler(timeLimitToggle, "timeLimit");
   makeToggleHandler(silentToggle, "silentMode");
@@ -340,6 +499,73 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  timerToggle.addEventListener("change", async () => {
+    skipSync.add("timerToggle");
+
+    const enabled = timerToggle.checked ? 1 : 0;
+    const [hh, mm, ss] = timerTimeInput.value.split(":").map(Number);
+    const totalSeconds = (hh || 0) * 3600 + (mm || 0) * 60 + (ss || 0);
+
+    try {
+      await fetch(`/set/timer?enabled=${enabled}&seconds=${totalSeconds}`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTimeout(() => skipSync.delete("timerToggle"), 5000);
+    }
+  });
+
+
+  timerTimeInput.addEventListener("change", async () => {
+    skipSync.add("timerTimeInput");
+
+    if (timerToggle.checked) {
+      const [hh, mm, ss] = timerTimeInput.value.split(":").map(Number);
+      const totalSeconds = (hh || 0) * 3600 + (mm || 0) * 60 + (ss || 0);
+
+      try {
+        await fetch(`/set/timer?enabled=1&seconds=${totalSeconds}`);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    setTimeout(() => skipSync.delete("timerTimeInput"), 5000);
+  });
+
+  alarmToggle.addEventListener("change", async () => {
+    skipSync.add("alarmToggle");
+
+    const enabled = alarmToggle.checked ? 1 : 0;
+    const [hh, mm] = alarmTimeInput.value.split(":").map(Number);
+    const timeStr = `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+
+    try {
+      await fetch(`/set/alarm?enabled=${enabled}&time=${encodeURIComponent(timeStr)}`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTimeout(() => skipSync.delete("alarmToggle"), 5000);
+    }
+  });
+
+
+  alarmTimeInput.addEventListener("change", async () => {
+    skipSync.add("alarmTimeInput");
+
+    if (alarmToggle.checked) {
+      const [hh, mm] = alarmTimeInput.value.split(":").map(Number);
+      const timeStr = `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+
+      try {
+        await fetch(`/set/alarm?enabled=1&time=${encodeURIComponent(timeStr)}`);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    setTimeout(() => skipSync.delete("alarmTimeInput"), 5000);
+  });
+
+
   [timeLimitFromInput, timeLimitToInput].forEach(input => {
     input.addEventListener("change", async () => {
       skipSync.add(input.id);
@@ -354,9 +580,33 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (e) {
         console.error(e);
       } finally {
-        setTimeout(() => skipSync.delete(input.id), 2000);
+        setTimeout(() => skipSync.delete(input.id), 5000);
       }
     });
+  });
+
+  tzNames.forEach((name, i) => {
+    const opt = document.createElement("option");
+    opt.value = String(i);
+    opt.text = name;
+    timezoneSelect.add(opt);
+  });
+
+  // Skip-Sync beim manuellen Ändern
+  timezoneSelect.addEventListener("focus", () => skipSync.add("timezoneSelect"));
+  timezoneSelect.addEventListener("blur", () => skipSync.delete("timezoneSelect"));
+
+  // Anwenden-Button
+  applyTimezoneButton.addEventListener("click", async () => {
+    skipSync.add("timezoneSelect");
+    try {
+      await fetch(`/set/timezone?tz=${encodeURIComponent(timezoneSelect.value)}`);
+    } catch (e) {
+      console.error("Error setting timezone:", e);
+      alert("Fehler beim Setzen der Zeitzone.");
+    } finally {
+      setTimeout(() => skipSync.delete("timezoneSelect"), 2000);
+    }
   });
 
   // Brightness
@@ -366,6 +616,13 @@ document.addEventListener("DOMContentLoaded", () => {
     brightnessSlider.value = val;
     brightnessValue.textContent = val;
   }
+
+  // → Beginn der manuellen Interaktion: Skip setzen
+  brightnessSlider.addEventListener('mousedown', () => skipSync.add('brightnessSlider'));
+  brightnessSlider.addEventListener('touchstart', () => skipSync.add('brightnessSlider'));
+  brightnessToggle.addEventListener('mousedown', () => skipSync.add('brightnessToggle'));
+  brightnessToggle.addEventListener('touchstart', () => skipSync.add('brightnessToggle'));
+
   brightnessToggle.addEventListener("change", async () => {
     skipSync.add("brightnessToggle");
     await fetch(
@@ -374,17 +631,17 @@ document.addEventListener("DOMContentLoaded", () => {
     );
     setTimeout(() => skipSync.delete("brightnessToggle"), 2000);
   });
+
   brightnessSlider.addEventListener("input", () => {
     brightnessValue.textContent = brightnessSlider.value;
   });
+
   brightnessSlider.addEventListener("change", async () => {
     skipSync.add("brightnessSlider");
     await fetch(
       `/set/manualBrightness?value=${brightnessToggle.checked}&` +
       `brightness=${brightnessSlider.value}`
     )
-
-
     setTimeout(() => skipSync.delete("brightnessSlider"), 5000);
   });
 
@@ -397,6 +654,11 @@ document.addEventListener("DOMContentLoaded", () => {
   timeLimitFromInput.addEventListener('focus', () => skipSync.add('timeLimitFrom'));
   timeLimitToInput.addEventListener('focus', () => skipSync.add('timeLimitTo'));
 
+  alarmTimeInput.addEventListener('focus', () => skipSync.add('alarmTimeInput'));
+  alarmTimeInput.addEventListener('blur', () => skipSync.delete('alarmTimeInput'));
+
+  timerTimeInput.addEventListener('focus', () => skipSync.add('timerTimeInput'));
+  timerTimeInput.addEventListener('blur', () => skipSync.delete('timerTimeInput'));
 
   // Firmware & ZIP
   applyFirmware.addEventListener("click", async () => {
@@ -404,6 +666,7 @@ document.addEventListener("DOMContentLoaded", () => {
     await fetch(`/set/firmware?target=${encodeURIComponent(firmwareSelect.value)}`);
     setTimeout(() => skipSync.delete("firmwareSelect"), 1000);
   });
+
   applyZip.addEventListener("click", async () => {
     skipSync.add("zipInput");
     await fetch(`/set/zip?zip=${encodeURIComponent(zipInput.value)}`);
@@ -416,6 +679,7 @@ document.addEventListener("DOMContentLoaded", () => {
     "logDigitToggle", "logWebserverToggle", "logOtaToggle",
     "logButtonToggle", "logGeneralToggle", "logWifiToggle"
   ];
+
   logIds.forEach(id => {
     const cb = document.getElementById(id);
     cb.addEventListener("change", async () => {
@@ -438,7 +702,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   [timeLimitFromInput, timeLimitToInput].forEach(input => {
     input.addEventListener("change", async () => {
-      // Flag setzen, damit fetchInfo nicht drüber schreibt
       skipSync.add('timeLimitFrom');
       skipSync.add('timeLimitTo');
       try {
@@ -468,7 +731,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Dashboard mapping
       const map = {
         Chip: 'chipModel', SSID: 'ssid', Password: 'password',
-        Melody: 'melody', FreeHeap: 'freeHeap',
+        Melody: 'melody', FreeHeap: 'freeHeap', CoreLoad0: 'coreLoad0', CoreLoad1: 'coreLoad1', TotalLoad: 'totalLoad',
         ChipId: 'chipId', FlashSize: 'flashSize', FlashSpeed: 'flashSpeed',
         SketchSize: 'sketchSize', SketchFreeSpace: 'sketchFreeSpace',
         CpuFrequencyMHz: 'cpuFreq', SdkVersion: 'sdkVersion',
@@ -478,14 +741,17 @@ document.addEventListener("DOMContentLoaded", () => {
         HSS_Enabled: 'HSS_Enabled', HSS_190V: 'HSS_190V', HSS_Resistor: 'HSS_Resistor',
         CaseTemperature_C: 'temperature', Firmware_Target: 'firmwareTarget',
         Hardware_Version: 'hardwareVersion', Software_Version: 'softwareVersion',
-        zipCode: 'zipCode',
+        NixiePWM: 'NixiePWM', PWM_Frequenzy: 'PWM_Frequenzy',
         manualBrightnessEnabled: 'manualBrightnessEnabled',
         loadDetected: 'loadDetected', Brightness: 'brightness', timeLimitFrom: 'timeLimitFrom', timeLimitTo: 'timeLimitTo',
-        DisplayEnabled: 'DisplayEnabled', tickerEnabled: 'tickerEnabled', timeLimitEnabled: 'timeLimitEnabled', 
-        silentModeEnabled: 'silentModeEnabled', WeatherUpdateEnabled: 'WeatherUpdateEnabled', NixiePWM: 'nixiePWM'
+        DisplayEnabled: 'DisplayEnabled', tickerEnabled: 'tickerEnabled', timeLimitEnabled: 'timeLimitEnabled',
+        silentModeEnabled: 'silentModeEnabled', WeatherUpdateEnabled: 'WeatherUpdateEnabled', zipCode: 'zipCode',
+        CurrentTimeZone: 'CurrentTimeZone', TimerActive: 'TimerActive', TimerConfiguredSeconds: 'TimerConfiguredSeconds',
+        AlarmActive: 'AlarmActive', AlarmTime: 'AlarmTime' 
       };
 
-      const boolFields = ['DisplayEnabled', 'tickerEnabled', 'timeLimitEnabled', 'silentModeEnabled', 'WeatherUpdateEnabled', 'manualBrightnessEnabled','nixiePWM'];
+      const boolFields = ['DisplayEnabled', 'tickerEnabled', 'timeLimitEnabled', 'silentModeEnabled',
+        'WeatherUpdateEnabled', 'manualBrightnessEnabled', 'NixiePWM', 'TimerActive', 'AlarmActive'];
 
       Object.entries(map).forEach(([k, id]) => {
         const el = document.getElementById(id);
@@ -499,7 +765,16 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       // sync brightness
-      syncBrightnessUI(!!data.manualBrightnessEnabled, data.Brightness);
+      if (!skipSync.has("brightnessSlider") && !skipSync.has("brightnessToggle")) {
+        syncBrightnessUI(!!data.manualBrightnessEnabled, data.Brightness);
+      }
+
+      const tzDisplay = document.getElementById("CurrentTimeZone");
+      if (tzDisplay && data.CurrentTimeZone != null) {
+        // tzNames muss ganz oben im DOMContentLoaded stehen
+        const idx = parseInt(data.CurrentTimeZone, 10);
+        tzDisplay.textContent = tzNames[idx] || "–";
+      }
 
       // charts
       configs.forEach(cfg => {
@@ -513,6 +788,8 @@ document.addEventListener("DOMContentLoaded", () => {
         charts[cfg.key].update('none');
       });
 
+      updateChartTimeWindow();
+
       // toggles
       if (!skipSync.has("displayToggle")) displayToggle.checked = !!data.DisplayEnabled;
       if (!skipSync.has("tickerToggle")) tickerToggle.checked = !!data.tickerEnabled;
@@ -520,6 +797,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!skipSync.has("silentToggle")) silentToggle.checked = !!data.silentModeEnabled;
       if (!skipSync.has("weatherToggle")) weatherToggle.checked = !!data.WeatherUpdateEnabled;
       if (!skipSync.has("PWMToggle")) PWMToggle.checked = !!data.NixiePWM;
+      if (!skipSync.has("timerToggle")) timerToggle.checked = !!data.TimerActive;
+      if (!skipSync.has("alarmToggle")) alarmToggle.checked = !!data.AlarmActive;
+
+      // timezone
+      if (!skipSync.has("timezoneSelect") && data.CurrentTimeZoneIndex != null) {
+        timezoneSelect.value = String(data.CurrentTimeZoneIndex);
+      }
 
       // logConfig
       const bin = data.logConfigBinary.padStart(9, '0');
@@ -533,6 +817,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
       timeLimitSettings.style.display = data.timeLimitEnabled ? "flex" : "none";
 
+      if (!skipSync.has("timerTimeInput")) {
+        const totalSec = data.TimerConfiguredSeconds || 0;
+        const h = String(Math.floor(totalSec / 3600)).padStart(2, "0");
+        const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
+        const s = String(totalSec % 60).padStart(2, "0");
+        timerTimeInput.value = `${h}:${m}:${s}`;
+      }
+
+      if (!skipSync.has("alarmTimeInput")) {
+        const alarmTime = data.AlarmTime || "06:00";
+        alarmTimeInput.value = alarmTime.length === 5 ? alarmTime : "06:00";
+      }
 
       if (data.timeLimitEnabled) {
         if (!skipSync.has("timeLimitFrom")) {
@@ -553,6 +849,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(pollInfo, 500);
   }
 
-  pollInfo();
   initCharts();
+  pollInfo();
 });

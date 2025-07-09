@@ -9,9 +9,16 @@
 #include "Hss/HSS.hpp"
 #include "Globals/Globals.hpp"
 #include "TimeWeather/WeatherClient/WeatherClient.hpp"
+#include "StatsMonitor/StatsMonitor.hpp"
+#include "Timer/Timer.hpp"
+#include "AlarmClock/AlarmClock.hpp"
+#include "Acoustics/Buzzer/Buzzer.hpp"
 #include <ctime>
 
 extern Relay relay;
+extern Timer timer;
+extern AlarmClock alarmClock;
+extern Buzzer buzzer;
 
 class NTPClient;
 class HSS;

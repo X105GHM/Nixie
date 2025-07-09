@@ -6,6 +6,7 @@
 #include "nvs.h"
 #include "Logger/Logger.hpp"
 #include "Globals/Globals.hpp"
+#include "digits/Digits.hpp"
 
 namespace Memory
 {
@@ -29,10 +30,10 @@ namespace Memory
         std::string getStringValue() const noexcept;
 
     private:
-        static constexpr const char *NVS_NAMESPACE = "storage";
-        static constexpr const char *KEY_INT = "int_val";
-        static constexpr const char *KEY_FLOAT = "float_val";
-        static constexpr const char *KEY_STRING = "str_val";
+        static constexpr const char *NVS_NAMESPACE  = "storage";
+        static constexpr const char *KEY_INT        = "int_val";
+        static constexpr const char *KEY_FLOAT      = "float_val";
+        static constexpr const char *KEY_STRING     = "str_val";
 
         int intValue_;
         float floatValue_;

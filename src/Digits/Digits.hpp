@@ -15,11 +15,17 @@
 #include <cstring>
 #include <driver/gpio.h>
 
-constexpr std::uint32_t ON_TIME_US = 1000;
+/// Software-PWM für 400 Hz (Periode = 2 500 µs)
+extern std::uint32_t PWM_PERIOD_US;
+
 constexpr bool ADAPTIVE_BRIGHTNESS = true;
 
 extern bool displayEnabled;
-extern std::int32_t digits; 
+extern bool zipMaskingEnabled;
+extern bool tempMaskingEnabled;
+extern bool singleDigitACP;
+extern std::uint8_t singleDigit; 
+extern std::int32_t digits;
 extern std::int32_t lastdigits;
 extern std::uint32_t brightness;   // 0..100
 extern const std::uint32_t symbolArray[10];
@@ -28,3 +34,12 @@ void displayDigitsTask(void* pvParameters) noexcept;
 void displayTime() noexcept;
 void displayDate() noexcept;
 void displayWeather() noexcept;
+
+static void delayMicrosYield(uint32_t usec) 
+{
+    int64_t start = esp_timer_get_time();
+    while ((esp_timer_get_time() - start) < usec) 
+    {
+        taskYIELD(); 
+    }
+}

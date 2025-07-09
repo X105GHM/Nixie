@@ -56,7 +56,7 @@ namespace Globals
     FirmwareTarget currentFirmwareTarget = FirmwareTarget::NixieV6_std; // Mem
 
     static constexpr const char *firmwareUrlTable[] = {
-        /* NixieV6_std */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6/bin",
+        /* NixieV6_std */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6/bin", 
         /* NixieV6_dev */ "https://raw.githubusercontent.com/X105GHM/Nixie/V.6_dev/bin",
         /* NixieV6_BOS */ "https://update.server.com/nixiev6/branch/V.6_BOS/bin"
 
@@ -75,4 +75,6 @@ namespace Globals
         }
         return std::string(firmwareUrlTable[idx]);
     }
+
+    TimeZone currentTimeZone = TimeZone::CET;
 }

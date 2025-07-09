@@ -136,20 +136,20 @@ h2 {
 /* -----------------------------------------------
      Dashboard
      ----------------------------------------------- */
-     #general-info {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2rem;
-      }
-      
-      /* Card-Style */
-      .card {
-        background: #fff;
-        padding: 0.75rem;
-        border-radius: 6px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
+#general-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+/* Card-Style */
+.card {
+    background: #fff;
+    padding: 0.75rem;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 
 /* -----------------------------------------------
      Graphen
@@ -183,7 +183,7 @@ h2 {
 /* ================================================
    Log-Fenster
    ================================================ */
-   #networkLogContainer {
+#networkLogContainer {
     background-color: #fff;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -191,40 +191,44 @@ h2 {
     overflow-y: auto;
     padding: .5rem;
     margin-bottom: 1rem;
-  }
-  #networkLog {
+}
+
+#networkLog {
     font-family: monospace;
     font-size: .9rem;
     white-space: pre-wrap;
     word-break: break-word;
-  }
-  
-  /* ================================================
+}
+
+/* ================================================
      Log Input-Gruppe
      ================================================ */
-  .log-input-group {
+.log-input-group {
     display: flex;
     flex-wrap: wrap;
     gap: .5rem;
     align-items: center;
     margin-bottom: .5rem;
-  }
-  .log-input-group input[type="text"] {
+}
+
+.log-input-group input[type="text"] {
     flex: 1;
     padding: .4rem;
     border: 1px solid #ccc;
     border-radius: 4px;
-  }
-  .log-input-group button {
+}
+
+.log-input-group button {
     padding: .4rem .8rem;
     border: 1px solid #888;
     background-color: #f0f0f0;
     border-radius: 4px;
     cursor: pointer;
-  }
-  .log-input-group button:hover {
+}
+
+.log-input-group button:hover {
     background-color: #e0e0e0;
-  }
+}
 
 /* -----------------------------------------------
    Einstellungen
@@ -282,17 +286,16 @@ h2 {
 /* -----------------------------------------------
    Time-Boxes
    ----------------------------------------------- */
-   .time-limit-settings {
+.time-limit-settings {
     display: none;
     align-items: center;
     gap: 0.5rem;
     margin-bottom: 0.75rem;
-  }
-  .time-limit-settings label {
-    white-space: nowrap;
-  }
-  
+}
 
+.time-limit-settings label {
+    white-space: nowrap;
+}
 
 /* -----------------------------------------------
    Helligkeits-Slider
@@ -312,29 +315,20 @@ h2 {
 
 #brightnessSlider {
     flex: 1;
-    /* Slider dehnt sich aus, bleibt aber eingerahmt */
     margin-right: 0.75rem;
-    /* Abstand zum Wert-Span */
     cursor: pointer;
 }
 
 #brightnessValue {
     flex: none;
     width: 2.5rem;
-    /* ausreichend Platz für "100" */
     text-align: center;
     font-weight: 500;
 }
 
-
-
-
-/* Input-Feld für ZIP Code – etwa Höhe wie Dropdown/Buttons */
 #zipInput {
     flex: none;
-    /* nicht dehnen */
     padding: 0.4rem 0.6rem;
-    /* vertikal/horizontal */
     font-size: 1rem;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -343,9 +337,7 @@ h2 {
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
     margin-right: 0.75rem;
-    /* Abstand zum Button */
     width: 100px;
-    /* feste Breite für ZIP (kann angepasst werden) */
 }
 
 /* Hover/Focus für ZIP-Input */
@@ -380,6 +372,30 @@ h2 {
     border-color: #388E3C;
 }
 
+/* Standard-Styles für Timezone-Button */
+#applyTimezoneSelect {
+    flex: none;
+    padding: 0.4rem 0.8rem;
+    font-size: 1rem;
+    border: 1px solid #4CAF50;
+    border-radius: 4px;
+    background-color: #4CAF50;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+/* Hover/Active für Timezone-Button */
+#applyTimezoneSelect:hover {
+    background-color: #45A049;
+    border-color: #45A049;
+}
+
+#applyTimezoneSelect:active {
+    background-color: #388E3C;
+    border-color: #388E3C;
+}
+
 
 /* ================================================
    Log-Config-Gruppe (vertikal)
@@ -399,32 +415,24 @@ h2 {
     font-weight: 600;
 }
 
-/* ALTE GRID-Definition entfernen oder überschreiben */
-/* .log-config-switches { … }  */
-
-/* Neue vertikale Anordnung: */
 .log-config-switches-vertical {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    /* Abstand zwischen den einzelnen Einträgen */
 }
 
-/* Jeder Eintrag in der vertikalen Liste: Label + Switch rechts */
 .log-config-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
 
-/* Label bleibt links, darf nicht expandieren */
 .log-config-item>label:first-child {
     flex: none;
     margin-right: 0.5rem;
     white-space: nowrap;
 }
 
-/* Switch-Container: feste Breite, nicht wachsen lassen */
 .log-config-item .switch {
     flex: none;
 }
@@ -434,14 +442,11 @@ h2 {
    ----------------------------------------------- */
 .device-setting.firmware-setting {
     margin-bottom: 1rem;
-    /* Abstand nach unten */
 }
 
 #firmwareSelect {
     flex: none;
-    /* nicht dehnen */
     padding: 0.4rem 0.6rem;
-    /* vertikales und horizontales Padding */
     font-size: 1rem;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -450,20 +455,16 @@ h2 {
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
     margin-right: 0.75rem;
-    /* Abstand zum Button */
 }
 
-/* Hover/Focus für Select */
 #firmwareSelect:hover,
 #firmwareSelect:focus {
     border-color: #888;
     box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Button-Element: gleiche Höhe wie Select, optisch passend */
 #applyFirmware {
     flex: none;
-    /* nicht dehnen */
     padding: 0.4rem 0.8rem;
     font-size: 1rem;
     border: 1px solid #2196F3;
@@ -474,7 +475,6 @@ h2 {
     transition: background-color 0.2s, border-color 0.2s;
 }
 
-/* Hover/Active für Button */
 #applyFirmware:hover {
     background-color: #1a7bcc;
     border-color: #1a7bcc;
@@ -493,7 +493,6 @@ h2 {
     align-items: center;
     justify-content: space-between;
     margin-bottom: 1.5rem;
-    /* Abstand nach unten */
 }
 
 .device-setting.ota-setting>label:first-child {
@@ -571,8 +570,6 @@ input:checked+.slider {
 input:checked+.slider:before {
     transform: translateX(26px);
 }
-
-
 
 /* -----------------------------------------------
      Dark Mode
@@ -736,16 +733,13 @@ body.dark #applyZip:active {
     border-color: #1B5E20;
 }
 
-/* Dark Mode–Anpassungen */
 body.dark #brightnessSlider {
     accent-color: #2196F3;
-    /* Hellblauer Slider im Dark Mode */
 }
 
 body.dark #brightnessValue {
     color: #e0e0e0;
 }
-
 
 /* Dark Mode für die zusätzlichen Buttons */
 body.dark .device-setting button {
@@ -762,77 +756,93 @@ body.dark .device-setting button:hover {
 body.dark #dashboard {
     background-color: #121212;
     color: #e0e0e0;
-  }
-  
-  /* Überschriften im Dashboard */
-  body.dark #dashboard h2 {
+}
+
+/* Überschriften im Dashboard */
+body.dark #dashboard h2 {
     border-color: #444;
     color: #e0e0e0;
-  }
-  
-  /* Karten im Dashboard */
-  body.dark #dashboard .card {
-    background-color: #1e1e1e;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
-    color: #e0e0e0;
-  }
-  
-  /* Starke Labels in den Cards */
-  body.dark #dashboard .card strong {
-    color: #bbb;
-  }
-  
-  /* Textwerte in den Cards */
-  body.dark #dashboard .card span {
-    color: #e0e0e0;
-  }
-  
-  /* Grid-Hintergrund entfernen */
-  body.dark #dashboard .grid {
-    background: none;
-  }
-  
-  /* Chart-Canvases dunkler */
-  body.dark #dashboard canvas {
-    background-color: #1e1e1e !important;
-  }
+}
 
-  /* Dark Mode für Logger */
+/* Karten im Dashboard */
+body.dark #dashboard .card {
+    background-color: #1e1e1e;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+    color: #e0e0e0;
+}
+
+/* Starke Labels in den Cards */
+body.dark #dashboard .card strong {
+    color: #bbb;
+}
+
+/* Textwerte in den Cards */
+body.dark #dashboard .card span {
+    color: #e0e0e0;
+}
+
+/* Grid-Hintergrund entfernen */
+body.dark #dashboard .grid {
+    background: none;
+}
+
+/* Chart-Canvases dunkler */
+body.dark #dashboard canvas {
+    background-color: #1e1e1e !important;
+}
+
+/* Dark Mode für Logger */
 body.dark #networkLogContainer {
     background-color: #1e1e1e;
     border-color: #444;
-  }
-  
-  body.dark #networkLog {
+}
+
+body.dark #networkLog {
     background-color: transparent;
     color: #e0e0e0;
-  }
-  
-  /* Dark Mode Eingabe-Gruppe */
-  body.dark .log-input-group input[type="text"] {
+}
+
+/* Dark Mode Eingabe-Gruppe */
+body.dark .log-input-group input[type="text"] {
     background-color: #1e1e1e;
     color: #e0e0e0;
     border-color: #444;
-  }
-  
-  body.dark .log-input-group input[type="text"]::placeholder {
+}
+
+body.dark .log-input-group input[type="text"]::placeholder {
     color: #888;
-  }
-  
-  body.dark .log-input-group button {
+}
+
+body.dark .log-input-group button {
     background-color: #2a2a2a;
     color: #e0e0e0;
     border-color: #555;
-  }
-  
-  body.dark .log-input-group button:hover {
-    background-color: #3a3a3a;
-  }
+}
 
-  body.dark .time-limit-settings {
+body.dark .log-input-group button:hover {
+    background-color: #3a3a3a;
+}
+
+body.dark .time-limit-settings {
     background-color: #1e1e1e;
     border: 1px solid #333;
-  }
+}
+
+body.dark #applyTimezoneSelect {
+    background-color: #388E3C;
+    border-color: #388E3C;
+    color: #fff;
+}
+
+body.dark #applyTimezoneSelect:hover {
+    background-color: #2E7D32;
+    border-color: #2E7D32;
+}
+
+body.dark #applyTimezoneSelect:active {
+    background-color: #1B5E20;
+    border-color: #1B5E20;
+}
 
 /* ================================================
      Responsive
@@ -845,4 +855,143 @@ body.dark #networkLogContainer {
     .hamburger {
         display: block;
     }
+}
+
+:root {
+    --nixie-bg: radial-gradient(circle at top, #fff 0%, #ddd 80%);
+    --nixie-border: #aaa;
+    --nixie-digit-color: #111;
+    --nixie-glow: #f90;
+    --nixie-btn-bg: #eee;
+    --nixie-btn-hover: #ddd;
+}
+
+/* === Dark-Mode Override für Nixie === */
+body.dark {
+    --nixie-bg: radial-gradient(circle at top, #222 0%, #000 80%);
+    --nixie-border: #444;
+    --nixie-digit-color: #eee;
+    --nixie-glow: #f90;
+    --nixie-btn-bg: #333;
+    --nixie-btn-hover: #555;
+}
+
+/* ================================================
+     Container & Sichtbarkeit
+     ================================================ */
+.nixie-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 600px;
+}
+
+.nixie-container.hidden {
+    display: none;
+}
+
+/* ================================================
+     Nixie-Tube Styling
+     ================================================ */
+.nixie-tube {
+    position: relative;
+    width: 14%;
+    aspect-ratio: 0.6;
+    background: var(--nixie-bg);
+    border: 2px solid var(--nixie-border);
+    border-radius: 0 0 8px 8px;
+    clip-path: polygon(10% 18%,
+            20% 10%,
+            30% 5%,
+            40% 2%,
+            50% 0%,
+            60% 2%,
+            70% 5%,
+            80% 10%,
+            90% 18%,
+            100% 20%,
+            100% 100%,
+            0% 100%,
+            0% 20%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: box-shadow 0.2s, transform 0.1s;
+    margin-right: 8px;
+    user-select: none;
+}
+
+.nixie-tube:active {
+    transform: scale(0.97);
+}
+
+.nixie-tube.selected {
+    box-shadow: 0 0 20px var(--nixie-glow);
+}
+
+.nixie-tube:nth-child(2),
+.nixie-tube:nth-child(4) {
+    margin-right: 32px;
+}
+
+.nixie-tube:last-child {
+    margin-right: 0;
+}
+
+/* ================================================
+     Digit Styling
+     ================================================ */
+.digit {
+    font-family: 'Digital-7 Mono', monospace;
+    font-size: 2.5rem;
+    color: var(--nixie-glow);
+    text-shadow:
+        0 0 5px var(--nixie-glow),
+        0 0 20px var(--nixie-glow),
+        0 0 30px var(--nixie-glow);
+    user-select: none;
+}
+
+/* ================================================
+     Kathodenreinigungs-Button
+     ================================================ */
+.clean-button {
+    margin-top: 30px;
+    padding: 15px 30px;
+    font-size: 1.1rem;
+    background: var(--nixie-btn-bg);
+    color: var(--nixie-digit-color);
+    border: none;
+    border-radius: 5px;
+    width: 80%;
+    max-width: 400px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.clean-button:hover {
+    background: var(--nixie-btn-hover);
+}
+
+.acp-group #acpControls {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+}
+
+#acpNixieContainer {
+    margin: 0 auto 10px;
+}
+
+#acpCleanButton {
+    width: auto;
+    padding: 0.75rem 1.5rem;
+    margin: 0 auto;
+    display: block;
+}
+
+.clean-button.hidden {
+    display: none !important;
 }

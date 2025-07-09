@@ -19,13 +19,17 @@
 #include "Temperature/Temperature.hpp"
 #include "OTA/OTA.hpp"
 #include "Globals/SharedObjects.hpp"
+#include "StatsMonitor/StatsMonitor.hpp"
 
 static constexpr LoggerType LOGTYPE = LoggerType::GENERAL;
 
+extern "C" void idle_task(void* pvParameters);
+
 static void initTime() 
 {
-    ntpClient.initTime("CET-1CEST,M3.5.0,M10.5.0/3");
-    Logger::log(LOGTYPE, F("NTP initialized"));
+    const char* tzSpec = Globals::getPosixTZ(Globals::currentTimeZone);
+    ntpClient.initTime(tzSpec);
+    Logger::log(LOGTYPE, ("NTP initialized with TZ: %s"), tzSpec);
 }
 
 static void buttonTask(void *pvParameters) 
@@ -55,6 +59,8 @@ static void brownoutStarter(void *pvParameters)
     vTaskDelete(nullptr);
 }
 
+static TaskHandle_t statsMonitorHandle = nullptr;
+
 void setup() 
 {
     Serial.begin(115200);
@@ -68,10 +74,8 @@ void setup()
     }
     else 
     {
-        /*
         Memory::loadGlobals();
         Globals::applyLogConfig();
-        */
     }
 
     WiFi.mode(WIFI_STA);
@@ -83,7 +87,7 @@ void setup()
         auto readVoltage = []() -> float {return supplyWatch.readUHSS();};
         bool hasLoad = hssController.testLoad(readVoltage, 200/*ms*/, 127.0f/*V*/);
         Globals::loadDetected = hasLoad;
-        Logger::log(LoggerType::HSS, hasLoad ? F("LoadTest: Last erkannt") : F("LoadTest: Keine Last erkannt"));
+        Logger::log(LoggerType::HSS, hasLoad ? F("LoadTest: Load detected") : F("LoadTest: No load detected"));
     }
 
     displayEnabled = true;
@@ -102,6 +106,12 @@ void setup()
 
     xTaskCreatePinnedToCore(brownoutStarter, "BrownoutStarter", 2048, nullptr, 4, &brownoutTaskHandle, 0);
     Logger::log(LOGTYPE, F("BrownoutStarter Task started"));
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    xTaskCreatePinnedToCore(idle_task, "IdleLoad0",2048, nullptr,tskIDLE_PRIORITY, nullptr,0);
+    xTaskCreatePinnedToCore(idle_task, "IdleLoad1",2048, nullptr, tskIDLE_PRIORITY, nullptr,1);
+    Logger::log(LOGTYPE, F("CPU-Load Task started"));
 
     vTaskDelay(pdMS_TO_TICKS(100));
 

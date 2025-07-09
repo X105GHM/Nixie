@@ -66,7 +66,6 @@ void ACP() noexcept
     int32_t displaySequence[] = {306060, 407070, 508080, 609090, 706060, 807070, 908080, 309090};
     for (int i = 0; i < 8; i++)
     {
-
         for (int number = 0; number <= 9; number++)
         {
             digits = 111111 * number;

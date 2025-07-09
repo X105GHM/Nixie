@@ -3,19 +3,14 @@
 
 <head>
     <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Nixie Clock V6</title>
-  <link rel="stylesheet" href="style.css" />
-
-  <!-- 1) Chart.js UMD -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
-
-  <!-- 2) Chart.js-Adapter mit eingebettetem date-fns (Bundle) -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-
-  <!-- 3) Dein Dashboard-Skript -->
-  <script src="script.js"></script>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nixie Clock V6</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="icon" type="image/png" href="Nixie_V6_icon.png">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="script.js"></script>
 </head>
 
 <body>
@@ -53,33 +48,39 @@
         <section id="dashboard" class="tab-content active">
             <h2>Dashboard</h2>
             <div id="general-info" class="grid">
-              <div class="card"><strong>Chip:</strong> <span id="chipModel">–</span></div>
-              <div class="card"><strong>Chip ID:</strong> <span id="chipId">–</span></div>
-              <div class="card"><strong>SDK Version:</strong> <span id="sdkVersion">–</span></div>
-              <div class="card"><strong>CPU-Freq (MHz):</strong> <span id="cpuFreq">–</span></div>
-              <div class="card"><strong>Firmware:</strong> <span id="firmwareTarget">–</span></div>
-              <div class="card"><strong>Hardware:</strong> <span id="hardwareVersion">–</span></div>
-              <div class="card"><strong>Software:</strong> <span id="softwareVersion">–</span></div>
-              <div class="card"><strong>Display Status:</strong> <span id="DisplayEnabled">–</span></div>
-              <div class="card"><strong>Ruhemodus:</strong> <span id="silentModeEnabled">–</span></div>
-              <div class="card"><strong>Wetter Updates:</strong> <span id="WeatherUpdateEnabled">–</span></div>
-              <div class="card"><strong>Ticker:</strong> <span id="tickerEnabled">–</span></div>
-              <div class="card"><strong>Autor:</strong> <span id="autor">–</span></div>
-              <div class="card"><strong>SSID:</strong> <span id="ssid">–</span></div>
-              <div class="card"><strong>ZIP-Code:</strong> <span id="zipCode">–</span></div>
-              <div class="card"><strong>Freier Heap:</strong> <span id="freeHeap">–</span></div>
-              <div class="card"><strong>Sketch-Größe:</strong> <span id="sketchSize">–</span></div>
-              <div class="card"><strong>Freier Sketch:</strong> <span id="sketchFreeSpace">–</span></div>
-              <div class="card"><strong>Flash-Größe:</strong> <span id="flashSize">–</span></div>
-              <div class="card"><strong>Flash-Speed:</strong> <span id="flashSpeed">–</span></div>
-              <div class="card"><strong>Nixie PWM:</strong> <span id="nixiePWM">–</span></div>
-              <div class="card"><strong>Manuelle Helligkeit:</strong> <span id="manualBrightnessEnabled">–</span></div>
-              <div class="card"><strong>Helligkeit:</strong> <span id="brightness">–</span></div>
-              <div class="card"><strong>Zeitabhänige Anzeige:</strong> <span id="timeLimitEnabled">–</span></div>
-              <div class="card"><strong>Anzeige Startzeit:</strong> <span id="timeLimitFrom">–</span></div>
-              <div class="card"><strong>Anzeige Stop:</strong> <span id="timeLimitTo">–</span></div> 
+                <div class="card"><strong>Chip:</strong> <span id="chipModel">–</span></div>
+                <div class="card"><strong>Chip ID:</strong> <span id="chipId">–</span></div>
+                <div class="card"><strong>SDK Version:</strong> <span id="sdkVersion">–</span></div>
+                <div class="card"><strong>CPU-Freq (MHz):</strong> <span id="cpuFreq">–</span></div>
+                <div class="card"><strong>Firmware:</strong> <span id="firmwareTarget">–</span></div>
+                <div class="card"><strong>Hardware:</strong> <span id="hardwareVersion">–</span></div>
+                <div class="card"><strong>Software:</strong> <span id="softwareVersion">–</span></div>
+                <div class="card"><strong>Display Status:</strong> <span id="DisplayEnabled">–</span></div>
+                <div class="card"><strong>Ruhemodus:</strong> <span id="silentModeEnabled">–</span></div>
+                <div class="card"><strong>Wetter Updates:</strong> <span id="WeatherUpdateEnabled">–</span></div>
+                <div class="card"><strong>Ticker:</strong> <span id="tickerEnabled">–</span></div>
+                <div class="card"><strong>Autor:</strong> <span id="autor">–</span></div>
+                <div class="card"><strong>SSID:</strong> <span id="ssid">–</span></div>
+                <div class="card"><strong>ZIP-Code:</strong> <span id="zipCode">–</span></div>
+                <div class="card"><strong>Freier Heap:</strong> <span id="freeHeap">–</span></div>
+                <div class="card"><strong>Sketch-Größe:</strong> <span id="sketchSize">–</span></div>
+                <div class="card"><strong>Freier Sketch:</strong> <span id="sketchFreeSpace">–</span></div>
+                <div class="card"><strong>Flash-Größe:</strong> <span id="flashSize">–</span></div>
+                <div class="card"><strong>Flash-Speed:</strong> <span id="flashSpeed">–</span></div>
+                <div class="card"><strong>Nixie PWM:</strong> <span id="NixiePWM">–</span></div>
+                <div class="card"><strong>PWM Frequenz:</strong> <span id="PWM_Frequenzy">–</span></div>
+                <div class="card"><strong>Manuelle Helligkeit:</strong> <span id="manualBrightnessEnabled">–</span></div>
+                <div class="card"><strong>Helligkeit:</strong> <span id="brightness">–</span></div>
+                <div class="card"><strong>Zeitabhänige Anzeige:</strong> <span id="timeLimitEnabled">–</span></div>
+                <div class="card"><strong>Anzeige Startzeit:</strong> <span id="timeLimitFrom">–</span></div>
+                <div class="card"><strong>Anzeige Stop:</strong> <span id="timeLimitTo">–</span></div>
+                <div class="card"><strong>Zeitzone:</strong> <span id="CurrentTimeZone">–</span></div>
+                <div class="card"><strong>Timer:</strong> <span id="TimerActive">–</span></div>
+                <div class="card"><strong>Timer-Zeit:</strong> <span id="TimerConfiguredSeconds">–</span></div>
+                <div class="card"><strong>Wecker:</strong> <span id="AlarmActive">–</span></div>
+                <div class="card"><strong>Wecker-Zeit:</strong> <span id="AlarmTime">–</span></div>
             </div>
-          </section>
+        </section>
 
         <!-- Graphen -->
         <section id="graphen" class="tab-content">
@@ -93,8 +94,6 @@
                     <option value="7d">Letzte 7 Tage</option>
                 </select>
             </div>
-
-            <!-- Statt eines Canvas: für jede Kennzahl eins -->
             <canvas id="chart_voltage_12V"></canvas>
             <canvas id="chart_voltage_5V"></canvas>
             <canvas id="chart_voltage_3V3"></canvas>
@@ -106,20 +105,30 @@
             <canvas id="chart_temperature"></canvas>
             <canvas id="chart_freeHeap"></canvas>
             <canvas id="chart_sketchSize"></canvas>
+            <canvas id="chart_totalLoad"></canvas>
+            <canvas id="chart_coreLoad0"></canvas>
+            <canvas id="chart_coreLoad1"></canvas>
         </section>
 
         <!-- Log -->
         <section id="log" class="tab-content">
             <h2>Log</h2>
+            <div style="margin-bottom: 10px;">
+            <label class="switch">
+                <input type="checkbox" id="logTrimToggle" checked />
+                <span class="slider"></span>
+              </label>
+              <span style="margin-left: 8px;">Auto-Trimmen</span>
+              </div>
             <div id="networkLogContainer">
-              <pre id="networkLog"></pre>
+                <pre id="networkLog"></pre>
             </div>
             <div class="log-input-group">
-              <input type="text" id="manualCommand" placeholder="Befehl eingeben (Enter zum Senden)" />
-              <button id="sendCommand">Senden</button>
-              <button id="clearNetworkLog">Clear</button>
+                <input type="text" id="manualCommand" placeholder="Befehl eingeben (Enter zum Senden)" />
+                <button id="sendCommand">Senden</button>
+                <button id="clearNetworkLog">Clear</button>
             </div>
-          </section>
+        </section>
 
         <!-- ======= Einstellungen ======= -->
         <section id="einstellungen" class="tab-content">
@@ -141,203 +150,262 @@
             <div class="settings-group">
                 <h3>Geräte-Einstellungen</h3>
 
-            <div class="device-setting">
-                <label for="displayToggle">Display On/Off</label>
-                <label class="switch">
-                    <input type="checkbox" id="displayToggle" />
-                    <span class="slider"></span>
-                </label>
-            </div>
+                <div class="device-setting">
+                    <label for="displayToggle">Display On/Off</label>
+                    <label class="switch">
+                        <input type="checkbox" id="displayToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            <div class="device-setting">
-                <label for="displayToggle">Reset</label>
-                <button id="resetBtn">Reset</button>
-            </div>
+                <div class="device-setting">
+                    <label for="displayToggle">Reset</label>
+                    <button id="resetBtn">Reset</button>
+                </div>
 
-            <div class="device-setting">
-                <label for="displayToggle">ACP-Routine</label>
-                <button id="acpBtn">ACP</button>
-            </div>
+                <div class="device-setting">
+                    <label for="displayToggle">ACP-Routine</label>
+                    <button id="acpBtn">ACP</button>
+                </div>
 
-            <div class="device-setting">
-                <label for="displayToggle">Datum</label>
-                <button id="dateBtn">Datum</button>
-            </div>
+                <div class="device-setting">
+                    <label for="displayToggle">Datum</label>
+                    <button id="dateBtn">Datum</button>
+                </div>
 
-            <div class="device-setting">
-                <label for="displayToggle">Wetter</label>
-                <button id="weatherBtn">Wetter</button>
-            </div>
+                <div class="device-setting">
+                    <label for="displayToggle">Wetter</label>
+                    <button id="weatherBtn">Wetter</button>
+                </div>
 
-            <div class="device-setting">
-                <label for="displayToggle">Voreinstellungen</label>
-                <button id="startValue">Setzen</button>
-            </div>
+                <div class="device-setting">
+                    <label for="displayToggle">Voreinstellungen</label>
+                    <button id="startValue">Setzen</button>
+                </div>
 
-            <div class="device-setting">
-                <label for="displayToggle">Reset Einstellungen</label>
-                <button id="rstValue">Reset</button>
-            </div>
+                <div class="device-setting">
+                    <label for="displayToggle">Reset Einstellungen</label>
+                    <button id="rstValue">Reset</button>
+                </div>
 
-            <div class="device-setting">
-                <label for="tickerToggle">Ticker aktivieren</label>
-                <label class="switch">
-                    <input type="checkbox" id="tickerToggle" />
-                    <span class="slider"></span>
-                </label>
-            </div>
+                <div class="device-setting">
+                    <label for="tickerToggle">Ticker aktivieren</label>
+                    <label class="switch">
+                        <input type="checkbox" id="tickerToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            <div class="device-setting">
-                <label for="timeLimitToggle">Time Limit aktivieren</label>
-                <label class="switch">
-                    <input type="checkbox" id="timeLimitToggle" />
-                    <span class="slider"></span>
-                </label>
-            </div>
+                <div class="device-setting">
+                    <label for="timeLimitToggle">Time Limit aktivieren</label>
+                    <label class="switch">
+                        <input type="checkbox" id="timeLimitToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            <div class="device-setting time-limit-settings" id="timeLimitSettings">
-                <label for="timeLimitFromInput">von</label>
-                <input type="time" id="timeLimitFromInput" step="1">
-                <label for="timeLimitToInput">bis</label>
-                <input type="time" id="timeLimitToInput" step="1">
-              </div>              
+                <div class="device-setting time-limit-settings" id="timeLimitSettings">
+                    <label for="timeLimitFromInput">von</label>
+                    <input type="time" id="timeLimitFromInput" step="1">
+                    <label for="timeLimitToInput">bis</label>
+                    <input type="time" id="timeLimitToInput" step="1">
+                </div>
 
-            <div class="device-setting">
-                <label for="silentToggle">Silent Mode</label>
-                <label class="switch">
-                    <input type="checkbox" id="silentToggle" />
-                    <span class="slider"></span>
-                </label>
-            </div>
+                <div class="device-setting">
+                    <label for="silentToggle">Silent Mode</label>
+                    <label class="switch">
+                        <input type="checkbox" id="silentToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            <div class="device-setting">
-                <label for="PWMToggle">Nixie PWM</label>
-                <label class="switch">
-                    <input type="checkbox" id="PWMToggle" />
-                    <span class="slider"></span>
-                </label>
-            </div>
+                <div class="device-setting">
+                    <label for="PWMToggle">Nixie PWM</label>
+                    <label class="switch">
+                        <input type="checkbox" id="PWMToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            <div class="device-setting">
-                <label for="brightnessToggle">Manuelle Helligkeit</label>
-                <label class="switch">
-                    <input type="checkbox" id="brightnessToggle" />
-                    <span class="slider"></span>
-                </label>
-            </div>
+                <div class="device-setting">
+                    <label for="brightnessToggle">Manuelle Helligkeit</label>
+                    <label class="switch">
+                        <input type="checkbox" id="brightnessToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            <div class="device-setting brightness-slider-setting">
-                <label for="brightnessSlider">Helligkeit</label>
-                <input type="range" id="brightnessSlider" min="1" max="100" value="50" />
-                <span id="brightnessValue">50</span>
-            </div>
+                <div class="device-setting brightness-slider-setting">
+                    <label for="brightnessSlider">Helligkeit</label>
+                    <input type="range" id="brightnessSlider" min="1" max="100" value="50" />
+                    <span id="brightnessValue">50</span>
+                </div>
 
-            <div class="device-setting">
-                <label for="weatherToggle">Wetter-Update</label>
-                <label class="switch">
-                    <input type="checkbox" id="weatherToggle" />
-                    <span class="slider"></span>
-                </label>
-            </div>
+                <div class="device-setting">
+                    <label for="weatherToggle">Wetter-Update</label>
+                    <label class="switch">
+                        <input type="checkbox" id="weatherToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            <div class="device-setting">
-                <label for="zipInput">Postleitzahl</label>
-                <input type="text" id="zipInput" placeholder="z. B. 12345" />
-                <button id="applyZip">Übernehmen</button>
-            </div>
+                <div class="device-setting" id="timerSettings">
+                    <label for="timerToggle">Timer aktiv</label>
+                    <input type="time" id="timerTimeInput" step="1" value="00:00:10">
+                    <label class="switch">
+                        <input type="checkbox" id="timerToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
 
-            <!-- ======= Log-Config-Gruppe (aktualisiert für vertikale Anordnung) ======= -->
-            <div class="log-config-group">
-                <h4>Log Config</h4>
-                <div class="log-config-switches-vertical">
-                    <div class="log-config-item">
-                        <label for="logHttpToggle">LOG_HTTP</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logHttpToggle" />
-                            <span class="slider"></span>
-                        </label>
+                <div class="device-setting" id="alarmSettings">
+                    <label for="alarmToggle">Wecker aktiv</label>
+                    <input type="time" id="alarmTimeInput" step="60" value="06:00">
+                    <label class="switch">
+                        <input type="checkbox" id="alarmToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="device-setting">
+                    <label for="zipInput">Postleitzahl</label>
+                    <input type="text" id="zipInput" placeholder="87700" />
+                    <button id="applyZip">Übernehmen</button>
+                </div>
+
+                <div class="device-setting">
+                    <label for="zipInput">Zeitzone</label>
+                    <select id="timezoneSelect"></select>
+                    <button id="applyTimezoneSelect">Übernehmen</button>
+                </div>
+
+                <!-- ======= Log-Config-Gruppe ======= -->
+                <div class="log-config-group">
+                    <h4>Log Config</h4>
+                    <div class="log-config-switches-vertical">
+                        <div class="log-config-item">
+                            <label for="logHttpToggle">LOG_HTTP</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logHttpToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="log-config-item">
+                            <label for="logTimeToggle">LOG_TIME</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logTimeToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="log-config-item">
+                            <label for="logHssToggle">LOG_HSS</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logHssToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="log-config-item">
+                            <label for="logDigitToggle">LOG_DIGIT</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logDigitToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="log-config-item">
+                            <label for="logWebserverToggle">LOG_WEBSERVER</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logWebserverToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="log-config-item">
+                            <label for="logOtaToggle">LOG_OTA</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logOtaToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="log-config-item">
+                            <label for="logButtonToggle">LOG_BUTTON</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logButtonToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="log-config-item">
+                            <label for="logGeneralToggle">LOG_GENERAL</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logGeneralToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="log-config-item">
+                            <label for="logWifiToggle">LOG_WIFI</label>
+                            <label class="switch">
+                                <input type="checkbox" id="logWifiToggle" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
                     </div>
-                    <div class="log-config-item">
-                        <label for="logTimeToggle">LOG_TIME</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logTimeToggle" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="log-config-item">
-                        <label for="logHssToggle">LOG_HSS</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logHssToggle" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="log-config-item">
-                        <label for="logDigitToggle">LOG_DIGIT</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logDigitToggle" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="log-config-item">
-                        <label for="logWebserverToggle">LOG_WEBSERVER</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logWebserverToggle" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="log-config-item">
-                        <label for="logOtaToggle">LOG_OTA</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logOtaToggle" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="log-config-item">
-                        <label for="logButtonToggle">LOG_BUTTON</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logButtonToggle" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="log-config-item">
-                        <label for="logGeneralToggle">LOG_GENERAL</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logGeneralToggle" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="log-config-item">
-                        <label for="logWifiToggle">LOG_WIFI</label>
-                        <label class="switch">
-                            <input type="checkbox" id="logWifiToggle" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
+                </div>
+
+                <!-- Firmware-Target -->
+                <div class="device-setting">
+                    <label for="firmwareSelect">Firmware</label>
+                    <select id="firmwareSelect">
+                        <option value="NixieV6_std">NixieV6_std</option>
+                        <option value="NixieV6_dev">NixieV6_dev</option>
+                        <option value="NixieV6_BOS">NixieV6_BOS</option>
+                    </select>
+                    <button id="applyFirmware">Übernehmen</button>
+                </div>
+                <!-- OTA-Update Button -->
+                <div class="device-setting ota-setting">
+                    <label>Firmware-Update</label>
+                    <button id="otaUpdateButton">OTA Starten</button>
                 </div>
             </div>
 
-            <!-- Firmware-Target -->
-            <div class="device-setting">
-                <label for="firmwareSelect">Firmware</label>
-                <select id="firmwareSelect">
-                    <option value="NixieV6_std">NixieV6_std</option>
-                    <option value="NixieV6_dev">NixieV6_dev</option>
-                    <option value="NixieV6_BOS">NixieV6_BOS</option>
-                </select>
-                <button id="applyFirmware">Übernehmen</button>
+            <!-- Selektive ACP -->
+            <div class="log-config-group acp-group">
+                <h4>Selektive Röhrenreinigung</h4>
+                <div class="log-config-item">
+                    <label for="acpToggle">Einzel Zahlen aktivieren</label>
+                    <label class="switch">
+                        <input type="checkbox" id="acpToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div id="acpControls" class="log-config-switches-vertical" style="margin-top:10px; display:none;">
+                    <!-- Nixie-Röhren -->
+                    <div class="nixie-container hidden" id="acpNixieContainer">
+                        <div class="nixie-tube" data-index="1"><span class="digit"></span></div>
+                        <div class="nixie-tube" data-index="2"><span class="digit"></span></div>
+                        <div class="nixie-tube" data-index="3"><span class="digit"></span></div>
+                        <div class="nixie-tube" data-index="4"><span class="digit"></span></div>
+                        <div class="nixie-tube" data-index="5"><span class="digit"></span></div>
+                        <div class="nixie-tube" data-index="6"><span class="digit"></span></div>
+                    </div>
+                    <!-- Button zur Ausführung -->
+                    <button id="acpCleanButton" class="clean-button" disabled style="margin-top:15px; width:100%;">
+                        Kathodenreinigung
+                    </button>
+                </div>
             </div>
-            <!-- OTA-Update Button (neu unter Firmware-Target) -->
-            <div class="device-setting ota-setting">
-                <label>Firmware-Update</label>
-                <button id="otaUpdateButton">OTA Starten</button>
-            </div>
-            </div>
+
         </section>
 
-        <!-- Info -->
         <section id="info" class="tab-content">
-            <h2>Info</h2>
-            <p>test</p>
+            <h2>Bedienungsanleitung – Nixie Clock V6 (PDF)</h2>
+            <p>Die vollständige Bedienungsanleitung kann direkt im Browser angezeigt oder heruntergeladen werden:</p>
+
+            <iframe src="Bedienungsanleitung_Nixie.pdf" width="100%" height="800px" style="border:1px solid #ccc;">
+                Diese Funktion wird von Ihrem Browser nicht unterstützt.
+                <a href="Bedienungsanleitung_Nixie.pdf" download>Hier klicken, um die PDF herunterzuladen.</a>
+            </iframe>
+
+            <p><a href="Bedienungsanleitung_Nixie.pdf" download>PDF herunterladen</a></p>
+
         </section>
     </main>
 </body>

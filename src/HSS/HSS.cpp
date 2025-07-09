@@ -66,7 +66,7 @@ void HSS::disableResistorReduction() const noexcept
 
 bool HSS::testLoad(const std::function<float()> &readVoltage, uint32_t timeoutMs, float thresholdV) const noexcept
 {
-    Logger::log(logType, F("testLoad: Lade auf 160V und messe Entladen..."));
+    Logger::log(logType, F("testLoad: charging to 160V and measuring discharge..."));
 
     enable160();
     vTaskDelay(pdMS_TO_TICKS(100)); 
@@ -74,11 +74,11 @@ bool HSS::testLoad(const std::function<float()> &readVoltage, uint32_t timeoutMs
 
     TickType_t startTick = xTaskGetTickCount();
     float voltage = readVoltage();
-    Logger::log(logType, "Initiale HSS-Spannung: %.2f V", voltage);
+    Logger::log(logType, "Initial HSS voltage: %.2f V", voltage);
 
     if (voltage < thresholdV)
     {
-        Logger::log(logType, "testLoad: Spannung schon unter Threshold => Last aber hoch => Keine Last erkannt");
+        Logger::log(logType, F("testLoad: voltage already below threshold => load is high => no load detected"));
         return false;
     }
 
@@ -88,13 +88,13 @@ bool HSS::testLoad(const std::function<float()> &readVoltage, uint32_t timeoutMs
 
         if (voltage < thresholdV)
         {
-            Logger::log(logType, "testLoad: Spannung bei %.2f V < Threshold => Last erkannt", voltage);
+            Logger::log(logType, "testLoad: voltage at %.2f V < threshold => load detected", voltage);
             return true;
         }
 
          if ((xTaskGetTickCount() - startTick) * portTICK_PERIOD_MS >= timeoutMs)
         {
-            Logger::log(logType, "testLoad: Timeout erreicht, Spannung immer noch %.2f V => Keine Last", voltage);
+            Logger::log(logType, "testLoad: timeout reached, voltage still %.2f V => no load", voltage);
             return false;
         }
 

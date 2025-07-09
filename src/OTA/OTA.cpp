@@ -4,7 +4,7 @@ OTAManager::OTAManager() noexcept {}
 
 std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &manifestUrl) noexcept
 {
-    Logger::log(LoggerType::OTA, "Lade Manifest: %s", manifestUrl.c_str());
+    Logger::log(LoggerType::OTA, "Loading manifest: %s", manifestUrl.c_str());
     esp_http_client_config_t config{};
     config.url = manifestUrl.c_str();
     config.transport_type = HTTP_TRANSPORT_OVER_SSL;
@@ -16,12 +16,12 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client)
     {
-        Logger::log(LoggerType::OTA, F("HTTP-Client konnte nicht initialisiert werden"));
+        Logger::log(LoggerType::OTA, F("HTTP client could not be initialized"));
         return std::nullopt;
     }
     if (esp_http_client_open(client, 0) != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, F("HTTP-Client konnte keine Verbindung öffnen"));
+        Logger::log(LoggerType::OTA, F("HTTP client could not open connection"));
         esp_http_client_cleanup(client);
         return std::nullopt;
     }
@@ -29,7 +29,7 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
     int content_length = esp_http_client_fetch_headers(client);
     if (content_length <= 0)
     {
-        Logger::log(LoggerType::OTA, F("Keine Header empfangen oder Content-Length ist 0"));
+        Logger::log(LoggerType::OTA, F("No headers received or Content-Length is 0"));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return std::nullopt;
@@ -65,7 +65,7 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
 
 esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noexcept
 {
-    Logger::log(LoggerType::OTA, "Beginne Firmware-OTA von %s", firmwareUrl.c_str());
+    Logger::log(LoggerType::OTA, "Starting firmware OTA from %s", firmwareUrl.c_str());
 
     esp_http_client_config_t config{};
     config.url = firmwareUrl.c_str();
@@ -78,19 +78,19 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client)
     {
-        Logger::log(LoggerType::OTA, F("esp_http_client_init fehlgeschlagen"));
+        Logger::log(LoggerType::OTA, F("esp_http_client_init failed"));
         return ESP_FAIL;
     }
     if (esp_http_client_open(client, 0) != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, F("Fehler beim Öffnen der Firmware-URL"));
+        Logger::log(LoggerType::OTA, F("Error opening firmware URL"));
         esp_http_client_cleanup(client);
         return ESP_FAIL;
     }
 
     if (esp_http_client_fetch_headers(client) <= 0)
     {
-        Logger::log(LoggerType::OTA, F("Fehler beim Holen der HTTP-Header"));
+        Logger::log(LoggerType::OTA, F("Error fetching HTTP headers"));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
@@ -99,7 +99,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     const esp_partition_t *update_partition = esp_ota_get_next_update_partition(nullptr);
     if (!update_partition)
     {
-        Logger::log(LoggerType::OTA, F("Keine OTA-Partition gefunden"));
+        Logger::log(LoggerType::OTA, F("No OTA partition found"));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
@@ -109,7 +109,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     esp_err_t err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &update_handle);
     if (err != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, "esp_ota_begin fehlgeschlagen: %s", esp_err_to_name(err));
+        Logger::log(LoggerType::OTA, "esp_ota_begin failed: %s", esp_err_to_name(err));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
@@ -119,7 +119,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     uint8_t *buffer = static_cast<uint8_t *>(malloc(bufferSize));
     if (!buffer)
     {
-        Logger::log(LoggerType::OTA, F("Speicher für OTA-Buffer konnte nicht reserviert werden"));
+        Logger::log(LoggerType::OTA, F("Could not allocate memory for OTA buffer"));
         esp_ota_end(update_handle);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
@@ -131,7 +131,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
         int data_read = esp_http_client_read(client, reinterpret_cast<char *>(buffer), bufferSize);
         if (data_read < 0)
         {
-            Logger::log(LoggerType::OTA, F("esp_http_client_read fehlgeschlagen"));
+            Logger::log(LoggerType::OTA, F("esp_http_client_read failed"));
             free(buffer);
             esp_ota_end(update_handle);
             esp_http_client_close(client);
@@ -145,7 +145,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
         esp_err_t write_err = esp_ota_write(update_handle, buffer, data_read);
         if (write_err != ESP_OK)
         {
-            Logger::log(LoggerType::OTA, "OTA Write fehlgeschlagen: %s", esp_err_to_name(write_err));
+            Logger::log(LoggerType::OTA, "OTA write failed: %s", esp_err_to_name(write_err));
             free(buffer);
             esp_ota_end(update_handle);
             esp_http_client_close(client);
@@ -158,7 +158,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     esp_err_t end_err = esp_ota_end(update_handle);
     if (end_err != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, "OTA End fehlgeschlagen: %s", esp_err_to_name(end_err));
+        Logger::log(LoggerType::OTA, "OTA End failed: %s", esp_err_to_name(end_err));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return end_err;
@@ -167,7 +167,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     esp_app_desc_t new_desc;
     if (esp_ota_get_partition_description(update_partition, &new_desc) != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, F("Neue Partition konnte nicht gelesen werden"));
+        Logger::log(LoggerType::OTA, F("Could not read new partition"));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
@@ -177,7 +177,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     esp_app_desc_t running_desc;
     if (esp_ota_get_partition_description(running_partition, &running_desc) != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, F("Laufende Partition konnte nicht gelesen werden"));
+        Logger::log(LoggerType::OTA, F("Could not read running partition"));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
@@ -185,7 +185,7 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
 /*
     if (std::strcmp(new_desc.version, running_desc.version) == 0)
     {
-        Logger::log(LoggerType::OTA, F("Update-Version ist identisch zur laufenden"));
+        Logger::log(LoggerType::OTA, F("Update version is identical to the running one"));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
@@ -194,13 +194,13 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     esp_err_t boot_err = esp_ota_set_boot_partition(update_partition);
     if (boot_err != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, "esp_ota_set_boot_partition fehlgeschlagen: %s", esp_err_to_name(boot_err));
+        Logger::log(LoggerType::OTA, "esp_ota_set_boot_partition failed: %s", esp_err_to_name(boot_err));
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
     }
 
-    Logger::log(LoggerType::OTA, F("Firmware-OTA erfolgreich. Neustart erforderlich."));
+    Logger::log(LoggerType::OTA, F("Firmware OTA successful. Restart required."));
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
     return ESP_OK;
@@ -215,28 +215,30 @@ esp_err_t OTAManager::checkAndUpdate(const std::string &baseUrl) noexcept
     auto verOpt = fetchManifestVersion(manifestUrl);
     if (!verOpt)
     {
-        Logger::log(LoggerType::OTA, "Manifest konnte nicht geladen werden: %s", manifestUrl.c_str());
+        Logger::log(LoggerType::OTA, "Could not load manifest: %s", manifestUrl.c_str());
         return ESP_FAIL;
     }
     const auto *running = esp_ota_get_running_partition();
     esp_app_desc_t desc;
     if (esp_ota_get_partition_description(running, &desc) == ESP_OK && *verOpt != desc.version)
     {
-        Logger::log(LoggerType::OTA, "Firmware-Update erkannt: %s", verOpt->c_str());
+        Logger::log(LoggerType::OTA, "Firmware update detected: %s", verOpt->c_str());
         if (performFirmwareUpdate(firmwareUrl) != ESP_OK)
             return ESP_FAIL;
     }
     else
     {
-        Logger::log(LoggerType::OTA, F("Firmware ist aktuell"));
+        Logger::log(LoggerType::OTA, F("Firmware is up to date"));
     }
 
-    Logger::log(LoggerType::OTA, "Beginne SPIFFS-Download von %s", spiffsUrl.c_str());
+    Logger::log(LoggerType::OTA, "Starting SPIFFS download from %s", spiffsUrl.c_str());
     return performSPIFFSUpdate(spiffsUrl);
 }
 
 esp_err_t OTAManager::performSPIFFSUpdate(const std::string &spiffsUrl) noexcept
 {
+    Logger::log(LoggerType::OTA, "Starting SPIFFS OTA from %s", spiffsUrl.c_str());
+
     esp_http_client_config_t config{};
     config.url = spiffsUrl.c_str();
     config.transport_type = HTTP_TRANSPORT_OVER_SSL;
@@ -248,56 +250,60 @@ esp_err_t OTAManager::performSPIFFSUpdate(const std::string &spiffsUrl) noexcept
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client)
     {
+        Logger::log(LoggerType::OTA, F("esp_http_client_init failed"));
         return ESP_FAIL;
     }
+
     if (esp_http_client_open(client, 0) != ESP_OK)
     {
+        Logger::log(LoggerType::OTA, F("Error opening SPIFFS URL"));
         esp_http_client_cleanup(client);
         return ESP_FAIL;
     }
 
-    const esp_partition_t *part = esp_partition_find_first(
-        ESP_PARTITION_TYPE_DATA,
-        ESP_PARTITION_SUBTYPE_DATA_SPIFFS,
-        nullptr);
-    if (!part)
+    int content_length = esp_http_client_fetch_headers(client);
+    int status = esp_http_client_get_status_code(client);
+    Logger::log(LoggerType::OTA, "SPIFFS HTTP status: %d, Content-Length: %d", status, content_length);
+    if (status != 200 || content_length <= 0)
     {
+        Logger::log(LoggerType::OTA, "Invalid HTTP response: %d / %d", status, content_length);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
     }
+
+    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,ESP_PARTITION_SUBTYPE_DATA_SPIFFS,nullptr);
+
+    if (!part)
+    {
+        Logger::log(LoggerType::OTA, F("SPIFFS partition not found"));
+    }
+
+    Logger::log(LoggerType::OTA, "SPIFFS partition @ 0x%08x, size %u bytes", part->address, part->size);
 
     if (esp_partition_erase_range(part, 0, part->size) != ESP_OK)
     {
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        return ESP_FAIL;
+        Logger::log(LoggerType::OTA, F("SPIFFS partition erase failed"));
     }
 
     const size_t bufSize = 4096;
-    uint8_t *buf = static_cast<uint8_t *>(malloc(bufSize));
-    if (!buf)
-    {
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        return ESP_ERR_NO_MEM;
-    }
-
+    std::unique_ptr<uint8_t[]> buffer(new uint8_t[bufSize]);
     size_t offset = 0;
-    int len;
-    while ((len = esp_http_client_read(client, reinterpret_cast<char *>(buf), bufSize)) > 0)
+    int read_len;
+    while ((read_len = esp_http_client_read(client,reinterpret_cast<char *>(buffer.get()), bufSize)) > 0)
     {
-        if (esp_partition_write(part, offset, buf, len) != ESP_OK)
+
+        Logger::log(LoggerType::OTA, "Writing %d bytes at offset 0x%08x", read_len, offset);
+
+        if (esp_partition_write(part, offset, buffer.get(), read_len) != ESP_OK)
         {
-            free(buf);
-            esp_http_client_close(client);
-            esp_http_client_cleanup(client);
-            return ESP_FAIL;
+            Logger::log(LoggerType::OTA, F("SPIFFS write failed"));
         }
-        offset += len;
+        offset += read_len;
     }
 
-    free(buf);
+    Logger::log(LoggerType::OTA, "SPIFFS download complete, total written: %u bytes", offset);
+
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
 

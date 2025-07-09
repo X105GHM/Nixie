@@ -33,7 +33,7 @@ bool NTPClient::isWithinTimeLimit(struct tm &timeInfo) const noexcept
     if (sscanf(Globals::timeLimitFrom.c_str(), "%d:%d:%d", &fromH, &fromM, &fromS) != 3 ||
         sscanf(Globals::timeLimitTo.c_str(), "%d:%d:%d", &toH, &toM, &toS) != 3)
     {
-        Logger::log(LoggerType::TIME, "Ungültiges Zeitformat in Globals");
+        Logger::log(LoggerType::TIME, "Invalid time format in Globals");
         return true;
     }
 

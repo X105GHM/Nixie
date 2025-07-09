@@ -7,9 +7,14 @@ constexpr gpio_num_t PIN_DIN = GPIO_NUM_11;
 static SPISettings dispSPISettings(2'000'000, MSBFIRST, SPI_MODE2);
 
 bool displayEnabled = false;
+bool singleDigitACP = false;
+bool zipMaskingEnabled = false;
+bool tempMaskingEnabled = false;
+std::uint32_t PWM_PERIOD_US = 10000; // 100 Hz, Periode = 10 ms //* Kann über HTTP geändert werden
 std::int32_t digits = 0;
+std::uint8_t singleDigit = 0;
 std::int32_t lastdigits = 717111; // zufälliger Startwert, damit Display initialisiert wird
-std::uint32_t brightness = 100;
+std::uint32_t brightness;
 const std::uint32_t symbolArray[10] = {512, 1, 2, 4, 8, 16, 32, 64, 128, 256};
 
 static inline void initPinOe() noexcept
@@ -32,8 +37,12 @@ void displayDigitsTask(void *pvParameters) noexcept
 
     for (;;)
     {
-        if (!ACP_enabled)
-            delayMicroseconds(ON_TIME_US);
+        if (!ACP_enabled) 
+        {
+            std::uint32_t b      = std::min(brightness, (std::uint32_t)100);
+            std::uint32_t onTime = (PWM_PERIOD_US * b) / 100;
+            delayMicrosYield(onTime);
+        }
 
         if (!displayEnabled)
         {
@@ -41,10 +50,46 @@ void displayDigitsTask(void *pvParameters) noexcept
             continue;
         }
 
+        if (singleDigitACP)
+        {
+            SPI.beginTransaction(dispSPISettings);
+            gpio_set_level(PIN_OE, 0);
+            std::uint32_t var32 = 0;
+            if (singleDigit < 30)
+            {
+                SPI.transfer(var32 >> 24);
+                SPI.transfer(var32 >> 16);
+                SPI.transfer(var32 >> 8);
+                SPI.transfer(var32);
+                var32 |= symbolArray[singleDigit % 10] << singleDigit - (singleDigit % 10);
+                SPI.transfer(var32 >> 24);
+                SPI.transfer(var32 >> 16);
+                SPI.transfer(var32 >> 8);
+                SPI.transfer(var32);
+            }
+            else
+            {
+                var32 |= symbolArray[singleDigit % 10] << singleDigit - (singleDigit % 10) - 30;
+                SPI.transfer(var32 >> 24);
+                SPI.transfer(var32 >> 16);
+                SPI.transfer(var32 >> 8);
+                SPI.transfer(var32);
+                var32 = 0;
+                SPI.transfer(var32 >> 24);
+                SPI.transfer(var32 >> 16);
+                SPI.transfer(var32 >> 8);
+                SPI.transfer(var32);
+            }
+            SPI.endTransaction();
+            gpio_set_level(PIN_OE, 1);
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+
         if (ACP_enabled == true || Globals::PWM_disabled)
         {
-            if(lastdigits == digits)
-            continue;
+            if (lastdigits == digits)
+                continue;
 
             lastdigits = digits;
 
@@ -135,14 +180,14 @@ void displayDigitsTask(void *pvParameters) noexcept
         //        s2         s1         m2            m1         h2         h1
         // -- 0987654321 0987654321 0987654321 -- 0987654321 0987654321 0987654321
 
-        if (!runningACP1)
+        if (!runningACP1 && !zipMaskingEnabled && !tempMaskingEnabled)
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
         }
 
         copy /= 10;
 
-        if (!runningACP2)
+        if (!runningACP2 && !tempMaskingEnabled)
         {
             var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
         }
@@ -195,16 +240,17 @@ void displayDigitsTask(void *pvParameters) noexcept
 
         if (ADAPTIVE_BRIGHTNESS && (!runningACP1 || !runningACP2))
         {
-            std::uint32_t b = std::min(brightness, static_cast<std::uint32_t>(100));
-            std::uint32_t offTime = (ON_TIME_US * 100 - ON_TIME_US * b) / b;
-            delayMicroseconds(offTime);
+            std::uint32_t b       = std::min(brightness, (std::uint32_t)100);
+            std::uint32_t onTime  = (PWM_PERIOD_US * b) / 100;
+            std::uint32_t offTime = PWM_PERIOD_US - onTime;
+            delayMicrosYield(offTime);
         }
 
         gpio_set_level(PIN_OE, 1);
 
         if (runningACP1 || runningACP2)
         {
-            delay(100);
+            vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
 }
@@ -225,7 +271,7 @@ void displayDate() noexcept
     std::time_t t = std::time(nullptr);
     std::tm timeInfo{};
     localtime_r(&t, &timeInfo);
-    digits = 0;
+    digits  = 0;
     digits += timeInfo.tm_mday * 10000;
     digits += (timeInfo.tm_mon + 1) * 100;
     digits += (timeInfo.tm_year + 1900) % 100;
@@ -241,7 +287,7 @@ void displayWeather() noexcept
     float temp = weather.getTemperatureByZip(zip);
     if (!std::isnan(temp))
     {
-        int temp100 = static_cast<int>(roundf(temp * 100.0f));
+        int temp100 = static_cast<int>(roundf(temp * 10000.0f));
 
         if (temp100 < 0)
         {
@@ -254,6 +300,6 @@ void displayWeather() noexcept
     {
         digits = 0;
 
-        Logger::log(LoggerType::DIGIT, "Fehler beim Abrufen der Wetterdaten für ZIP: %s", zip.c_str());
+        Logger::log(LoggerType::DIGIT, "Error fetching weather data for ZIP: %s", zip.c_str());
     }
 }

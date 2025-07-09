@@ -1,5 +1,5 @@
 #ifndef SOFTWARE_VERSION
-  #define SOFTWARE_VERSION "0.0.0"
+  #define SOFTWARE_VERSION "1.5.23"
 #endif
 
 #pragma once
@@ -84,4 +84,44 @@ namespace Globals
         logConfig = 0;
         applyLogConfig();
     }
+
+    enum class TimeZone : uint8_t
+    {
+        CET,   // Mitteleuropa
+        EET,   // Osteuropa
+        WET,   // Westeuropa
+        UTC,   // UTC ohne Sommerzeit
+        EST,   // USA Ostküste
+        CST,   // USA Mittelwesten
+        MST,   // USA Bergland
+        PST,   // USA Westküste
+        HST,   // Hawaii
+        JST,   // Japan
+        IST,   // Indien
+        AEST,  // Australien Ost
+        AWST   // Australien West
+    };
+
+    inline const char* getPosixTZ(TimeZone tz) 
+    {
+        switch (tz) 
+        {
+            case TimeZone::CET:  return "CET-1CEST,M3.5.0/2,M10.5.0/3";
+            case TimeZone::EET:  return "EET-2EEST,M3.5.0/3,M10.5.0/4";
+            case TimeZone::WET:  return "WET0WEST,M3.5.0/1,M10.5.0/2";
+            case TimeZone::UTC:  return "UTC0";
+            case TimeZone::EST:  return "EST5EDT,M3.2.0/2,M11.1.0/2";
+            case TimeZone::CST:  return "CST6CDT,M3.2.0/2,M11.1.0/2";
+            case TimeZone::MST:  return "MST7MDT,M3.2.0/2,M11.1.0/2";
+            case TimeZone::PST:  return "PST8PDT,M3.2.0/2,M11.1.0/2";
+            case TimeZone::HST:  return "HST10";
+            case TimeZone::JST:  return "JST-9";
+            case TimeZone::IST:  return "IST-5:30";
+            case TimeZone::AEST: return "AEST-10AEDT,M10.1.0/2,M4.1.0/3";
+            case TimeZone::AWST: return "AWST-8";
+            default:             return "UTC0";
+        }
+    }
+
+    extern TimeZone currentTimeZone;
 }

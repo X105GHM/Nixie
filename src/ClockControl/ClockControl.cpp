@@ -32,6 +32,10 @@ void ClockControl::timeCycle() noexcept
         {
             prevTime = nowTime;
 
+            StatsMonitor &sm = StatsMonitor::instance();
+
+            sm.update();
+
             static bool lastState160 = false;
 
             static bool inTime = true; 
@@ -58,8 +62,7 @@ void ClockControl::timeCycle() noexcept
 
                 if (!ntpClient.isWithinTimeLimit(timeInfo))
                 {
-                    Logger::log(LoggerType::TIME, "Zeit außerhalb des erlaubten Bereichs (%s - %s)",
-                                Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
+                    Logger::log(LoggerType::TIME, "Time outside allowed range (%s - %s)", Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
                     vTaskDelay(pdMS_TO_TICKS(200));
                     inTime = false;
                     continue;
@@ -67,7 +70,7 @@ void ClockControl::timeCycle() noexcept
 
                 inTime = true;
             }
-                       
+
             if (Globals::tickerEnabled)
             {
                 relay.toggle();
@@ -108,13 +111,25 @@ void ClockControl::timeCycle() noexcept
             {
                 WeatherClient weather(std::string(OPENWEATHER_API_KEY));
 
+                zipMaskingEnabled = true;
+                digits = Globals::zipCode.empty() ? 0 : std::stoi(Globals::zipCode)*10;
+                vTaskDelay(pdMS_TO_TICKS(4000));
                 displayWeather();
-                vTaskDelay(pdMS_TO_TICKS(5000));
+                tempMaskingEnabled = true;
+                zipMaskingEnabled = false;
+                vTaskDelay(pdMS_TO_TICKS(6000));
+                tempMaskingEnabled = false;
             }
             else
             {
                 displayTime();
             }
+
+            alarmClock.update(timeInfo.tm_hour, timeInfo.tm_min);
+
+            timer.update();
+
+            buzzer.update();
         }
         vTaskDelay(pdMS_TO_TICKS(200));
     }
