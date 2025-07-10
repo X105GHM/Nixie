@@ -751,7 +751,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
       const boolFields = ['DisplayEnabled', 'tickerEnabled', 'timeLimitEnabled', 'silentModeEnabled',
-        'WeatherUpdateEnabled', 'manualBrightnessEnabled', 'NixiePWM', 'TimerActive', 'AlarmActive'];
+        'WeatherUpdateEnabled', 'manualBrightnessEnabled', 'NixiePWM', 'TimerActive', 'AlarmActive', 'loadDetected'];
 
       Object.entries(map).forEach(([k, id]) => {
         const el = document.getElementById(id);

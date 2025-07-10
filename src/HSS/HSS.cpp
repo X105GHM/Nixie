@@ -64,40 +64,36 @@ void HSS::disableResistorReduction() const noexcept
     Logger::log(logType, F("Resistors restored (GPIO19 = LOW)"));
 }
 
-bool HSS::testLoad(const std::function<float()> &readVoltage, uint32_t timeoutMs, float thresholdV) const noexcept
+bool HSS::testLoad(const std::function<float()> &readVoltage, float thresholdV, uint32_t discriminationMs, uint32_t maxWaitMs) const noexcept
 {
-    Logger::log(logType, F("testLoad: charging to 160V and measuring discharge..."));
+    Logger::log(logType, F("testLoad: charge to 160V, then measure discharge"));
 
     enable160();
-    vTaskDelay(pdMS_TO_TICKS(100)); 
-    disable160();
-
-    TickType_t startTick = xTaskGetTickCount();
+    vTaskDelay(pdMS_TO_TICKS(100));
     float voltage = readVoltage();
-    Logger::log(logType, "Initial HSS voltage: %.2f V", voltage);
-
-    if (voltage < thresholdV)
-    {
-        Logger::log(logType, F("testLoad: voltage already below threshold => load is high => no load detected"));
-        return false;
-    }
+    Logger::log(logType, "Initial voltage: %.2f V", voltage);
+    TickType_t start = xTaskGetTickCount();
+    disable160();
 
     while (true)
     {
         voltage = readVoltage();
+        uint32_t elapsed = (xTaskGetTickCount() - start) * portTICK_PERIOD_MS;
 
         if (voltage < thresholdV)
         {
-            Logger::log(logType, "testLoad: voltage at %.2f V < threshold => load detected", voltage);
-            return true;
+            Logger::log(logType, "Voltage dropped to %.2f V after %u ms", voltage, elapsed);
+            bool load = elapsed < discriminationMs;
+            Logger::log(logType, load ? "testLoad: drop-time %ums < %ums => LOAD detected" : "testLoad: drop-time %ums ≥ %ums => NO LOAD", elapsed, discriminationMs);
+            return load;
         }
 
-         if ((xTaskGetTickCount() - startTick) * portTICK_PERIOD_MS >= timeoutMs)
+        if (elapsed >= maxWaitMs)
         {
-            Logger::log(logType, "testLoad: timeout reached, voltage still %.2f V => no load", voltage);
+            Logger::log(logType,"testLoad: timeout %u ms reached, voltage still %.2f V => NO LOAD", elapsed, voltage);
             return false;
         }
 
-        delay(10);
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }

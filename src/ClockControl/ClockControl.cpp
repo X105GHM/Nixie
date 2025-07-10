@@ -78,7 +78,7 @@ void ClockControl::timeCycle() noexcept
 
             if ((timeInfo.tm_hour < 6 || timeInfo.tm_hour >= 22) && !Globals::manualBrightnessEnabled)
             {
-                brightness = 10;
+                brightness = 15;
             }
             else if ((timeInfo.tm_hour < 8 || timeInfo.tm_hour >= 20) && !Globals::manualBrightnessEnabled)
             {

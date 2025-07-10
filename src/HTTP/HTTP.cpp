@@ -141,18 +141,6 @@ void HTTPHandler::begin() noexcept
         });
     });
 
-    server_.on("/set/zip", HTTP_GET, [this]() noexcept {
-        if (!server_.hasArg("zip")) {
-            server_.send(400, "text/plain", "Missing 'zip' parameter");
-            Logger::log(LOGTYPE, F("HTTP /set/zip missing parameter 'zip'"));
-            return;
-        }
-        String zipArg = server_.arg("zip");
-        Globals::zipCode = std::string(zipArg.c_str());
-        Logger::log(LOGTYPE, "ZIP code set via HTTP to %s", zipArg.c_str());
-        server_.send(200, "text/plain", "ZIP-Code updated");
-    });
-
     server_.on("/set/ticker", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("value")) {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
@@ -174,8 +162,18 @@ void HTTPHandler::begin() noexcept
         {
             String v = server_.arg("value");
             singleDigitACP = (v == "1");
-            Logger::log(LOGTYPE, "singleDigitACP set to %s via HTTP",
-                        singleDigitACP ? "true" : "false");
+            Logger::log(LOGTYPE, "singleDigitACP set to %s via HTTP", singleDigitACP ? "true" : "false");
+
+            if(singleDigitACP)
+            {
+                hssController.enable190();
+                hssController.enableResistorReduction();
+            }
+            else
+            {
+                hssController.disableResistorReduction();
+                hssController.disable190();
+            }
             handled = true;
         }
 
@@ -213,7 +211,7 @@ void HTTPHandler::begin() noexcept
         }
         String val = server_.arg("value");
         Globals::PWM_disabled = (val != "0");
-        Logger::log(LOGTYPE, "tickerEnabled set to %s via HTTP", 
+        Logger::log(LOGTYPE, "Nixie_PWM set to %s via HTTP", 
                     Globals::PWM_disabled ? "true" : "false");
         server_.send(200, "text/plain", String("tickerEnabled=") + (Globals::PWM_disabled ? "1" : "0"));
     });
