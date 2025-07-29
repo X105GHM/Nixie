@@ -8,6 +8,7 @@ namespace Globals
     bool manualBrightnessEnabled    = false; // Mem wenn aktiv auch brightness merken
     bool WeatherUpdateEnabled       = false; // Mem
     bool PWM_disabled               = false; // Mem
+    bool cricketSoundEnabled        = false;
 
     bool loadDetected               = false;
 

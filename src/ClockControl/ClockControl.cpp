@@ -32,9 +32,22 @@ void ClockControl::timeCycle() noexcept
         {
             prevTime = nowTime;
 
+            static int currentHour = -1;
+            static int cricketTriggerMinute1 = -1;
+            static int cricketTriggerMinute2 = -1;
+            static int lastCricketMinute = -1;
+
             StatsMonitor &sm = StatsMonitor::instance();
 
             sm.update();
+
+            if (timeInfo.tm_hour != currentHour && Globals::cricketSoundEnabled) 
+            {
+            currentHour = timeInfo.tm_hour;
+
+            cricketTriggerMinute1 = esp_random() % 60;
+            cricketTriggerMinute2 = (esp_random() % 2 == 0) ? esp_random() % 60 : -1;
+            }
 
             static bool lastState160 = false;
 
@@ -54,6 +67,13 @@ void ClockControl::timeCycle() noexcept
                 lastState160 = currentState160;
             }
 
+            if (Globals::cricketSoundEnabled && (timeInfo.tm_min == cricketTriggerMinute1 || timeInfo.tm_min == cricketTriggerMinute2) && timeInfo.tm_sec == 0 && timeInfo.tm_min != lastCricketMinute)
+            {
+                lastCricketMinute = timeInfo.tm_min;
+                Logger::log(LoggerType::TIME, F("Cricket chirping triggered"));
+                buzzer.playCricketSound();
+            }
+
             if (Globals::timeLimitEnabled)
             {
                 time_t now = time(nullptr);
@@ -68,6 +88,10 @@ void ClockControl::timeCycle() noexcept
                     continue;
                 }
 
+                inTime = true;
+            }
+            else
+            {
                 inTime = true;
             }
 
@@ -98,6 +122,7 @@ void ClockControl::timeCycle() noexcept
             else if (((timeInfo.tm_min == 57 && timeInfo.tm_sec == 15) || (timeInfo.tm_min == 27 && timeInfo.tm_sec == 15)) && displayEnabled && Globals::loadDetected)
             {
                 Logger::log(LoggerType::TIME, F("Running ACP"));
+                digits = 0;
                 hssCtrl.enable190();
                 vTaskDelay(pdMS_TO_TICKS(10));
                 hssCtrl.enableResistorReduction();
@@ -131,6 +156,6 @@ void ClockControl::timeCycle() noexcept
 
             buzzer.update();
         }
-        vTaskDelay(pdMS_TO_TICKS(200));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

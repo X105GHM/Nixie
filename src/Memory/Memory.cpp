@@ -67,6 +67,53 @@ namespace Memory
         return ESP_OK;
     }
 
+    esp_err_t PersistentStorage::saveEventLog(const std::string &json) noexcept
+    {
+        nvs_handle_t handle;
+        esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+        if (err != ESP_OK) return err;
+
+        err = nvs_set_str(handle, KEY_LAST_EVENT, json.c_str());
+        if (err == ESP_OK) 
+        {
+            err = nvs_commit(handle);
+        }
+        nvs_close(handle);
+        return err;
+    }
+
+    esp_err_t PersistentStorage::getLastEventLog(std::string &outJson) noexcept
+    {
+        nvs_handle_t handle;
+        esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+        if (err != ESP_OK) return err;
+
+        size_t len = 0;
+        if ((err = nvs_get_str(handle, KEY_LAST_EVENT, nullptr, &len)) == ESP_OK) 
+        {
+            std::string buf(len, '\0');
+            nvs_get_str(handle, KEY_LAST_EVENT, buf.data(), &len);
+            outJson = buf;
+        }
+        nvs_close(handle);
+        return err;
+    }
+
+    esp_err_t PersistentStorage::deleteEventLog() noexcept
+    {
+        nvs_handle_t handle;
+        esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+        if (err != ESP_OK) return err;
+
+        err = nvs_erase_key(handle, KEY_LAST_EVENT);
+        if (err == ESP_OK) 
+        {
+            err = nvs_commit(handle);
+        }
+        nvs_close(handle);
+        return err;
+    }
+
     void PersistentStorage::setIntValue(int val) noexcept    { intValue_ = val; }
     int  PersistentStorage::getIntValue() const noexcept     { return intValue_; }
 
@@ -196,5 +243,25 @@ namespace Memory
     {
         storage.resetGlobals();
         Logger::log(LoggerType::GENERAL, "Persistent storage reset and globals reloaded");
+    }
+
+    void ReadBrownoutLog(std::string &outJson) noexcept
+    {
+        if (auto err = storage.getLastEventLog(outJson); err != ESP_OK)
+        {
+            Logger::log(LoggerType::GENERAL, "ReadBrownoutLog failed: %s", esp_err_to_name(err));
+        }
+    }
+
+    void BrownoutReset() noexcept
+    {
+        if (auto err = storage.deleteEventLog(); err != ESP_OK)
+        {
+            Logger::log(LoggerType::GENERAL, "BrownoutReset failed: %s", esp_err_to_name(err));
+        }
+        else
+        {
+            Logger::log(LoggerType::GENERAL, "Brownout log cleared");
+        }
     }
 }

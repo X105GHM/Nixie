@@ -36,7 +36,32 @@ void Brownout::timerCallback(void *arg)
         self->hss_.disable190();
         self->hss_.disable160();
         self->hss_.disableResistorReduction();
+        displayEnabled = false;
         Memory::saveGlobals();
+
+        time_t now = 0;
+        time(&now);
+        struct tm tm_local{};
+        localtime_r(&now, &tm_local);
+        char buf[64];
+        strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm_local);
+
+        std::string json =
+            "{\n"
+            "  \"timestamp\": \"" + std::string(buf) + "\",\n"
+            "  \"event\": \"brownout\",\n"
+            "  \"voltage\": " + std::to_string(v12) + "\n"
+            "}";
+
+        Logger::log(LoggerType::GENERAL, "%s", json.c_str());
+
+        if (auto err = self->storage_.saveEventLog(json); err != ESP_OK)
+        {
+            Logger::log(LoggerType::GENERAL,
+                        "Brownout: saveEventLog failed: %s",
+                        esp_err_to_name(err));
+        }
+
         esp_timer_stop(self->timer_);
     }
 }

@@ -1,5 +1,5 @@
 #ifndef SOFTWARE_VERSION
-  #define SOFTWARE_VERSION "1.5.23"
+  #define SOFTWARE_VERSION "6.5.25"
 #endif
 
 #pragma once
@@ -38,6 +38,8 @@ namespace Globals
     extern bool PWM_disabled;
 
     extern bool loadDetected;
+    
+    extern bool cricketSoundEnabled;
 
     extern std::string zipCode;
 

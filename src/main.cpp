@@ -83,6 +83,7 @@ void setup()
 
     initTime();
 
+    // Loadcheck
     {
         auto readVoltage = [](){ return supplyWatch.readUHSS(); };
         bool hasLoad = hssController.testLoad(readVoltage, 125.0f /*Threshold in Volt*/, 28 /*28 ms → schneller Abfall = Last*/, 50 /*50 ms → maximal warten*/);

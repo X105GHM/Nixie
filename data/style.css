@@ -1,3 +1,5 @@
+/* What a fucking mess...*/
+
 /* ================================================
    Reset & Basis
    ================================================ */
@@ -49,12 +51,10 @@ a {
      ================================================ */
 nav {
     margin-top: 4rem;
-    /* Platz für den Banner */
     background-color: #333;
     color: #fff;
     position: sticky;
     top: 2.5rem;
-    /* direkt unter Banner */
     z-index: 999;
 }
 

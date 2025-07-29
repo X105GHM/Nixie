@@ -86,6 +86,7 @@ void HTTPHandler::begin() noexcept
         }
 
         Logger::log(LOGTYPE, "ACP started via HTTP");
+        digits = 0;
         hssController.enable190();
         vTaskDelay(pdMS_TO_TICKS(10));
         hssController.enableResistorReduction();
@@ -135,13 +136,24 @@ void HTTPHandler::begin() noexcept
 
         server_.send(200, "text/plain", "Date display started");
 
-        runWithClockSuspended(clockTaskHandle, [this]() {
+        runWithClockSuspended(clockTaskHandle, [this]() 
+        {
             displayDate();
             vTaskDelay(pdMS_TO_TICKS(5000));
         });
     });
 
+    server_.on("/set/CRICKET", HTTP_GET, [this]() noexcept {
+
+        Logger::log(LOGTYPE, F("Cricket sound requested via HTTP"));
+
+        buzzer.startCricketInTask();
+
+        server_.send(200, "text/plain", "Cricket sound started");
+    });
+
     server_.on("/set/ticker", HTTP_GET, [this]() noexcept {
+
         if (!server_.hasArg("value")) {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
             Logger::log(LOGTYPE, F("HTTP /set/ticker missing parameter 'value'"));
@@ -149,10 +161,8 @@ void HTTPHandler::begin() noexcept
         }
         String val = server_.arg("value");
         Globals::tickerEnabled = (val != "0");
-        Logger::log(LOGTYPE, "tickerEnabled set to %s via HTTP", 
-                    Globals::tickerEnabled ? "true" : "false");
-        server_.send(200, "text/plain", 
-                     String("tickerEnabled=") + (Globals::tickerEnabled ? "1" : "0"));
+        Logger::log(LOGTYPE, "tickerEnabled set to %s via HTTP", Globals::tickerEnabled ? "true" : "false");
+        server_.send(200, "text/plain", String("tickerEnabled=") + (Globals::tickerEnabled ? "1" : "0"));
     });
 
     server_.on("/set/singleDigitControl", HTTP_GET, [this]() noexcept{
@@ -348,6 +358,19 @@ void HTTPHandler::begin() noexcept
         Globals::WeatherUpdateEnabled = (val != "0");
         Logger::log(LOGTYPE, "WeatherUpdateEnabled set to %s via HTTP", Globals::WeatherUpdateEnabled ? "true" : "false");
         server_.send(200, "text/plain", String("WeatherUpdateEnabled=") + (Globals::WeatherUpdateEnabled ? "1" : "0"));
+    });
+
+    server_.on("/set/randomCricket", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("value")) 
+        {
+            server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
+            Logger::log(LOGTYPE, F("HTTP /set/randomCricket fehlte Parameter 'value'"));
+            return;
+        }
+        String val = server_.arg("value");
+        Globals::cricketSoundEnabled = (val != "0");
+        Logger::log(LOGTYPE, "cricketSoundEnabled set to %s via HTTP", Globals::cricketSoundEnabled ? "true" : "false");
+        server_.send(200, "text/plain", String("cricketSoundEnabled=") + (Globals::cricketSoundEnabled ? "1" : "0"));
     });
 
     server_.on("/set/logConfig", HTTP_GET, [this]() noexcept {
@@ -583,6 +606,23 @@ void HTTPHandler::begin() noexcept
         }
     });
 
+    server_.on("/get/brownout", HTTP_GET, [this]() noexcept {
+        std::string json;
+        Memory::ReadBrownoutLog(json);
+
+        if (json.empty()) {
+            server_.send(200, "text/plain", "None.");
+        }
+        else 
+        {
+            server_.send(200, "application/json", String(json.c_str()));
+        }
+    });
+
+    server_.on("/set/brownout", HTTP_GET, [this]() noexcept {
+        Memory::BrownoutReset();
+        server_.send(204, "text/plain", "");
+    });
 
     server_.on("/get/info", HTTP_GET, [this]() noexcept {
         Logger::log(LOGTYPE, F("Info requested via HTTP"));
@@ -685,6 +725,7 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse += "  \"silentModeEnabled\": "   + String(Globals::SilentModeEnabled) + ",\n";
     jsonResponse += "  \"manualBrightnessEnabled\": " + String(Globals::manualBrightnessEnabled) + ",\n";
     jsonResponse += "  \"WeatherUpdateEnabled\": "    + String(Globals::WeatherUpdateEnabled) + ",\n";
+    jsonResponse += "  \"cricketSoundEnabled\": "    + String(Globals::cricketSoundEnabled) + ",\n";
     jsonResponse += "  \"logConfigBinary\": \""    + binStr                         + "\",\n";
     jsonResponse += "  \"loadDetected\": "        + String(Globals::loadDetected)  + ",\n";
     jsonResponse += "  \"Brightness\": "          + String(brightness)             + ",\n";

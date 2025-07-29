@@ -1,8 +1,13 @@
 #pragma once
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_timer.h"
+#include "driver/ledc.h"
 #include "driver/gpio.h"
 #include <cstdint>
+
+#include "Digits/Digits.hpp"
 
 class Buzzer
 {
@@ -17,9 +22,14 @@ public:
 
     void update() noexcept;
 
+    void startCricketInTask() noexcept;
+
+    void playCricketSound() noexcept;
+
 private:
     static constexpr gpio_num_t BUZZER_PIN = GPIO_NUM_40;
 
+    bool cricketRunning_;
     bool state_;
     bool alarmRunning_ = false;
     bool toneState_ = false; 

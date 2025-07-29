@@ -36,7 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // wrap fetch to log
+  // fetch umwickeln, um Protokollierung hinzuzufügen
   const _fetch = window.fetch;
   window.fetch = async (input, init) => {
     const url = typeof input === "string" ? input : input.url,
@@ -127,14 +127,32 @@ document.addEventListener("DOMContentLoaded", () => {
             url = `/set/PWMPeriod?value=${parts[2]}`;
           }
           break;
+
+        case 'brownout':
+          url = '/set/brownout';
+          break;
       }
     }
-    else if (parts[0] === 'get' && parts[1] === 'info') {
-      url = `/get/info`;
+    else if (parts[0] === 'get') {
+
+      switch (parts[1]) {
+        case 'info':
+          url = `/get/info`;
+          break;
+
+        case 'brownout':
+          url = `/get/brownout`;
+          break;
+      }
     }
 
     if (url) {
-      fetch(url);
+      fetch(url)
+        .then(async res => {
+          const body = await res.text();
+          if (body) logToUI(`   ▶ body: ${body}`);
+        })
+        .catch(err => logToUI(`!! fetch ${url} ERROR: ${err}`));
       inputEl.value = '';
     } else {
       logToUI(`Ungültiger Befehl: ${txt}`);
@@ -193,12 +211,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let selectedTube = null;
 
-  // 0) Initialzustand
+  // Initialzustand
   acpControls.style.display = 'none';
   nixieContainer.classList.add('hidden');
   applyBtn.classList.add('hidden');
 
-  // 1) Toggle umschalten → nur Panel öffnen/schließen, kein HTTP beim AN
+  // Toggle umschalten → nur Panel öffnen/schließen
   acpToggle.addEventListener('change', () => {
     const on = acpToggle.checked;
 
@@ -209,11 +227,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (on) initNixie();
 
     // Haupt-ACP-, Datum-, Wetter-, Startwerte-Buttons deaktivieren
-    [ACPButton, DateButton, WeatherButton, StartValuesButton].forEach(btn => {
+    [ACPButton, DateButton, WeatherButton, CricketButton, StartValuesButton].forEach(btn => {
       btn.disabled = on;
     });
 
-    // Beim AUSschalten** senden wir value=0
     if (!on) {
       fetch('/set/singleDigitControl?value=0')
         .then(res => {
@@ -223,7 +240,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // 2) Init-Funktion: alle Röhren leeren, erste auf „0“
   function initNixie() {
     nixieTubes.forEach((tube, idx) => {
       const span = tube.querySelector('.digit');
@@ -239,7 +255,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   initNixie();
 
-  // 3) Klick auf Röhre → Ziffer inkrementieren & Auswahl aktivieren
   nixieTubes.forEach(tube => {
     tube.addEventListener('click', () => {
       nixieTubes.forEach(t => {
@@ -259,7 +274,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // 4) „Anwenden“-Button → senden value=1 & digit=…
   applyBtn.addEventListener('click', () => {
     if (!selectedTube) return;
 
@@ -273,7 +287,6 @@ document.addEventListener("DOMContentLoaded", () => {
           console.error('singleDigitControl:value=1 failed', res.status);
         } else {
           console.log('singleDigitControl OK');
-          // Panel bleibt offen, Toggle bleibt an
         }
       })
       .catch(err => console.error('Network error:', err));
@@ -398,7 +411,9 @@ document.addEventListener("DOMContentLoaded", () => {
     timerSettings = document.getElementById("timerSettings"),
     alarmToggle = document.getElementById("alarmToggle"),
     alarmTimeInput = document.getElementById("alarmTimeInput"),
-    alarmSettings = document.getElementById("alarmSettings");
+    alarmSettings = document.getElementById("alarmSettings"),
+    cricketToggle = document.getElementById("cricketToggle"),
+    CricketButton = document.getElementById("cricketButton");
 
   const tzNames = ["CET", "EET", "WET", "UTC", "EST", "CST", "MST", "PST", "HST", "JST", "IST", "AEST", "AWST"];
 
@@ -420,7 +435,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // standard toggles
+  // Standard toggles
   function makeToggleHandler(el, path) {
     el.addEventListener("change", async () => {
       skipSync.add(el.id);
@@ -439,6 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
   makeToggleHandler(silentToggle, "silentMode");
   makeToggleHandler(weatherToggle, "weatherUpdate");
   makeToggleHandler(PWMToggle, "NixiePWM");
+  makeToggleHandler(cricketToggle, "cricketSound");
 
   // Reset Button
   ResetButton.addEventListener("click", async () => {
@@ -481,6 +497,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // Cricket Button
+  CricketButton.addEventListener("click", async () => {
+    try {
+      await fetch("/set/CRICKET");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Setzen des Cricket-Sounds.");
+    }
+  });
+
   StartValuesButton.addEventListener("click", async () => {
     try {
       await fetch("/set/setOldValue");
@@ -514,7 +540,6 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => skipSync.delete("timerToggle"), 5000);
     }
   });
-
 
   timerTimeInput.addEventListener("change", async () => {
     skipSync.add("timerTimeInput");
@@ -747,7 +772,7 @@ document.addEventListener("DOMContentLoaded", () => {
         DisplayEnabled: 'DisplayEnabled', tickerEnabled: 'tickerEnabled', timeLimitEnabled: 'timeLimitEnabled',
         silentModeEnabled: 'silentModeEnabled', WeatherUpdateEnabled: 'WeatherUpdateEnabled', zipCode: 'zipCode',
         CurrentTimeZone: 'CurrentTimeZone', TimerActive: 'TimerActive', TimerConfiguredSeconds: 'TimerConfiguredSeconds',
-        AlarmActive: 'AlarmActive', AlarmTime: 'AlarmTime' 
+        AlarmActive: 'AlarmActive', AlarmTime: 'AlarmTime'
       };
 
       const boolFields = ['DisplayEnabled', 'tickerEnabled', 'timeLimitEnabled', 'silentModeEnabled',
@@ -771,7 +796,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const tzDisplay = document.getElementById("CurrentTimeZone");
       if (tzDisplay && data.CurrentTimeZone != null) {
-        // tzNames muss ganz oben im DOMContentLoaded stehen
         const idx = parseInt(data.CurrentTimeZone, 10);
         tzDisplay.textContent = tzNames[idx] || "–";
       }
@@ -799,6 +823,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!skipSync.has("PWMToggle")) PWMToggle.checked = !!data.NixiePWM;
       if (!skipSync.has("timerToggle")) timerToggle.checked = !!data.TimerActive;
       if (!skipSync.has("alarmToggle")) alarmToggle.checked = !!data.AlarmActive;
+      if (!skipSync.has("cricketToggle")) cricketToggle.checked = !!data.cricketSoundEnabled;
 
       // timezone
       if (!skipSync.has("timezoneSelect") && data.CurrentTimeZoneIndex != null) {

@@ -17,6 +17,9 @@ namespace Memory
         esp_err_t load() noexcept;
         esp_err_t save() noexcept;
         esp_err_t clearAll() noexcept;
+        esp_err_t saveEventLog(const std::string &json) noexcept;
+        esp_err_t getLastEventLog(std::string &outJson) noexcept;
+        esp_err_t deleteEventLog() noexcept;
 
         void resetGlobals() noexcept;
 
@@ -34,6 +37,7 @@ namespace Memory
         static constexpr const char *KEY_INT        = "int_val";
         static constexpr const char *KEY_FLOAT      = "float_val";
         static constexpr const char *KEY_STRING     = "str_val";
+        static constexpr char KEY_LAST_EVENT[] = "last_event";
 
         int intValue_;
         float floatValue_;
@@ -45,4 +49,9 @@ namespace Memory
     void saveGlobals() noexcept;
 
     void StorageReset() noexcept;
+
+    void ReadBrownoutLog(std::string &outJson) noexcept;
+
+    void BrownoutReset() noexcept;
+
 }
