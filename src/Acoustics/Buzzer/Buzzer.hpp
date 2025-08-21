@@ -26,6 +26,10 @@ public:
 
     void playCricketSound() noexcept;
 
+    void setLevel(bool level) noexcept;
+
+    void Silence() noexcept;
+
 private:
     static constexpr gpio_num_t BUZZER_PIN = GPIO_NUM_40;
 
@@ -35,6 +39,4 @@ private:
     bool toneState_ = false; 
     uint32_t lastToggleTime_ = 0;
     uint8_t remainingToggles_ = 0;
-
-    void setLevel(bool level) noexcept;
 };

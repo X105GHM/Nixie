@@ -69,14 +69,14 @@ namespace Globals
     inline void enableAllLogging()
     {
         logConfig = 
-            LOG_HTTP |
-            LOG_TIME |
-            LOG_HSS |
-            LOG_DIGIT |
-            LOG_WEBSERVER |
-            LOG_OTA |
-            LOG_BUTTON |
-            LOG_GENERAL |
+            LOG_HTTP        |
+            LOG_TIME        |
+            LOG_HSS         |
+            LOG_DIGIT       |
+            LOG_WEBSERVER   |
+            LOG_OTA         |
+            LOG_BUTTON      |
+            LOG_GENERAL     |
             LOG_WIFI;
         applyLogConfig();
     }

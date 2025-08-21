@@ -35,6 +35,7 @@ static void initTime()
 static void buttonTask(void *pvParameters) 
 {
     buttonPoll.init();
+    buttonPoll.bindUserActions();
     for (;;) 
     {
         buttonPoll.poll();

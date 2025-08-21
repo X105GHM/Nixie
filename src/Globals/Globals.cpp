@@ -23,14 +23,14 @@ namespace Globals
     std::string timeLimitTo         = "00:00:00"; // Mem
 
     uint32_t logConfig = // Mem
-        LOG_HTTP |
-        LOG_TIME |
-        LOG_HSS |
-        LOG_DIGIT |
-        LOG_WEBSERVER |
-        LOG_OTA |
-        LOG_BUTTON |
-        LOG_GENERAL |
+        LOG_HTTP        |
+        LOG_TIME        |
+        LOG_HSS         |
+        LOG_DIGIT       |
+        LOG_WEBSERVER   |
+        LOG_OTA         |
+        LOG_BUTTON      |
+        LOG_GENERAL     |
         LOG_WIFI;
 
     void applyLogConfig()

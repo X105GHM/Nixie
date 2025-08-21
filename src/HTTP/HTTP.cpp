@@ -68,9 +68,15 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/setOldValue", HTTP_GET, [this]() noexcept {
-        Logger::log(LOGTYPE, F("System reset requested via HTTP"));       
+        Logger::log(LOGTYPE, F("System apply loadGlobals requested via HTTP"));       
         Memory::loadGlobals();
         Globals::applyLogConfig();
+    });
+
+    server_.on("/set/loadDetectedOverwrite", HTTP_GET, [this]() noexcept {     
+        Globals::loadDetected = !Globals::loadDetected;
+        Logger::log(LOGTYPE, "loadDetected set to %s via HTTP", Globals::loadDetected ? "true" : "false");
+        server_.send(200, "text/plain", String("loadDetected=") + (Globals::loadDetected ? "1" : "0"));
     });
 
     server_.on("/set/resetValue", HTTP_GET, [this]() noexcept {

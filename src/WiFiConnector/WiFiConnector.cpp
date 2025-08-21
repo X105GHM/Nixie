@@ -1,4 +1,5 @@
 #include "WiFiConnector.hpp"
+using ewm::EasyWiFiManager;
 
 WiFiConnector::WiFiConnector(const char *apSsid, const char *apPass) noexcept
     : apSsid_(apSsid), apPass_(apPass)
@@ -10,35 +11,44 @@ void WiFiConnector::connect() noexcept
     if (WiFi.status() == WL_CONNECTED)
     {
         Logger::log(logType_, "WiFi already connected: %s", WiFi.localIP().toString().c_str());
+        startMDNSWithCollisionCheck_("nixieclock");
         return;
     }
 
-    Logger::log(logType_, "WiFi not connected, starting AP: %s", apSsid_);
-    WiFiManager wm;
-    wm.setTimeout(180);
-    
-    if (!wm.autoConnect(apSsid_, apPass_))
+    auto &ewm = EasyWiFiManager::instance();
+
+    ewm.setHostname("nixieclock");
+
+    ewm.setAPCredentials(apSsid_, (apPass_ ? apPass_ : ""));
+
+    ewm.setInternetProbe("1.1.1.1", 53);
+    ewm.setConnectivityMonitor(true, /*checkIntervalMs*/ 10000, /*internetTimeoutMs*/ 15000);
+
+    ewm.onNoConnectivity([]
     {
-        Logger::log(logType_, "WiFiManager timeout, restarting");
-        delay(3000);
-        ESP.restart();
-        return;
-    }
-    Logger::log(logType_, "WiFi connected, IP=%s", WiFi.localIP().toString().c_str());
+        Logger::log(LoggerType::WiFi, "No connectivity for extended period -> restarting");
+        Memory::saveGlobals();
+        ESP.restart(); 
+    }   , 300000); // 5 Minuten
 
-
-
-    // mDNS mit Kollisionsprüfung
-    const String baseName = "nixieclock";
-    String      hostName;
-    int         suffix  = 1;
-    bool        success = false;
-
-    while (!success)
+    ewm.onConnect([this](const IPAddress &ip)
     {
-        hostName = (suffix == 1)
-            ? baseName
-            : baseName + String(suffix);
+        Logger::log(logType_, "WiFi connected, IP=%s", ip.toString().c_str());
+        startMDNSWithCollisionCheck_("nixieclock");
+    });
+
+    ewm.begin();
+}
+
+void WiFiConnector::startMDNSWithCollisionCheck_(const char *baseName) noexcept
+{
+    String hostName;
+    int suffix = 1;
+    bool okName = false;
+
+    while (!okName)
+    {
+        hostName = (suffix == 1) ? baseName : (String(baseName) + String(suffix));
 
         if (!MDNS.begin(hostName.c_str()))
         {
@@ -51,7 +61,7 @@ void WiFiConnector::connect() noexcept
         delay(200);
 
         int n = MDNS.queryService("http", "tcp");
-        Logger::log(logType_, "MDNS: %d HTTP service(s) found", n);
+        Logger::log(logType_, "mDNS: %d HTTP service(s) found", n);
 
         int countMe = 0;
         for (int i = 0; i < n; ++i)
@@ -62,7 +72,7 @@ void WiFiConnector::connect() noexcept
 
         if (countMe <= 1)
         {
-            success = true;
+            okName = true;
             Logger::log(logType_, "mDNS responder started as %s.local", hostName.c_str());
         }
         else

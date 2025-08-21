@@ -105,3 +105,26 @@ void Buzzer::playCricketSound() noexcept
     gpio_set_level(BUZZER_PIN, 0);
     Logger::log(LoggerType::GENERAL, F("Cricket sound chirp finished"));
 }
+
+void Buzzer::Silence() noexcept
+{
+    gpio_config_t io_conf = 
+    {
+        .pin_bit_mask = (1ULL << 40),
+        .mode = Globals::SilentModeEnabled ? GPIO_MODE_INPUT : GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = Globals::SilentModeEnabled ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&io_conf);
+
+    if (!Globals::SilentModeEnabled) 
+    {
+        gpio_set_level(GPIO_NUM_40, 0);
+        Globals::tickerEnabled = true;
+    }
+    else 
+    {
+        Globals::tickerEnabled = false;
+    }
+}
