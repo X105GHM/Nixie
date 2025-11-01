@@ -15,11 +15,11 @@
 #include "ACP/ACP.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <WiFiManager.h>
 #include "Digits/Digits.hpp"
 #include "Temperature/Temperature.hpp"
 #include "Globals/Globals.hpp"
 #include "OTA/OTA.hpp"
+#include "WiFiConnector/WiFiConnector.hpp"
 
 extern bool displayEnabled;
 extern bool enable160V;
@@ -32,6 +32,7 @@ extern HSS hssController;
 extern ClockControl clockControl;
 extern EnergyMonitor energyMonitor;
 extern NtcThermistor temperatureSensor;
+extern WiFiConnector wifiConnector;
 
 extern TaskHandle_t clockTaskHandle;
 

@@ -4,7 +4,8 @@
 #include <cmath>
 #include "esp_adc_cal.h"
 
-class NtcThermistor {
+class NtcThermistor 
+{
 public:
     explicit NtcThermistor() noexcept;
     float readTemperatureC() const noexcept;

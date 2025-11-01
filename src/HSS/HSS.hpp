@@ -9,25 +9,18 @@ class HSS
 public:
     HSS() noexcept;
 
-    void enable160() const noexcept;
-
-    void disable160() const noexcept;
-
-    void enable190() const noexcept;
-
-    void disable190() const noexcept;
-
-    void enableResistorReduction() const noexcept;
-
-    void disableResistorReduction() const noexcept;
+    esp_err_t enable160() const noexcept;
+    esp_err_t disable160() const noexcept;
+    esp_err_t enable190() const noexcept;
+    esp_err_t disable190() const noexcept;
+    esp_err_t enableResistorReduction() const noexcept;
+    esp_err_t disableResistorReduction() const noexcept;
 
     bool testLoad(const std::function<float()>& readVoltage, float thresholdV, uint32_t discrimMs, uint32_t maxWaitMs) const noexcept;
 
     mutable bool enableResistor = false;
-
     mutable bool enable190V = false;
-
-    mutable bool enable160V = false; 
+    mutable bool enable160V = false;
 
 private:
     static constexpr gpio_num_t PIN_160V = GPIO_NUM_15;

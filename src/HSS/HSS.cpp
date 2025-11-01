@@ -10,7 +10,13 @@ HSS::HSS() noexcept
     io_conf.pin_bit_mask = (1ULL << PIN_160V) | (1ULL << PIN_190V) | (1ULL << PIN_REDUCE) | (1ULL << PIN_HSS_LED);
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    gpio_config(&io_conf);
+
+    esp_err_t err = gpio_config(&io_conf);
+    if (err != ESP_OK)
+    {
+        Logger::log(logType, "GPIO config failed with error %d", err);
+        return;
+    }
 
     gpio_set_level(PIN_160V, 0);
     gpio_set_level(PIN_190V, 0);
@@ -20,59 +26,87 @@ HSS::HSS() noexcept
     Logger::log(logType, F("GPIOs for HSS initialized (15, 7, 19, 42 = outputs, all LOW)"));
 }
 
-void HSS::enable160() const noexcept
+esp_err_t HSS::enable160() const noexcept
 {
     enable160V = true;
-    gpio_set_level(PIN_160V, 1);
-    gpio_set_level(PIN_HSS_LED, 1);
+    esp_err_t err = gpio_set_level(PIN_160V, 1);
+    if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO15 HIGH (%d)", err), err;
+
+    err = gpio_set_level(PIN_HSS_LED, 1);
+    if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO42 HIGH (%d)", err), err;
+
     Logger::log(logType, F("160V enabled (GPIO15 = HIGH)"));
+    return ESP_OK;
 }
 
-void HSS::disable160() const noexcept
+esp_err_t HSS::disable160() const noexcept
 {
     enable160V = false;
-    gpio_set_level(PIN_160V, 0);
-    gpio_set_level(PIN_HSS_LED, 0);
+    esp_err_t err = gpio_set_level(PIN_160V, 0);
+    if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO15 LOW (%d)", err), err;
+
+    err = gpio_set_level(PIN_HSS_LED, 0);
+    if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO42 LOW (%d)", err), err;
+
     Logger::log(logType, F("160V disabled (GPIO15 = LOW)"));
+    return ESP_OK;
 }
 
-void HSS::enable190() const noexcept
+esp_err_t HSS::enable190() const noexcept
 {
     enable190V = true;
-    gpio_set_level(PIN_190V, 1);
+    esp_err_t err = gpio_set_level(PIN_190V, 1);
+    if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO7 HIGH (%d)", err), err;
+
     Logger::log(logType, F("190V boost enabled (GPIO7 = HIGH)"));
+    return ESP_OK;
 }
 
-void HSS::disable190() const noexcept
+esp_err_t HSS::disable190() const noexcept
 {
     enable190V = false;
-    gpio_set_level(PIN_190V, 0);
+    esp_err_t err = gpio_set_level(PIN_190V, 0);
+    if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO7 LOW (%d)", err), err;
+
     Logger::log(logType, F("190V boost disabled (GPIO7 = LOW)"));
+    return ESP_OK;
 }
 
-void HSS::enableResistorReduction() const noexcept
+esp_err_t HSS::enableResistorReduction() const noexcept
 {
     enableResistor = true;
-    gpio_set_level(PIN_REDUCE, 1);
+    esp_err_t err = gpio_set_level(PIN_REDUCE, 1);
+    if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO19 HIGH (%d)", err), err;
+
     Logger::log(logType, F("Resistors reduced (GPIO19 = HIGH)"));
+    return ESP_OK;
 }
 
-void HSS::disableResistorReduction() const noexcept
+esp_err_t HSS::disableResistorReduction() const noexcept
 {
     enableResistor = false;
-    gpio_set_level(PIN_REDUCE, 0);
+    esp_err_t err = gpio_set_level(PIN_REDUCE, 0);
+    if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO19 LOW (%d)", err), err;
+
     Logger::log(logType, F("Resistors restored (GPIO19 = LOW)"));
+    return ESP_OK;
 }
 
 bool HSS::testLoad(const std::function<float()> &readVoltage, float thresholdV, uint32_t discriminationMs, uint32_t maxWaitMs) const noexcept
 {
     Logger::log(logType, F("testLoad: charge to 160V, then measure discharge"));
 
-    enable160();
+    if (enable160() != ESP_OK)
+    {
+        Logger::log(logType, F("testLoad aborted: failed to enable 160V"));
+        return false;
+    }
+
     vTaskDelay(pdMS_TO_TICKS(100));
     float voltage = readVoltage();
     Logger::log(logType, "Initial voltage: %.2f V", voltage);
     TickType_t start = xTaskGetTickCount();
+
     disable160();
 
     while (true)
@@ -90,7 +124,7 @@ bool HSS::testLoad(const std::function<float()> &readVoltage, float thresholdV, 
 
         if (elapsed >= maxWaitMs)
         {
-            Logger::log(logType,"testLoad: timeout %u ms reached, voltage still %.2f V => NO LOAD", elapsed, voltage);
+            Logger::log(logType, "testLoad: timeout %u ms reached, voltage still %.2f V => NO LOAD", elapsed, voltage);
             return false;
         }
 

@@ -10,7 +10,7 @@ void ACP() noexcept
     uint8_t lastBrightness = brightness;
     brightness = 100;
 
-    for (int number = 0; number <= 9; number++)
+    for (uint8_t number = 0; number <= 9; number++)
     {
         digits = 111111 * number;
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -20,15 +20,15 @@ void ACP() noexcept
 
     runningACP1 = true;
 
-    for (int number = 0; number <= 9; number++)
+    for (uint8_t number = 0; number <= 9; number++)
     {
         digits = 101010 * number;
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 
-    for (int i = 0; i <= 8; i++)
+    for (uint8_t i = 0; i <= 8; i++)
     {
-        for (int number = 0; number <= 9; number++)
+        for (uint8_t number = 0; number <= 9; number++)
         {
             digits = 101010 * number;
             vTaskDelay(pdMS_TO_TICKS(20));
@@ -38,16 +38,16 @@ void ACP() noexcept
     runningACP1 = false;
     runningACP2 = true;
 
-    for (int i = 0; i <= 4; i++)
+    for (uint8_t i = 0; i <= 4; i++)
     {
-        for (int number = 0; number <= 9; number++)
+        for (uint8_t number = 0; number <= 9; number++)
         {
             digits = 10101 * number;
             vTaskDelay(pdMS_TO_TICKS(50));
         }
     }
 
-    for (int number = 0; number <= 9; number++)
+    for (uint8_t number = 0; number <= 9; number++)
     {
         digits = (90909 - (10101 * number));
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -55,7 +55,7 @@ void ACP() noexcept
 
     runningACP2 = false;
 
-    for (int number = 9; number >= 0; number--)
+    for (uint8_t number = 9; number >= 0; number--)
     {
         digits = 111111 * number;
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -66,13 +66,13 @@ void ACP() noexcept
     int32_t displaySequence[] = {306060, 407070, 508080, 609090, 706060, 807070, 908080, 309090};
     for (int i = 0; i < 8; i++)
     {
-        for (int number = 0; number <= 9; number++)
+        for (uint8_t number = 0; number <= 9; number++)
         {
             digits = 111111 * number;
             vTaskDelay(pdMS_TO_TICKS(50));
         }
 
-        for (int number = 8; number >= 0; number--)
+        for (uint8_t number = 8; number >= 0; number--)
         {
             digits = 111111 * number;
             vTaskDelay(pdMS_TO_TICKS(50));

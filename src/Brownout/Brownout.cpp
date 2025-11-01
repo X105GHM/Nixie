@@ -57,9 +57,7 @@ void Brownout::timerCallback(void *arg)
 
         if (auto err = self->storage_.saveEventLog(json); err != ESP_OK)
         {
-            Logger::log(LoggerType::GENERAL,
-                        "Brownout: saveEventLog failed: %s",
-                        esp_err_to_name(err));
+            Logger::log(LoggerType::GENERAL, "Brownout: saveEventLog failed: %s", esp_err_to_name(err));
         }
 
         esp_timer_stop(self->timer_);

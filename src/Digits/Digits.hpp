@@ -16,7 +16,7 @@
 #include <driver/gpio.h>
 
 /// Software-PWM für 400 Hz (Periode = 2 500 µs)
-extern std::uint32_t PWM_PERIOD_US;
+extern uint32_t PWM_PERIOD_US;
 
 constexpr bool ADAPTIVE_BRIGHTNESS = true;
 
@@ -24,10 +24,10 @@ extern bool displayEnabled;
 extern bool zipMaskingEnabled;
 extern bool tempMaskingEnabled;
 extern bool singleDigitACP;
-extern std::uint8_t singleDigit; 
-extern std::int32_t digits;
-extern std::int32_t lastdigits;
-extern std::uint32_t brightness;   // 0..100
+extern uint8_t singleDigit; 
+extern int32_t digits;
+extern int32_t lastdigits;
+extern uint32_t brightness;   // 0..100
 extern const std::uint32_t symbolArray[10];
 
 void displayDigitsTask(void* pvParameters) noexcept;

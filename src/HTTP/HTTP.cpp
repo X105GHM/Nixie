@@ -6,13 +6,41 @@ static const std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$
 
 static const char* tzNames[] = {"CET","EET","WET","UTC","EST","CST","MST","PST","HST","JST","IST","AEST","AWST"};
 
+static String jsonEscape_(const String& s) noexcept 
+{
+  String r; r.reserve(s.length()+8);
+  for (size_t i=0;i<s.length();++i)
+  {
+    char c=s[i];
+    switch(c)
+    {
+      case '\"': r+="\\\""; break;
+      case '\\': r+="\\\\"; break;
+      case '\b': r+="\\b";  break;
+      case '\f': r+="\\f";  break;
+      case '\n': r+="\\n";  break;
+      case '\r': r+="\\r";  break;
+      case '\t': r+="\\t";  break;
+      default:
+        if ((uint8_t)c<0x20)
+        {
+            char b[7]; sprintf(b,"\\u%04x",(uint8_t)c); 
+            r+=b; 
+        }
+        else r+=c;
+    }
+  }
+  return r;
+}
+
 constexpr int tzCount = sizeof(tzNames) / sizeof(tzNames[0]);
 
 HTTPHandler::HTTPHandler(int port) noexcept
     : server_(port)
 {}
 
-String HTTPHandler::getContentType(const String &filename) noexcept {
+String HTTPHandler::getContentType(const String &filename) noexcept 
+{
     if (filename.endsWith(".htm") || filename.endsWith(".html")) return "text/html";
     if (filename.endsWith(".css"))   return "text/css";
     if (filename.endsWith(".js"))    return "application/javascript";
@@ -23,7 +51,8 @@ String HTTPHandler::getContentType(const String &filename) noexcept {
     return "text/plain";
 }
 
-bool HTTPHandler::handleFileRead(const String &path) noexcept {
+bool HTTPHandler::handleFileRead(const String &path) noexcept 
+{
     String filePath = path;
     if (filePath.endsWith("/")) filePath += "index.html";
     if (!SPIFFS.exists(filePath)) return false;
@@ -64,6 +93,7 @@ void HTTPHandler::begin() noexcept
 
     server_.on("/set/reset", HTTP_GET, [this]() noexcept {
         Logger::log(LOGTYPE, F("System reset requested via HTTP"));       
+        server_.send(200, "text/plain", "OK");
         handleReset();
     });
 
@@ -80,8 +110,77 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/resetValue", HTTP_GET, [this]() noexcept {
-        Logger::log(LOGTYPE, F("System reset requested via HTTP"));       
+        Logger::log(LOGTYPE, F("Globals Values reset requested via HTTP"));       
         Memory::StorageReset();
+        server_.send(200, "text/plain", "OK");
+    });
+
+    server_.on("/set/resetWiFi", HTTP_GET, [this]() noexcept {
+        wifiConnector.eraseCredentials();
+        Logger::log(LOGTYPE, F("WiFi Credentail erase requested via HTTP"));  
+        server_.send(200, "text/plain", "OK");     
+    });
+
+    server_.on("/get/wifiSaved", HTTP_GET, [this]() noexcept {
+        auto list = wifiConnector.getSavedNetworks();
+
+        auto esc = [](const String& s)->String{
+            String r; r.reserve(s.length()+8);
+            for (size_t i=0;i<s.length();++i){
+                char c=s[i];
+                if (c=='\"') r += "\\\"";
+                else if (c=='\\') r += "\\\\";
+                else if ((uint8_t)c < 0x20){ char b[7]; sprintf(b,"\\u%04x",(uint8_t)c); r+=b; }
+                else r += c;
+            }
+            return r;
+        };
+
+        String out = "[";
+        for (size_t i=0;i<list.size();++i)
+        {
+            if(i) out += ",";
+            out += "{\"ssid\":\""; out += esc(String(list[i].ssid)); out += "\",";
+            out += "\"priority\":"; out += String(list[i].priority); out += ",";
+            out += "\"last_ok\":";  out += String(list[i].last_ok);
+            out += "}";
+        }
+        out += "]";
+
+        server_.sendHeader("Cache-Control","no-store");
+        server_.send(200, "application/json", out);
+        Logger::log(LOGTYPE, "HTTP /get/wifiSaved -> %u entries", (unsigned)list.size());
+    });
+
+    server_.on("/set/wifiAdd", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("ssid")) {
+            server_.send(400, "text/plain", "Missing 'ssid'");
+            Logger::log(LOGTYPE, "HTTP /set/wifiAdd missing ssid");
+            return;
+        }
+        String ssid = server_.arg("ssid");
+        String pwd  = server_.hasArg("pwd")  ? server_.arg("pwd")  : "";
+        int prio    = server_.hasArg("prio") ? server_.arg("prio").toInt() : 100;
+        prio = constrain(prio, 0, 254);
+
+        bool ok = wifiConnector.addOrUpdateNetwork(ssid, pwd, (uint8_t)prio);
+        Logger::log(LOGTYPE, ok ? "WiFi addOrUpdate OK: '%s' (prio %d)" : "WiFi addOrUpdate FAIL: '%s'", ssid.c_str(), prio);
+
+        server_.send(ok ? 200 : 400, "text/plain", ok ? "OK" : "FAIL");
+    });
+
+    server_.on("/set/wifiRemove", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("ssid")) 
+        {
+            server_.send(400, "text/plain", "Missing 'ssid'");
+            Logger::log(LOGTYPE, "HTTP /set/wifiRemove missing ssid");
+            return;
+        }
+        String ssid = server_.arg("ssid");
+        bool ok = wifiConnector.removeNetwork(ssid);
+
+        Logger::log(LOGTYPE, ok ? "WiFi removed: '%s'" : "WiFi remove failed/not found: '%s'", ssid.c_str());
+        server_.send(ok ? 200 : 404, "text/plain", ok ? "OK" : "Not found");
     });
 
     server_.on("/set/ACP", HTTP_GET, [this]() noexcept {
@@ -91,23 +190,34 @@ void HTTPHandler::begin() noexcept
             return;
         }
 
+        auto httpCheck = [&](esp_err_t e, const char* what) -> bool 
+        {
+            if (e != ESP_OK)
+            {
+                Logger::log(LOGTYPE, "%s failed (%d)", what, static_cast<int>(e));
+                server_.send(500, "text/plain", what);
+                return false;
+            }
+            return true;
+        }; 
+
         Logger::log(LOGTYPE, "ACP started via HTTP");
         digits = 0;
-        hssController.enable190();
+        if (!httpCheck(hssController.enable190(), "Failed to enable 190V")) return;
         vTaskDelay(pdMS_TO_TICKS(10));
-        hssController.enableResistorReduction();
+        if (!httpCheck(hssController.enableResistorReduction(), "Failed to reduce resistors")) return;
         vTaskDelay(pdMS_TO_TICKS(10));
         runWithClockSuspended(clockTaskHandle, ACP);
-        hssController.disableResistorReduction();
+        if (!httpCheck(hssController.disableResistorReduction(), "Failed to disable resistor reduction")) return;
         vTaskDelay(pdMS_TO_TICKS(10));
-        hssController.disable190();
+        if (!httpCheck(hssController.disable190(), "Failed to disable 190V")) return;
         vTaskDelay(pdMS_TO_TICKS(10));
         Logger::log(LOGTYPE, F("ACP completed via HTTP"));
         server_.send(200, "text/plain", "ACP started");
     });
 
     server_.on("/set/tempDisplay", HTTP_GET, [this]() noexcept {
-        if (!displayEnabled) 
+        if (!displayEnabled && !ACP_enabled && !Globals::loadDetected) 
         {
             Logger::log(LOGTYPE, F("Error: Display not enabled for temperature display"));
             server_.send(400, "text/plain", "Display not enabled");
@@ -182,13 +292,13 @@ void HTTPHandler::begin() noexcept
 
             if(singleDigitACP)
             {
-                hssController.enable190();
-                hssController.enableResistorReduction();
+                (void)hssController.enable190();
+                (void)hssController.enableResistorReduction();
             }
             else
             {
-                hssController.disableResistorReduction();
-                hssController.disable190();
+                (void)hssController.disableResistorReduction();
+                (void)hssController.disable190();
             }
             handled = true;
         }
@@ -639,11 +749,13 @@ void HTTPHandler::begin() noexcept
     Logger::log(LOGTYPE, F("HTTP server started"));
 }
 
-void HTTPHandler::handleClient() noexcept {
+void HTTPHandler::handleClient() noexcept 
+{
     server_.handleClient();
 }
 
-void HTTPHandler::handleReset() noexcept {
+void HTTPHandler::handleReset() noexcept 
+{
     Logger::log(LOGTYPE, F("Performing system reset..."));
     Memory::saveGlobals();
     ESP.restart();
@@ -651,10 +763,9 @@ void HTTPHandler::handleReset() noexcept {
 
 void HTTPHandler::handleInfo() noexcept
 {
-    WiFiManager wm;
     auto &sm = StatsMonitor::instance();
-    auto ssid            = wm.getWiFiSSID();
-    auto password        = wm.getWiFiPass();
+    auto ssid            = wifiConnector.getWiFiSSID();
+    auto password        = wifiConnector.getWiFiPass();
     auto chipModel       = ESP.getChipModel();
     auto freeHeap        = ESP.getFreeHeap();
     auto chipId          = ESP.getEfuseMac();

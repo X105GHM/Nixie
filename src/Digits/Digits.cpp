@@ -10,12 +10,12 @@ bool displayEnabled = false;
 bool singleDigitACP = false;
 bool zipMaskingEnabled = false;
 bool tempMaskingEnabled = false;
-std::uint32_t PWM_PERIOD_US = 10000; // 100 Hz, Periode = 10 ms //* Kann über HTTP geändert werden
-std::int32_t digits = 0;
-std::uint8_t singleDigit = 0;
-std::int32_t lastdigits = 717111; // zufälliger Startwert, damit Display initialisiert wird
-std::uint32_t brightness;
-const std::uint32_t symbolArray[10] = {512, 1, 2, 4, 8, 16, 32, 64, 128, 256};
+uint32_t PWM_PERIOD_US = 10000; // 100 Hz, Periode = 10 ms //* Kann über HTTP geändert werden
+int32_t digits = 0;
+uint8_t singleDigit = 0;
+int32_t lastdigits = 717111; // zufälliger Startwert, damit Display initialisiert wird
+uint32_t brightness;
+const  uint32_t symbolArray[10] = {512, 1, 2, 4, 8, 16, 32, 64, 128, 256};
 
 static inline void initPinOe() noexcept
 {
@@ -39,8 +39,8 @@ void displayDigitsTask(void *pvParameters) noexcept
     {
         if (!ACP_enabled) 
         {
-            std::uint32_t b      = std::min(brightness, (std::uint32_t)100);
-            std::uint32_t onTime = (PWM_PERIOD_US * b) / 100;
+            uint32_t b      = min(brightness, (uint32_t)100);
+            uint32_t onTime = (PWM_PERIOD_US * b) / 100;
             delayMicrosYield(onTime);
         }
 
@@ -54,7 +54,7 @@ void displayDigitsTask(void *pvParameters) noexcept
         {
             SPI.beginTransaction(dispSPISettings);
             gpio_set_level(PIN_OE, 0);
-            std::uint32_t var32 = 0;
+            uint32_t var32 = 0;
             if (singleDigit < 30)
             {
                 SPI.transfer(var32 >> 24);
@@ -95,9 +95,9 @@ void displayDigitsTask(void *pvParameters) noexcept
 
             SPI.beginTransaction(dispSPISettings);
 
-            std::int64_t copy = digits;
+            int64_t copy = digits;
             gpio_set_level(PIN_OE, 0);
-            std::uint32_t var32 = 0;
+            uint32_t var32 = 0;
 
             //---------------------------------- REG 1 -----------------------------------------------
 
@@ -107,14 +107,14 @@ void displayDigitsTask(void *pvParameters) noexcept
 
             if (!runningACP1)
             {
-                var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
+                var32 |= (static_cast<uint32_t>(symbolArray[copy % 10]) << 20);
             }
 
             copy /= 10;
 
             if (!runningACP2)
             {
-                var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
+                var32 |= (static_cast<uint32_t>(symbolArray[copy % 10]) << 10);
             }
 
             copy /= 10;
@@ -137,14 +137,14 @@ void displayDigitsTask(void *pvParameters) noexcept
 
             if (!runningACP2)
             {
-                var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
+                var32 |= (static_cast<uint32_t>(symbolArray[copy % 10]) << 20);
             }
 
             copy /= 10;
 
             if (!runningACP1)
             {
-                var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
+                var32 |= (static_cast<uint32_t>(symbolArray[copy % 10]) << 10);
             }
 
             copy /= 10;
@@ -170,9 +170,9 @@ void displayDigitsTask(void *pvParameters) noexcept
 
         SPI.beginTransaction(dispSPISettings);
 
-        std::int64_t copy = digits;
+        int64_t copy = digits;
         gpio_set_level(PIN_OE, 0);
-        std::uint32_t var32 = 0;
+        uint32_t var32 = 0;
 
         //---------------------------------- REG 1 -----------------------------------------------
 
@@ -182,14 +182,14 @@ void displayDigitsTask(void *pvParameters) noexcept
 
         if (!runningACP1 && !zipMaskingEnabled && !tempMaskingEnabled)
         {
-            var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
+            var32 |= (static_cast<uint32_t>(symbolArray[copy % 10]) << 20);
         }
 
         copy /= 10;
 
         if (!runningACP2 && !tempMaskingEnabled)
         {
-            var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
+            var32 |= (static_cast<uint32_t>(symbolArray[copy % 10]) << 10);
         }
 
         copy /= 10;
@@ -212,14 +212,14 @@ void displayDigitsTask(void *pvParameters) noexcept
 
         if (!runningACP2)
         {
-            var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 20);
+            var32 |= (static_cast<uint32_t>(symbolArray[copy % 10]) << 20);
         }
 
         copy /= 10;
 
         if (!runningACP1)
         {
-            var32 |= (static_cast<std::uint32_t>(symbolArray[copy % 10]) << 10);
+            var32 |= (static_cast<uint32_t>(symbolArray[copy % 10]) << 10);
         }
 
         copy /= 10;
@@ -240,9 +240,9 @@ void displayDigitsTask(void *pvParameters) noexcept
 
         if (ADAPTIVE_BRIGHTNESS && (!runningACP1 || !runningACP2))
         {
-            std::uint32_t b       = std::min(brightness, (std::uint32_t)100);
-            std::uint32_t onTime  = (PWM_PERIOD_US * b) / 100;
-            std::uint32_t offTime = PWM_PERIOD_US - onTime;
+            uint32_t b       = min(brightness, (uint32_t)100);
+            uint32_t onTime  = (PWM_PERIOD_US * b) / 100;
+            uint32_t offTime = PWM_PERIOD_US - onTime;
             delayMicrosYield(offTime);
         }
 
@@ -257,8 +257,8 @@ void displayDigitsTask(void *pvParameters) noexcept
 
 void displayTime() noexcept
 {
-    std::time_t t = std::time(nullptr);
-    std::tm timeInfo{};
+    time_t t =  time(nullptr);
+    tm timeInfo{};
     localtime_r(&t, &timeInfo);
     digits = 0;
     digits += timeInfo.tm_hour * 10000;
@@ -268,8 +268,8 @@ void displayTime() noexcept
 
 void displayDate() noexcept
 {
-    std::time_t t = std::time(nullptr);
-    std::tm timeInfo{};
+    time_t t =  time(nullptr);
+    tm timeInfo{};
     localtime_r(&t, &timeInfo);
     digits  = 0;
     digits += timeInfo.tm_mday * 10000;
@@ -279,13 +279,13 @@ void displayDate() noexcept
 
 void displayWeather() noexcept
 {
-    WeatherClient weather(std::string(OPENWEATHER_API_KEY));
+    WeatherClient weather( std::string(OPENWEATHER_API_KEY));
     const std::string &zip = Globals::zipCode;
 
     Logger::log(LoggerType::GENERAL, "displayWeather(): going to fetch temp for ZIP: %s", zip.c_str());
 
     float temp = weather.getTemperatureByZip(zip);
-    if (!std::isnan(temp))
+    if (! isnan(temp))
     {
         int temp100 = static_cast<int>(roundf(temp * 10000.0f));
 

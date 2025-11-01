@@ -58,11 +58,11 @@ void ClockControl::timeCycle() noexcept
             {
                 if (currentState160)
                 {
-                    hssCtrl.enable160();
+                    (void)hssCtrl.enable160();
                 }
                 else
                 {
-                    hssCtrl.disable160();
+                    (void)hssCtrl.disable160();
                 }
                 lastState160 = currentState160;
             }
@@ -123,13 +123,13 @@ void ClockControl::timeCycle() noexcept
             {
                 Logger::log(LoggerType::TIME, F("Running ACP"));
                 digits = 0;
-                hssCtrl.enable190();
+                (void)hssCtrl.enable190();
                 vTaskDelay(pdMS_TO_TICKS(10));
-                hssCtrl.enableResistorReduction();
+                (void)hssCtrl.enableResistorReduction();
                 vTaskDelay(pdMS_TO_TICKS(10));
                 ACP();
-                hssCtrl.disableResistorReduction();
-                hssCtrl.disable190();
+                (void)hssCtrl.disableResistorReduction();
+                (void)hssCtrl.disable190();
                 vTaskDelay(pdMS_TO_TICKS(10));
             }
             else if ((timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 0 && timeInfo.tm_sec < 5) && displayEnabled && Globals::WeatherUpdateEnabled)
