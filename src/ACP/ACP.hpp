@@ -9,5 +9,6 @@
 extern bool runningACP1;
 extern bool runningACP2;
 extern bool ACP_enabled;
+extern std::atomic<bool> mode_running;
 
 void ACP() noexcept;

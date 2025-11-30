@@ -995,3 +995,107 @@ body.dark {
 .clean-button.hidden {
     display: none !important;
 }
+
+/* ================================================
+     WiFi-Manager
+     ================================================ */
+
+.wifi-group {
+    margin-top: 30px;
+}
+
+.wifi-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.wifi-add {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.wifi-add input {
+    padding: 8px 10px;
+    min-width: 180px;
+}
+
+#wifiAddBtn {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+.wifi-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.wifi-item {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    background: var(--card, #121a2b);
+    border: 1px solid #2a3550;
+    border-radius: 10px;
+    padding: 10px;
+    margin: 8px 0;
+}
+
+.wifi-item .drag {
+    cursor: grab;
+    user-select: none;
+    font-weight: 700;
+    opacity: .8;
+}
+
+.wifi-item .main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.wifi-item .ssid {
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wifi-item .meta {
+    color: var(--muted, #9fb0d0);
+    font-size: .9em;
+}
+
+.wifi-item .actions {
+    display: flex;
+    gap: 8px;
+}
+
+.wifi-item .del {
+    opacity: 0.0;
+    transition: opacity .15s;
+    cursor: pointer;
+    border: 0;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+.wifi-item:hover .del {
+    opacity: 1;
+}
+
+.wifi-item.dragging {
+    opacity: .6;
+}
+
+.wifi-hint {
+    color: var(--muted, #9fb0d0);
+    margin-top: 8px;
+    font-size: .92em;
+}

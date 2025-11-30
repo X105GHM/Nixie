@@ -184,43 +184,68 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/ACP", HTTP_GET, [this]() noexcept {
+
         if (!displayEnabled && !Globals::loadDetected) 
         {
             server_.send(400, "text/plain", "Display not enabled");
+            Logger::log(LOGTYPE, F("Error: Display not enabled"));
             return;
         }
-
-        auto httpCheck = [&](esp_err_t e, const char* what) -> bool 
+        else if (mode_running.load(std::memory_order_relaxed)) 
         {
-            if (e != ESP_OK)
-            {
-                Logger::log(LOGTYPE, "%s failed (%d)", what, static_cast<int>(e));
-                server_.send(500, "text/plain", what);
-                return false;
-            }
-            return true;
-        }; 
-
+            server_.send(400, "text/plain", "A mode is already running");
+            Logger::log(LOGTYPE, F("Error: Another mode is already running"));
+            return;
+        }
+        
         Logger::log(LOGTYPE, "ACP started via HTTP");
         digits = 0;
-        if (!httpCheck(hssController.enable190(), "Failed to enable 190V")) return;
-        vTaskDelay(pdMS_TO_TICKS(10));
-        if (!httpCheck(hssController.enableResistorReduction(), "Failed to reduce resistors")) return;
-        vTaskDelay(pdMS_TO_TICKS(10));
-        runWithClockSuspended(clockTaskHandle, ACP);
-        if (!httpCheck(hssController.disableResistorReduction(), "Failed to disable resistor reduction")) return;
-        vTaskDelay(pdMS_TO_TICKS(10));
-        if (!httpCheck(hssController.disable190(), "Failed to disable 190V")) return;
-        vTaskDelay(pdMS_TO_TICKS(10));
-        Logger::log(LOGTYPE, F("ACP completed via HTTP"));
+
+        runWithClockSuspended(clockTaskHandle, [this]() {
+            auto check = [](esp_err_t e, const char* what) {
+                if (e != ESP_OK) {
+                    Logger::log(LOGTYPE, "%s failed (%d)", what, static_cast<int>(e));
+                    return false;
+                }
+                return true;
+            };
+
+            Logger::log(LOGTYPE, "ACP task: enabling 190V + resistor reduction");
+
+            if (!check(hssController.enable190(), "Failed to enable 190V")) return;
+            vTaskDelay(pdMS_TO_TICKS(10));
+
+            if (!check(hssController.enableResistorReduction(), "Failed to reduce resistors")) return;
+            vTaskDelay(pdMS_TO_TICKS(10));
+
+            ACP();
+
+            Logger::log(LOGTYPE, "ACP task: disabling resistor reduction + 190V");
+
+            if (!check(hssController.disableResistorReduction(), "Failed to disable resistor reduction")) return;
+            vTaskDelay(pdMS_TO_TICKS(10));
+
+            if (!check(hssController.disable190(), "Failed to disable 190V")) return;
+            vTaskDelay(pdMS_TO_TICKS(10));
+
+            Logger::log(LOGTYPE, "ACP task finished");
+        });
+
         server_.send(200, "text/plain", "ACP started");
     });
 
     server_.on("/set/tempDisplay", HTTP_GET, [this]() noexcept {
-        if (!displayEnabled && !ACP_enabled && !Globals::loadDetected) 
+
+        if (!displayEnabled && !Globals::loadDetected) 
         {
-            Logger::log(LOGTYPE, F("Error: Display not enabled for temperature display"));
             server_.send(400, "text/plain", "Display not enabled");
+            Logger::log(LOGTYPE, F("Error: Display not enabled"));
+            return;
+        }
+        else if (mode_running.load(std::memory_order_relaxed)) 
+        {
+            server_.send(400, "text/plain", "A mode is already running");
+            Logger::log(LOGTYPE, F("Error: Another mode is already running"));
             return;
         }
 
@@ -229,6 +254,7 @@ void HTTPHandler::begin() noexcept
         server_.send(200, "text/plain", "Temperature display started");
 
             runWithClockSuspended(clockTaskHandle, [this]() {
+            mode_running.store(true, std::memory_order_relaxed);
             zipMaskingEnabled = true;
             digits = Globals::zipCode.empty() ? 0 : std::stoi(Globals::zipCode)*10;
             vTaskDelay(pdMS_TO_TICKS(3000));
@@ -237,14 +263,22 @@ void HTTPHandler::begin() noexcept
             zipMaskingEnabled = false;
             vTaskDelay(pdMS_TO_TICKS(5000));
             tempMaskingEnabled = false;
+            mode_running.store(false, std::memory_order_relaxed);
         });
     });
 
     server_.on("/set/DATE", HTTP_GET, [this]() noexcept {
-        if (!displayEnabled) 
+
+        if (!displayEnabled && !Globals::loadDetected) 
         {
-            Logger::log(LOGTYPE, F("Error: Display not enabled for DATE"));
             server_.send(400, "text/plain", "Display not enabled");
+            Logger::log(LOGTYPE, F("Error: Display not enabled"));
+            return;
+        }
+        else if (mode_running.load(std::memory_order_relaxed)) 
+        {
+            server_.send(400, "text/plain", "A mode is already running");
+            Logger::log(LOGTYPE, F("Error: Another mode is already running"));
             return;
         }
 
@@ -254,8 +288,10 @@ void HTTPHandler::begin() noexcept
 
         runWithClockSuspended(clockTaskHandle, [this]() 
         {
+            mode_running.store(true, std::memory_order_relaxed);
             displayDate();
             vTaskDelay(pdMS_TO_TICKS(5000));
+            mode_running.store(false, std::memory_order_relaxed);
         });
     });
 
@@ -282,6 +318,20 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/singleDigitControl", HTTP_GET, [this]() noexcept{
+
+        if (!displayEnabled && !Globals::loadDetected) 
+        {
+            server_.send(400, "text/plain", "Display not enabled");
+            Logger::log(LOGTYPE, F("Error: Display not enabled"));
+            return;
+        }
+        else if (mode_running.load(std::memory_order_relaxed)) 
+        {
+            server_.send(400, "text/plain", "A mode is already running");
+            Logger::log(LOGTYPE, F("Error: Another mode is already running"));
+            return;
+        }
+
         bool handled = false;
 
         if (server_.hasArg("value"))
@@ -765,7 +815,8 @@ void HTTPHandler::handleInfo() noexcept
 {
     auto &sm = StatsMonitor::instance();
     auto ssid            = wifiConnector.getWiFiSSID();
-    auto password        = wifiConnector.getWiFiPass();
+    auto deviceIP      = wifiConnector.getIpAddress();
+    //auto password        = wifiConnector.getWiFiPass();
     auto chipModel       = ESP.getChipModel();
     auto freeHeap        = ESP.getFreeHeap();
     auto chipId          = ESP.getEfuseMac();
@@ -806,7 +857,8 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse  = "{\n";
     jsonResponse += "  \"Chip\": \""               + String(chipModel)             + "\",\n";
     jsonResponse += "  \"SSID\": \""               + ssid                           + "\",\n";
-    jsonResponse += "  \"Password\": \""           + password                       + "\",\n";
+    jsonResponse += "  \"IP_Address\": \""         + deviceIP                       + "\",\n";
+    //jsonResponse += "  \"Password\": \""           + password                       + "\",\n";
     jsonResponse += "  \"DisplayEnabled\": "      + String(displayEnabled)         + ",\n";
     jsonResponse += "  \"Melody\": \""             + String("Nokia")                + "\",\n";
     jsonResponse += "  \"FreeHeap\": "            + String(freeHeap)               + ",\n";

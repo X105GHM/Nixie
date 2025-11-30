@@ -6,6 +6,7 @@ bool ACP_enabled = false;
 
 void ACP() noexcept
 {
+    mode_running.store(true, std::memory_order_relaxed);
     ACP_enabled = true;
     uint8_t lastBrightness = brightness;
     brightness = 100;
@@ -55,7 +56,7 @@ void ACP() noexcept
 
     runningACP2 = false;
 
-    for (uint8_t number = 9; number >= 0; number--)
+    for (int8_t number = 9; number >= 0; number--)
     {
         digits = 111111 * number;
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -72,7 +73,7 @@ void ACP() noexcept
             vTaskDelay(pdMS_TO_TICKS(50));
         }
 
-        for (uint8_t number = 8; number >= 0; number--)
+        for (int8_t number = 8; number >= 0; number--)
         {
             digits = 111111 * number;
             vTaskDelay(pdMS_TO_TICKS(50));
@@ -85,4 +86,5 @@ void ACP() noexcept
     runningACP1 = false;
     brightness = lastBrightness;
     ACP_enabled = false;
+    mode_running.store(false, std::memory_order_relaxed);
 }

@@ -10,6 +10,7 @@ bool displayEnabled = false;
 bool singleDigitACP = false;
 bool zipMaskingEnabled = false;
 bool tempMaskingEnabled = false;
+std::atomic<bool> mode_running{false};
 uint32_t PWM_PERIOD_US = 10000; // 100 Hz, Periode = 10 ms //* Kann über HTTP geändert werden
 int32_t digits = 0;
 uint8_t singleDigit = 0;

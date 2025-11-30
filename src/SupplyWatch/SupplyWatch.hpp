@@ -33,11 +33,11 @@ private:
     static constexpr float R3V3_TOP   = 10000.0f,  R3V3_BOT   = 10000.0f;
     static constexpr float R_UHSS_TOP = 1000000.0f, R_UHSS_BOT = 12000.0f;
 
-    static constexpr float RSENSE     = 0.01f;
-    static constexpr float AMP_GAIN   = 510.0f;
+    static constexpr float RSENSE       = 0.01f;
+    static constexpr float AMP_GAIN     = 510.0f;
     static constexpr float CURRENT_FACT = 1.0f / (RSENSE * AMP_GAIN);
 
-    static constexpr float T_REF_C           = 25.0f;
+    static constexpr float T_REF_C             = 25.0f;
     static constexpr float DRIFT_5V_MV_PER_C   = -19.35f;
     static constexpr float DRIFT_12V_MV_PER_C  = -44.84f;
     static constexpr float DRIFT_3V3_MV_PER_C  = +1.43f;
@@ -58,7 +58,8 @@ private:
     esp_adc_cal_characteristics_t calUHSS;
     esp_adc_cal_characteristics_t calI;
 
-    static inline float mvToVolt(uint32_t mv) {
+    static inline float mvToVolt(uint32_t mv) 
+    {
         return static_cast<float>(mv) / 1000.0f;
     }
 

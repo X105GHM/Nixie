@@ -407,6 +407,23 @@
                 </div>
             </div>
 
+            <div class="log-config-group wifi-group">
+                <h4>WiFi Manager</h4>
+                <div class="wifi-header">
+                  <div>
+                    <button id="wifiRefreshBtn">Aktualisieren</button>
+                  </div>
+                  <div class="wifi-add">
+                    <input id="wifiSsidInput" type="text" placeholder="SSID" />
+                    <input id="wifiPwdInput" type="password" placeholder="Passwort (optional)" />
+                    <button id="wifiAddBtn" title="Netz hinzufügen">➕</button>
+                  </div>
+                </div>
+              
+                <ul id="wifiList" class="wifi-list"><!-- wird per JS gefüllt --></ul>
+                <div class="wifi-hint">Tipp: Ziehen, um die Reihenfolge (Priorität) zu ändern. Höchste Priorität steht oben.</div>
+              </div>
+              
         </section>
 
         <section id="info" class="tab-content">

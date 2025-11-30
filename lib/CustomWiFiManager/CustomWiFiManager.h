@@ -15,18 +15,18 @@ namespace ewm
 
     struct Credential
     {
-        char ssid[33]       = {0};
-        char password[65]   = {0};
-        uint8_t priority    = 0;
-        uint32_t last_ok    = 0;
+        char ssid[33] = {0};
+        char password[65] = {0};
+        uint8_t priority = 0;
+        uint32_t last_ok = 0;
     };
 
     struct StorageHeader
     {
-        uint32_t magic      = MAGIC;    // Library-ID
-        uint16_t version    = 0x0001;   // Strukturversion
-        uint16_t count      = 0;        // Anzahl gültiger Einträge
-        uint32_t crc32      = 0;        // CRC über Header (ohne crc32) + Daten
+        uint32_t magic = MAGIC;    // Library-ID
+        uint16_t version = 0x0001; // Strukturversion
+        uint16_t count = 0;        // Anzahl gültiger Einträge
+        uint32_t crc32 = 0;        // CRC über Header (ohne crc32) + Daten
     };
 
     class EasyWiFiManager
@@ -45,6 +45,8 @@ namespace ewm
 
         bool addCredential(const String &ssid, const String &password, uint8_t priority = 254);
         bool eraseAll();
+
+        bool removeCredential(const String& ssid);
 
         wl_status_t status() const { return WiFi.status(); }
         std::vector<Credential> listCredentials() const;
@@ -67,12 +69,13 @@ namespace ewm
         static uint32_t crc32(const uint8_t *data, size_t len);
 
         bool tryConnectAll(uint32_t connectTimeoutMs, uint32_t betweenRetryMs);
-        bool tryConnectOne(const Credential &c, uint32_t connectTimeoutMs);
+        bool tryConnectOneWithInternet_(const Credential &c, uint32_t connectTimeoutMs, uint32_t internetTimeoutMs);
+        bool waitForConnectedOrFail_(uint32_t timeoutMs);
+        bool safeSwitchMode_(wifi_mode_t targetMode);
 
         void startAP();
         void stopAP();
         void setupWeb();
-        void loopWeb();
 
         void ensureAPState();
         static void monitorTaskThunk(void *arg);
@@ -81,13 +84,18 @@ namespace ewm
         void roamTryAll();
 
     private:
-        String hostname_    = "esp32-setup";
-        String apSsid_      = "ESP32-Setup";
-        String apPass_      = ""; // optional
+        String pendingSsid_;
+        String pendingPass_;
+        uint8_t pendingPrio_ = 100;
+        bool connectRequested_ = false;
+
+        String hostname_ = "esp32-setup";
+        String apSsid_ = "ESP32-Setup";
+        String apPass_ = ""; // optional
 
         Preferences pref_;
         static constexpr const char *NS_PRIMARY = "EWM1";
-        static constexpr const char *NS_BACKUP  = "EWM1B";
+        static constexpr const char *NS_BACKUP = "EWM1B";
 
         StorageHeader hdr_{};
         std::array<Credential, 10> creds_{};
@@ -105,6 +113,7 @@ namespace ewm
         const char *probeHost_ = "1.1.1.1";
         uint16_t probePort_ = 53;
         std::function<void()> onNoConn_;
+        std::vector<String> scanVisible_();
         uint32_t noConnSince_ = 0;
         uint32_t noConnCallbackDelayMs_ = 300000;
         TaskHandle_t monitorTask_ = nullptr;

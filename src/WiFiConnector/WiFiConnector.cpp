@@ -83,3 +83,35 @@ void WiFiConnector::startMDNSWithCollisionCheck_(const char *baseName) noexcept
         }
     }
 }
+
+void WiFiConnector::eraseCredentials() noexcept
+{
+    if(ewm::EasyWiFiManager::instance().eraseAll())
+    {
+        Logger::log(logType_, "WiFi credentials erased successfully");
+    }
+    else
+    {
+        Logger::log(logType_, "Failed to erase WiFi credentials");
+    }
+}
+
+std::vector<ewm::Credential> WiFiConnector::getSavedNetworks() const noexcept
+{
+    return EasyWiFiManager::instance().listCredentials();
+}
+
+bool WiFiConnector::addOrUpdateNetwork(const String& ssid, const String& password, uint8_t priority) noexcept
+{
+    if (ssid.isEmpty()) return false;
+    bool ok = EasyWiFiManager::instance().addCredential(ssid, password, priority);
+    Logger::log(logType_, ok ? "Saved WiFi '%s' (prio %u)" : "Failed to save WiFi '%s'", ssid.c_str(), priority);
+    return ok;
+}
+
+bool WiFiConnector::removeNetwork(const String& ssid) noexcept
+{
+    bool ok = EasyWiFiManager::instance().removeCredential(ssid);
+    Logger::log(logType_, ok ? "Removed WiFi '%s'" : "WiFi '%s' not found", ssid.c_str());
+    return ok;
+}

@@ -745,6 +745,161 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // === WiFi Manager ==========================================================
+  const wifiListEl = document.getElementById('wifiList');
+  const wifiRefreshBtn = document.getElementById('wifiRefreshBtn');
+  const wifiAddBtn = document.getElementById('wifiAddBtn');
+  const wifiSsidInput = document.getElementById('wifiSsidInput');
+  const wifiPwdInput = document.getElementById('wifiPwdInput');
+
+  let wifiData = [];     // [{ssid,priority,last_ok}, ...]
+  let draggingEl = null;
+  let reorderTimer = null;
+
+  const qEsc = s => encodeURIComponent(s || "");
+  const htmlEsc = s => (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+
+  async function loadWifiList() {
+    try {
+      const res = await fetch('/get/wifiSaved');
+      if (!res.ok) throw new Error(res.status);
+      wifiData = await res.json();
+      renderWifiList();
+    } catch (e) {
+      console.error('loadWifiList failed', e);
+    }
+  }
+
+  function renderWifiList() {
+    wifiListEl.innerHTML = "";
+    const arr = [...wifiData].sort((a, b) => (a.priority | 0) - (b.priority | 0));
+    arr.forEach((item, idx) => wifiListEl.appendChild(createWifiItem(item, idx)));
+  }
+
+  function createWifiItem(item, idx) {
+    const li = document.createElement('li');
+    li.className = 'wifi-item';
+    li.draggable = true;
+    li.dataset.ssid = item.ssid;
+    li.dataset.priority = item.priority;
+
+    li.innerHTML = `
+    <div class="drag" title="ziehen">≡</div>
+    <div class="main">
+      <div class="ssid">${htmlEsc(item.ssid || '')}</div>
+      <div class="meta">Prio: <span class="prio">${item.priority}</span>${item.last_ok ? ` · last_ok: ${item.last_ok}` : ''}</div>
+    </div>
+    <div class="actions">
+      <button class="del" title="Entfernen">✖</button>
+    </div>
+  `;
+
+    // Löschen
+    li.querySelector('.del').addEventListener('click', async () => {
+      const ssid = li.dataset.ssid;
+      if (!confirm(`Netzwerk „${ssid}“ entfernen?`)) return;
+      try {
+        const res = await fetch(`/set/wifiRemove?ssid=${qEsc(ssid)}`);
+        if (!res.ok) throw new Error(res.status);
+        // Aus lokaler Liste entfernen und neu rendern
+        wifiData = wifiData.filter(x => x.ssid !== ssid);
+        renderWifiList();
+      } catch (e) {
+        alert('Löschen fehlgeschlagen');
+        console.error(e);
+      }
+    });
+
+    // Drag&Drop
+    li.addEventListener('dragstart', e => {
+      draggingEl = li;
+      li.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    li.addEventListener('dragend', () => {
+      if (draggingEl) draggingEl.classList.remove('dragging');
+      draggingEl = null;
+      // Reihenfolge auf dem Server speichern (debounced)
+      if (reorderTimer) clearTimeout(reorderTimer);
+      reorderTimer = setTimeout(saveOrderToServer, 250);
+    });
+    li.addEventListener('dragover', e => {
+      e.preventDefault();
+      const after = getDragAfterElement(wifiListEl, e.clientY);
+      if (after == null) {
+        wifiListEl.appendChild(draggingEl);
+      } else {
+        wifiListEl.insertBefore(draggingEl, after);
+      }
+    });
+
+    return li;
+  }
+
+  // Bestimme Node hinter Drop-Position
+  function getDragAfterElement(container, y) {
+    const els = [...container.querySelectorAll('.wifi-item:not(.dragging)')];
+    let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+    els.forEach(el => {
+      const box = el.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closest.offset) closest = { offset, element: el };
+    });
+    return closest.element;
+  }
+
+  // Reihenfolge speichern: iteriere Liste von oben nach unten und setze priority = index
+  async function saveOrderToServer() {
+    const lis = [...wifiListEl.querySelectorAll('.wifi-item')];
+    // lokale Struktur updaten
+    wifiData = lis.map((li, i) => ({
+      ssid: li.dataset.ssid,
+      priority: i,
+      last_ok: (wifiData.find(x => x.ssid === li.dataset.ssid)?.last_ok) || 0
+    }));
+    // Prio im UI aktualisieren
+    lis.forEach((li, i) => {
+      li.dataset.priority = String(i);
+      const pr = li.querySelector('.prio');
+      if (pr) pr.textContent = String(i);
+    });
+
+    // nacheinander an Server schicken (benutzt addOrUpdate mit neuer Prio)
+    for (let i = 0; i < wifiData.length; i++) {
+      const n = wifiData[i];
+      try {
+        const res = await fetch(`/set/wifiAdd?ssid=${qEsc(n.ssid)}&pwd=&prio=${n.priority}`);
+        if (!res.ok) console.warn('prio save failed for', n.ssid, res.status);
+      } catch (e) {
+        console.warn('prio save error for', n.ssid, e);
+      }
+    }
+  }
+
+  // Hinzufügen (➕)
+  wifiAddBtn.addEventListener('click', async () => {
+    const ssid = (wifiSsidInput.value || "").trim();
+    const pwd = wifiPwdInput.value || "";
+    if (!ssid) { alert('Bitte SSID eingeben'); return; }
+    const prio = wifiListEl.children.length; // ans Ende
+
+    try {
+      wifiAddBtn.disabled = true;
+      const res = await fetch(`/set/wifiAdd?ssid=${qEsc(ssid)}&pwd=${qEsc(pwd)}&prio=${prio}`);
+      if (!res.ok) throw new Error(res.status);
+      wifiSsidInput.value = "";
+      wifiPwdInput.value = "";
+      await loadWifiList();
+    } catch (e) {
+      alert('Hinzufügen fehlgeschlagen');
+      console.error(e);
+    } finally {
+      wifiAddBtn.disabled = false;
+    }
+  });
+
+  wifiRefreshBtn.addEventListener('click', loadWifiList);
+
   // === Poll + DOM update ================================================
   async function fetchInfo() {
     try {
@@ -876,4 +1031,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
   initCharts();
   pollInfo();
+  loadWifiList();
 });

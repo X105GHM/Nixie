@@ -132,7 +132,7 @@ void ClockControl::timeCycle() noexcept
                 (void)hssCtrl.disable190();
                 vTaskDelay(pdMS_TO_TICKS(10));
             }
-            else if ((timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 0 && timeInfo.tm_sec < 5) && displayEnabled && Globals::WeatherUpdateEnabled)
+            else if ((timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 0 && timeInfo.tm_sec < 5) && displayEnabled && Globals::WeatherUpdateEnabled && Globals::loadDetected)
             {
                 WeatherClient weather(std::string(OPENWEATHER_API_KEY));
 

@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "esp_task_wdt.h"
+#include <atomic>
 
 #include "Globals/Globals.hpp"
 #include "TimeWeather/WeatherClient/WeatherClient.hpp"
@@ -15,7 +16,7 @@
 #include <cstring>
 #include <driver/gpio.h>
 
-/// Software-PWM für 400 Hz (Periode = 2 500 µs)
+/// Software-PWM 
 extern uint32_t PWM_PERIOD_US;
 
 constexpr bool ADAPTIVE_BRIGHTNESS = true;
@@ -24,6 +25,7 @@ extern bool displayEnabled;
 extern bool zipMaskingEnabled;
 extern bool tempMaskingEnabled;
 extern bool singleDigitACP;
+extern std::atomic<bool> mode_running;
 extern uint8_t singleDigit; 
 extern int32_t digits;
 extern int32_t lastdigits;

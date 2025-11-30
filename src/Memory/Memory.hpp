@@ -37,7 +37,7 @@ namespace Memory
         static constexpr const char *KEY_INT        = "int_val";
         static constexpr const char *KEY_FLOAT      = "float_val";
         static constexpr const char *KEY_STRING     = "str_val";
-        static constexpr char KEY_LAST_EVENT[] = "last_event";
+        static constexpr char KEY_LAST_EVENT[]      = "last_event";
 
         int intValue_;
         float floatValue_;
