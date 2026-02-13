@@ -11,33 +11,30 @@ void WiFiConnector::connect() noexcept
     if (WiFi.status() == WL_CONNECTED)
     {
         Logger::log(logType_, "WiFi already connected: %s", WiFi.localIP().toString().c_str());
-        startMDNSWithCollisionCheck_("nixieclock");
+        startMDNSOnce_();
         return;
     }
 
     auto &ewm = EasyWiFiManager::instance();
-
     ewm.setHostname("nixieclock");
-
     ewm.setAPCredentials(apSsid_, (apPass_ ? apPass_ : ""));
-
     ewm.setInternetProbe("1.1.1.1", 53);
-    ewm.setConnectivityMonitor(true, /*checkIntervalMs*/ 10000, /*internetTimeoutMs*/ 15000);
-
-    ewm.onNoConnectivity([]
-    {
-        Logger::log(LoggerType::WiFi, "No connectivity for extended period -> restarting");
-        Memory::saveGlobals();
-        ESP.restart(); 
-    }   , 300000); // 5 Minuten
 
     ewm.onConnect([this](const IPAddress &ip)
     {
         Logger::log(logType_, "WiFi connected, IP=%s", ip.toString().c_str());
-        startMDNSWithCollisionCheck_("nixieclock");
+        startMDNSOnce_();
     });
 
-    ewm.begin();
+    ewm.begin();  // erst verbinden (ggf. Portal)
+
+    ewm.setConnectivityMonitor(true, 10000, 60000);
+
+    ewm.onNoConnectivity([]{
+        Logger::log(LoggerType::WiFi, "No connectivity for extended period -> restarting");
+        Memory::saveGlobals();
+        ESP.restart();
+    }, 300000);
 }
 
 void WiFiConnector::startMDNSWithCollisionCheck_(const char *baseName) noexcept
@@ -83,6 +80,17 @@ void WiFiConnector::startMDNSWithCollisionCheck_(const char *baseName) noexcept
         }
     }
 }
+
+void WiFiConnector::startMDNSOnce_() noexcept
+{
+    if (mdnsStarted_) return;
+
+    MDNS.end();
+
+    startMDNSWithCollisionCheck_("nixieclock");
+    mdnsStarted_ = true;
+}
+
 
 void WiFiConnector::eraseCredentials() noexcept
 {

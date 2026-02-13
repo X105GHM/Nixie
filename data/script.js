@@ -804,6 +804,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Aus lokaler Liste entfernen und neu rendern
         wifiData = wifiData.filter(x => x.ssid !== ssid);
         renderWifiList();
+        loadWifiList();
       } catch (e) {
         alert('Löschen fehlgeschlagen');
         console.error(e);

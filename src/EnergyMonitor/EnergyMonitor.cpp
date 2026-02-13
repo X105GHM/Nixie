@@ -20,10 +20,7 @@ void EnergyMonitor::update() noexcept
 
     totalEnergyWh_ += instantPowerW_ * dtHours_;
 
-    ESP_LOGI(TAG,
-             "Instant Power: %.3f W | Total Energy: %.3f Wh",
-             instantPowerW_,
-             totalEnergyWh_);
+    ESP_LOGI(TAG, "Instant Power: %.3f W | Total Energy: %.3f Wh", instantPowerW_, totalEnergyWh_);
 }
 
 float EnergyMonitor::getInstantPowerW() const noexcept

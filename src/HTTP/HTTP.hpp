@@ -21,11 +21,6 @@
 #include "OTA/OTA.hpp"
 #include "WiFiConnector/WiFiConnector.hpp"
 
-extern bool displayEnabled;
-extern bool enable160V;
-extern bool enable190V;
-extern bool enableResistor;
-
 extern Memory::PersistentStorage storage;
 extern SupplyWatch supplyWatch;
 extern HSS hssController;

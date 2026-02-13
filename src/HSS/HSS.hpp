@@ -4,6 +4,10 @@
 #include "driver/gpio.h"
 #include <functional>
 
+extern bool enable160V;
+extern bool enable190V;
+extern bool enableResistor;
+
 class HSS
 {
 public:

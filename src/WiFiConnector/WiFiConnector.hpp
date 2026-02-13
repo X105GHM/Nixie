@@ -61,9 +61,12 @@ public:
     }
 
 private:
+    
+    bool mdnsStarted_ = false;
     const char *apSsid_;
     const char *apPass_;
     static constexpr LoggerType logType_ = LoggerType::WiFi;
 
     void startMDNSWithCollisionCheck_(const char *baseName) noexcept;
+    void startMDNSOnce_() noexcept;
 };
