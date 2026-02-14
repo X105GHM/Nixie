@@ -46,7 +46,6 @@ namespace ewm
             uint32_t internetTimeoutMs
         );
 
-    private:
         SemaphoreHandle_t wifiMutex_{nullptr};
     };
 }

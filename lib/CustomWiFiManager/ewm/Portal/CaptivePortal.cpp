@@ -18,6 +18,14 @@ namespace ewm
         apPass_ = pass;
     }
 
+    void CaptivePortal::setUiConfigJson(const String& json)
+    {
+        String t = json;
+        t.trim();
+        if (!t.startsWith("{") || !t.endsWith("}")) t = "{}";
+            uiCfgJson_ = t;
+    }
+
     void CaptivePortal::startAP_()
     {
         ewm::utils::WiFiLock lk(wifiMutex_);
@@ -40,8 +48,25 @@ namespace ewm
 
     void CaptivePortal::setupWeb_(PortalHooks &hooks)
     {
-        auto serveProbeOk = [this]()
+        auto addCors = [this]()
         {
+            server_.sendHeader("Access-Control-Allow-Origin", "*");
+            server_.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+            server_.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+            server_.sendHeader("Access-Control-Max-Age", "600");
+        };
+
+        auto handleOptions = [this, addCors]()
+        {
+            addCors();
+            server_.sendHeader("Connection", "close");
+            server_.send(204, "text/plain", "");
+        };
+
+        auto serveProbeOk = [this, addCors]()
+        {
+            addCors();
+            server_.sendHeader("Cache-Control", "no-store");
             server_.sendHeader("Connection", "close");
             server_.send(200, "text/html",
                          "<!doctype html><meta charset='utf-8'>"
@@ -50,31 +75,57 @@ namespace ewm
                          "<p>Weiter zur Konfigurationsseite…</p>");
         };
 
-        auto handleRoot = [this, &hooks]()
+        auto handleRoot = [this, &hooks, addCors]()
         {
             String list;
+
             for (auto &c : hooks.listCreds())
             {
-                list += "<li class=\"cred\" data-ssid=\"" + ewm::utils::html_escape(c.ssid) + "\">";
+                list += "<li class=\"cred\" draggable=\"true\" data-ssid=\"" + ewm::utils::html_escape(c.ssid) + "\">";
                 list += "<b>" + ewm::utils::html_escape(c.ssid) + "</b> <span class=\"pri\">Prio: " + String(c.priority) + "</span>";
-                list += "<span class=\"buttons\"><button class=\"up\">▲</button><button class=\"down\">▼</button><button class=\"del danger\">Löschen</button></span>";
+                list += "<span class=\"buttons\">"
+                        "<button class=\"con primary\">Verbinden</button>"
+                        "<button class=\"del danger\">Löschen</button>"
+                        "</span>";
                 list += "</li>";
+            }
+
+            uint8_t nextPrio = 0;
+            for (;;)
+            {
+                bool used = false;
+                for (auto &c : hooks.listCreds())
+                {
+                    if (c.priority == nextPrio)
+                    {
+                        used = true;
+                        break;
+                    }
+                }
+                if (!used)
+                    break;
+                nextPrio++;
             }
 
             String options = "<option value=\"\">(lade…)</option>";
 
             String page = ewm::portal::kPortalPage;
+            page.replace("__EWM_PORTAL_CFG__", uiCfgJson_);
             page.replace("__OPTIONS__", options);
             page.replace("__LIST__", list);
+            page.replace("__DEFAULT_PRIO__", String(nextPrio));
 
+            addCors();
+            server_.sendHeader("Cache-Control", "no-store");
             server_.sendHeader("Connection", "close");
             server_.send(200, "text/html; charset=utf-8", page);
         };
 
         server_.on("/", HTTP_GET, handleRoot);
+        server_.on("/", HTTP_OPTIONS, handleOptions);
 
-        server_.on("/scan", HTTP_GET, [this]()
-                   {
+        server_.on("/scan", HTTP_GET, [this, addCors]()
+        {
             ewm::utils::WiFiLock lk(wifiMutex_);
 
             WiFi.disconnect(false, false);
@@ -88,18 +139,37 @@ namespace ewm
                 if (i) json += ',';
                 json += "{\"ssid\":\"" + ewm::utils::json_escape(WiFi.SSID(i)) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
             }
+
             json += "]";
             WiFi.scanDelete();
 
-            server_.sendHeader("Cache-Control","no-store");
-            server_.sendHeader("Connection","close");
-            server_.send(200, "application/json", json); });
+            addCors();
+            server_.sendHeader("Cache-Control", "no-store");
+            server_.sendHeader("Connection", "close");
+            server_.send(200, "application/json", json); 
+        });
+        
+        server_.on("/scan", HTTP_OPTIONS, handleOptions);
 
-        server_.on("/status", HTTP_GET, [this, &hooks]()
-                   {
-            bool conn = hooks.isStaConnected();
-            String ip = conn ? hooks.staIp() : "";
-            int rssi  = conn ? hooks.staRssi() : 0;
+        server_.on("/status", HTTP_GET, [this, &hooks, addCors]()
+        {
+            bool conn = false;
+            String ip = "";
+            int rssi = -127;
+
+            {
+                ewm::utils::WiFiLock lk(wifiMutex_);
+                conn = (WiFi.status() == WL_CONNECTED);
+                if (conn) 
+                {
+                    ip = WiFi.localIP().toString();
+                    rssi = WiFi.RSSI();
+                }
+            }
+
+            if (!conn) conn = hooks.isStaConnected();
+            if (ip.length() == 0 && conn) ip = hooks.staIp();
+            if ((rssi == -127 || rssi == 0) && conn) rssi = hooks.staRssi();
 
             uint32_t apOffIn = 0;
             if (conn && apGraceUntil_ > millis()) apOffIn = apGraceUntil_ - millis();
@@ -111,69 +181,136 @@ namespace ewm
             json += "\"ap_off_in\":"; json += String(apOffIn);
             json += "}";
 
-            server_.sendHeader("Cache-Control","no-store");
+            addCors();
+            server_.sendHeader("Cache-Control","no-store, no-cache, must-revalidate");
+            server_.sendHeader("Pragma","no-cache");
+            server_.sendHeader("Expires","0");
             server_.sendHeader("Connection","close");
-            server_.send(200, "application/json", json); });
+            server_.send(200, "application/json", json); 
+        });
 
-        server_.on("/add", HTTP_POST, [this, &hooks]()
-                   {
+        server_.on("/status", HTTP_OPTIONS, handleOptions);
+
+        server_.on("/add", HTTP_POST, [this, &hooks, addCors]()
+        {
             String body = server_.arg("plain");
             String ssid, pw;
             int pr = 100;
 
-            if (!ewm::utils::json_get_string(body, "ssid", ssid)) { server_.send(400, "text/plain", "SSID fehlt."); return; }
+            if (!ewm::utils::json_get_string(body, "ssid", ssid))
+            {
+                addCors();
+                server_.send(400, "text/plain", "SSID fehlt.");
+                return;
+            }
+
             ewm::utils::json_get_string(body, "password", pw);
             ewm::utils::json_get_int(body, "priority", pr);
             pr = constrain(pr, 0, 254);
 
-            if (hooks.addCred(ssid, pw, (uint8_t)pr))
-                server_.send(200, "text/plain", "Hinzugefügt/aktualisiert.");
-            else
-                server_.send(400, "text/plain", "Fehler (max. 10 oder ungültig)."); });
+            addCors();
+            server_.sendHeader("Connection", "close");
 
-        server_.on("/del", HTTP_POST, [this, &hooks]()
-                   {
+            if (hooks.addCred(ssid, pw, (uint8_t)pr))
+            server_.send(200, "text/plain", "Hinzugefügt/aktualisiert.");
+            else
+            server_.send(400, "text/plain", "Fehler (max. 10 oder ungültig)."); 
+        });
+
+        server_.on("/add", HTTP_OPTIONS, handleOptions);
+
+        server_.on("/del", HTTP_POST, [this, &hooks, addCors]()
+        {
             String body = server_.arg("plain");
             String ssid;
-            if (!ewm::utils::json_get_string(body, "ssid", ssid)) { server_.send(400, "text/plain", "SSID fehlt."); return; }
-            if (hooks.delCred(ssid)) server_.send(200, "text/plain", "Gelöscht.");
-            else server_.send(404, "text/plain", "Nicht gefunden."); });
 
-        server_.on("/reorder", HTTP_POST, [this, &hooks]()
-                   {
+            if (!ewm::utils::json_get_string(body, "ssid", ssid))
+            {
+                addCors();
+                server_.send(400, "text/plain", "SSID fehlt.");
+                return;
+            }
+
+            addCors();
+            server_.sendHeader("Connection", "close");
+
+            if (hooks.delCred(ssid))
+                server_.send(200, "text/plain", "Gelöscht.");
+            else
+                server_.send(404, "text/plain", "Nicht gefunden."); 
+        });
+
+        server_.on("/del", HTTP_OPTIONS, handleOptions);
+
+        server_.on("/reorder", HTTP_POST, [this, &hooks, addCors]()
+        {
             String body = server_.arg("plain");
             std::vector<String> order;
-            if (!ewm::utils::json_get_order_array(body, order)) { server_.send(400, "text/plain", "order[] fehlt/ungültig."); return; }
+
+            if (!ewm::utils::json_get_order_array(body, order))
+            {
+                addCors();
+                server_.send(400, "text/plain", "order[] fehlt/ungültig.");
+                return;
+            }
+
             hooks.reorder(order);
-            server_.send(200, "text/plain", "Gespeichert."); });
 
-        server_.on("/erase", HTTP_POST, [this, &hooks]()
-                   {
+            addCors();
+            server_.sendHeader("Connection", "close");
+            server_.send(200, "text/plain", "Gespeichert."); 
+        });
+
+        server_.on("/reorder", HTTP_OPTIONS, handleOptions);
+
+        server_.on("/erase", HTTP_POST, [this, &hooks, addCors]()
+        {
             hooks.eraseAll();
-            server_.send(200, "text/plain", "Alle Einträge gelöscht."); });
+            addCors();
+            server_.sendHeader("Connection", "close");
+            server_.send(200, "text/plain", "Alle Einträge gelöscht."); 
+        });
 
-        server_.on("/ap_off", HTTP_POST, [this]()
-                   {
+        server_.on("/erase", HTTP_OPTIONS, handleOptions);
+
+        server_.on("/ap_off", HTTP_POST, [this, addCors]()
+        {
             apGraceUntil_ = millis();
             running_ = false;
-            server_.send(200, "application/json", "{\"ok\":true}"); });
+            addCors();
+            server_.sendHeader("Connection", "close");
+            server_.send(200, "application/json", "{\"ok\":true}");
+        });
 
-        server_.on("/connect", HTTP_POST, [this, &hooks]()
-                   {
+        server_.on("/ap_off", HTTP_OPTIONS, handleOptions);
+
+        server_.on("/connect", HTTP_POST, [this, &hooks, addCors]()
+        {
             String body = server_.arg("plain");
             String ssid, pw;
             int pr = 100;
 
-            if (!ewm::utils::json_get_string(body, "ssid", ssid)) { server_.send(400, "text/plain", "SSID fehlt."); return; }
+            if (!ewm::utils::json_get_string(body, "ssid", ssid))
+            {
+                addCors();
+                server_.send(400, "text/plain", "SSID fehlt.");
+                return;
+            }
+
             ewm::utils::json_get_string(body, "password", pw);
             ewm::utils::json_get_int(body, "priority", pr);
             pr = constrain(pr, 0, 254);
 
             hooks.connectRequest(ssid, pw, (uint8_t)pr);
 
-            server_.send(202, "application/json", "{\"ok\":true,\"msg\":\"Verbinde...\"}"); });
+            addCors();
+            server_.sendHeader("Connection", "close");
+            server_.send(202, "application/json", "{\"ok\":true,\"msg\":\"Verbinde...\"}"); 
+        });
 
-        // captive portal endpoints
+        server_.on("/connect", HTTP_OPTIONS, handleOptions);
+
+        // --- Captive portal endpoints
         server_.on("/generate_204", HTTP_ANY, serveProbeOk);
         server_.on("/gen_204", HTTP_ANY, serveProbeOk);
         server_.on("/hotspot-detect.html", HTTP_ANY, serveProbeOk);
@@ -181,9 +318,29 @@ namespace ewm
         server_.on("/ncsi.txt", HTTP_ANY, serveProbeOk);
         server_.on("/connecttest.txt", HTTP_ANY, serveProbeOk);
         server_.on("/success.txt", HTTP_ANY, serveProbeOk);
-        server_.on("/favicon.ico", HTTP_ANY, []() {});
 
-        server_.onNotFound(handleRoot);
+        server_.on("/favicon.ico", HTTP_ANY, [this, addCors]()
+        {
+            addCors();
+            server_.sendHeader("Connection", "close");
+            server_.send(204, "text/plain", ""); 
+        });
+
+        server_.onNotFound([this, addCors, handleRoot]()
+        {
+            EWM_LOG("HTTP notfound: method=%d uri=%s", (int)server_.method(), server_.uri().c_str());
+
+            if (server_.method() == HTTP_OPTIONS)
+            {
+                addCors();
+                server_.sendHeader("Connection", "close");
+                server_.send(204, "text/plain", "");
+                return;
+            }
+
+            handleRoot(); 
+        });
+
         server_.begin();
     }
 
@@ -214,7 +371,6 @@ namespace ewm
             {
                 if (apGraceUntil_ == 0)
                 {
-                    // 1x beim ersten Connect
                     if (hooks.onStaConnected)
                         hooks.onStaConnected();
 
@@ -226,9 +382,8 @@ namespace ewm
                     running_ = false;
             }
         }
-
         stopAP_();
+        server_.stop();
         EWM_LOG("Portal stopped");
     }
-
 }

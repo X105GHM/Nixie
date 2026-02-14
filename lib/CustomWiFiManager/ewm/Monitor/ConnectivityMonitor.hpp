@@ -13,7 +13,6 @@ namespace ewm
 
         void setOnNoConnectivity(std::function<void()> cb, uint32_t delayMs);
 
-        // callbacks vom Manager
         void setCheckFn(std::function<bool(uint32_t)> hasInternetFn);
         void setRoamFn(std::function<void()> roamFn);
 

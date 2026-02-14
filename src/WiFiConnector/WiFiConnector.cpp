@@ -1,4 +1,5 @@
 #include "WiFiConnector.hpp"
+#include "ewm/Portal/PortalUiConfig.hpp"
 using ewm::EasyWiFiManager;
 
 WiFiConnector::WiFiConnector(const char *apSsid, const char *apPass) noexcept
@@ -20,21 +21,30 @@ void WiFiConnector::connect() noexcept
     ewm.setAPCredentials(apSsid_, (apPass_ ? apPass_ : ""));
     ewm.setInternetProbe("1.1.1.1", 53);
 
+    ewm::portal::PortalUiConfig ui;
+    ui.mdnsHost = "nixieclock.local";
+    ui.finish.countdownAutoFinish = true;
+    ui.finish.redirect = true;
+    ui.finish.redirectUrl = "http://nixieclock.local/";
+    ui.finish.closeTab = false;
+    ewm.setPortalUiConfig(ui);
+
     ewm.onConnect([this](const IPAddress &ip)
     {
         Logger::log(logType_, "WiFi connected, IP=%s", ip.toString().c_str());
-        startMDNSOnce_();
+        startMDNSOnce_(); 
     });
 
-    ewm.begin();  // erst verbinden (ggf. Portal)
+    ewm.begin();
 
     ewm.setConnectivityMonitor(true, 10000, 60000);
 
-    ewm.onNoConnectivity([]{
+    ewm.onNoConnectivity([]
+    {
         Logger::log(LoggerType::WiFi, "No connectivity for extended period -> restarting");
         Memory::saveGlobals();
-        ESP.restart();
-    }, 300000);
+        ESP.restart(); 
+    },  300000);
 }
 
 void WiFiConnector::startMDNSWithCollisionCheck_(const char *baseName) noexcept
@@ -83,7 +93,8 @@ void WiFiConnector::startMDNSWithCollisionCheck_(const char *baseName) noexcept
 
 void WiFiConnector::startMDNSOnce_() noexcept
 {
-    if (mdnsStarted_) return;
+    if (mdnsStarted_)
+        return;
 
     MDNS.end();
 
@@ -91,10 +102,9 @@ void WiFiConnector::startMDNSOnce_() noexcept
     mdnsStarted_ = true;
 }
 
-
 void WiFiConnector::eraseCredentials() noexcept
 {
-    if(ewm::EasyWiFiManager::instance().eraseAll())
+    if (ewm::EasyWiFiManager::instance().eraseAll())
     {
         Logger::log(logType_, "WiFi credentials erased successfully");
     }
@@ -109,15 +119,16 @@ std::vector<ewm::Credential> WiFiConnector::getSavedNetworks() const noexcept
     return EasyWiFiManager::instance().listCredentials();
 }
 
-bool WiFiConnector::addOrUpdateNetwork(const String& ssid, const String& password, uint8_t priority) noexcept
+bool WiFiConnector::addOrUpdateNetwork(const String &ssid, const String &password, uint8_t priority) noexcept
 {
-    if (ssid.isEmpty()) return false;
+    if (ssid.isEmpty())
+        return false;
     bool ok = EasyWiFiManager::instance().addCredential(ssid, password, priority);
     Logger::log(logType_, ok ? "Saved WiFi '%s' (prio %u)" : "Failed to save WiFi '%s'", ssid.c_str(), priority);
     return ok;
 }
 
-bool WiFiConnector::removeNetwork(const String& ssid) noexcept
+bool WiFiConnector::removeNetwork(const String &ssid) noexcept
 {
     bool ok = EasyWiFiManager::instance().removeCredential(ssid);
     Logger::log(logType_, ok ? "Removed WiFi '%s'" : "WiFi '%s' not found", ssid.c_str());

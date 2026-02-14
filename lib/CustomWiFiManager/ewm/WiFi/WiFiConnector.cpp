@@ -37,11 +37,11 @@ namespace ewm
 
         bool ok = safeSwitchMode(WIFI_STA);
 
-#if defined(ESP_IDF_VERSION_MAJOR) && ESP_IDF_VERSION_MAJOR >= 4
-        WiFi.setHostname(hostname.c_str());
-#else
-        (void)hostname;
-#endif
+        #if defined(ESP_IDF_VERSION_MAJOR) && ESP_IDF_VERSION_MAJOR >= 4
+            WiFi.setHostname(hostname.c_str());
+        #else
+            (void)hostname;
+        #endif
         return ok;
     }
 

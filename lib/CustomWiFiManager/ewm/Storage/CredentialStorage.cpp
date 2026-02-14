@@ -82,7 +82,7 @@ namespace ewm
             else { hdrOut = hb; dataOut = db; }
         }
 
-        // Reparatur: schreibe geladenen Stand wieder in beide (wenn eine Kopie mal kaputt war)
+        // Reparatur: schreibt geladenen Stand wieder in beide (wenn eine Kopie mal kaputt war)
         saveBoth(hdrOut, dataOut);
         return true;
     }

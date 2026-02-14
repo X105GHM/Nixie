@@ -51,7 +51,6 @@ namespace ewm
         {
             if (ssid == creds_[i].ssid)
             {
-                // Passwort nur überschreiben, wenn tatsächlich eins geliefert wurde
                 if (password.length() > 0)
                 {
                     strncpy(creds_[i].password, password.c_str(), sizeof(creds_[i].password) - 1);
@@ -76,6 +75,7 @@ namespace ewm
         c.priority = priority;
         c.last_ok = 0;
 
+        normalizePrioritiesIfNeeded_(storage);
         return save(storage);
     }
 
@@ -107,6 +107,7 @@ namespace ewm
                     if (creds_[k].priority > removedPrio)
                         creds_[k].priority--;
                 }
+                normalizePrioritiesIfNeeded_(storage);
                 return save(storage);
             }
         }
@@ -124,6 +125,45 @@ namespace ewm
                     creds_[i].priority = p++;
             }
         }
+        save(storage);
+    }
+
+    void CredentialStore::normalizePrioritiesIfNeeded_(CredentialStorage &storage)
+    {
+        const size_t n = hdr_.count;
+        if (n == 0)
+            return;
+
+        // Prüfen ob Duplikate / Lücken / out-of-range existieren
+        bool need = false;
+        std::array<bool, 10> used{};
+        for (size_t i = 0; i < n && i < creds_.size(); ++i)
+        {
+            const uint8_t p = creds_[i].priority;
+            if (p >= n)
+            {
+                need = true;
+                break;
+            }
+            if (used[p])
+            {
+                need = true;
+                break;
+            }
+            used[p] = true;
+        }
+
+        if (!need)
+            return;
+
+        std::array<Credential, 10> tmp = creds_;
+        std::stable_sort(tmp.begin(), tmp.begin() + n, [](const Credential &a, const Credential &b)
+                         { return a.priority < b.priority; });
+
+        for (size_t i = 0; i < n; ++i)
+            tmp[i].priority = (uint8_t)i;
+
+        creds_ = tmp;
         save(storage);
     }
 }

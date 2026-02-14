@@ -4,6 +4,7 @@
 #include <functional>
 #include <vector>
 #include "ewm/Types.hpp"
+#include "ewm/Portal/PortalUiConfig.hpp"
 
 namespace ewm
 {
@@ -14,13 +15,8 @@ namespace ewm
         std::function<bool(const String&)> delCred;
         std::function<void(const std::vector<String>&)> reorder;
         std::function<void()> eraseAll;
-
-        // Startet STA-Verbindung (async)
         std::function<void(const String&, const String&, uint8_t)> connectRequest;
-
-        // Wird im Loop aufgerufen, wenn STA connected 
         std::function<void()> onStaConnected;
-
         std::function<bool()> isStaConnected;
         std::function<String()> staIp;
         std::function<int()> staRssi;
@@ -34,8 +30,9 @@ namespace ewm
         void setAP(const String& ssid, const String& pass);
         void setGraceMs(uint32_t ms) { apGraceMs_ = ms; }
 
-        // blockiert bis Portal fertig ist
         void runBlocking(PortalHooks hooks);
+
+        void setUiConfigJson(const String& json);
 
         bool running() const { return running_; }
 
@@ -52,10 +49,13 @@ namespace ewm
 
         String apSsid_{"ESP32-Setup"};
         String apPass_{""};
+        String uiCfgJson_{"{}"};
+
+        ewm::portal::PortalUiConfig uiCfg_;
 
         bool running_{false};
 
-        uint32_t apGraceMs_{60000};
+        uint32_t apGraceMs_{15000};
         uint32_t apGraceUntil_{0};
     };
 }

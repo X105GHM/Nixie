@@ -2,6 +2,7 @@
 #include "ewm/Log.hpp"
 #include "ewm/Utils/WiFiLock.hpp"
 #include "ewm/Utils/WiFiStatus.hpp"
+#include "ewm/Portal/PortalUiConfig.hpp"
 #include <WiFi.h>
 
 namespace ewm
@@ -19,10 +20,8 @@ namespace ewm
           portal_(80, wifiMutex_)
     {
         // Monitor wiring
-        monitor_.setCheckFn([this](uint32_t t)
-                            { return wifi_.hasInternet(probeHost_, probePort_, t); });
-        monitor_.setRoamFn([this]()
-                           { roamTryAll_(); });
+        monitor_.setCheckFn([this](uint32_t t) { return wifi_.hasInternet(probeHost_, probePort_, t); });
+        monitor_.setRoamFn([this]() { roamTryAll_(); });
     }
 
     void EasyWiFiManager::setHostname(const String &name) { hostname_ = name; }
@@ -141,7 +140,6 @@ namespace ewm
 
     void EasyWiFiManager::portalOnStaConnected_()
     {
-        // Wenn "Verbinden" einen Auto-Save auslösen soll: jetzt nach Erfolg speichern
         if (pendingSave_)
         {
             store_.addOrUpdate(storage_, pendingSsid_, pendingPass_, pendingPrio_);
@@ -180,6 +178,7 @@ namespace ewm
         { return WiFi.RSSI(); };
 
         portal_.setAP(apSsid_, apPass_);
+        portal_.setUiConfigJson(portalUiCfgJson_);
         portal_.runBlocking(hooks);
     }
 
@@ -228,6 +227,16 @@ namespace ewm
     void EasyWiFiManager::onNoConnectivity(std::function<void()> cb, uint32_t delayMs)
     {
         monitor_.setOnNoConnectivity(std::move(cb), delayMs);
+    }
+
+    void ewm::EasyWiFiManager::setPortalUiConfig(const portal::PortalUiConfig& cfg)
+    {
+        portalUiCfgJson_ = cfg.toJson();
+    }
+
+    void ewm::EasyWiFiManager::setPortalUiConfigJson(const String& json)
+    {
+        portalUiCfgJson_ = json.length() ? json : "{}";
     }
 
     void EasyWiFiManager::begin(uint32_t connectTimeoutMs, uint32_t betweenRetryMs)

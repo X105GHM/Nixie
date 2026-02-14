@@ -12,6 +12,7 @@
 #include "ewm/WiFi/WiFiConnector.hpp"
 #include "ewm/Portal/CaptivePortal.hpp"
 #include "ewm/Monitor/ConnectivityMonitor.hpp"
+#include "ewm/Portal/PortalUiConfig.hpp"
 
 namespace ewm
 {
@@ -45,6 +46,10 @@ namespace ewm
 
         void setRequireInternetOnConnect(bool enabled);
 
+        void setPortalUiConfig(const ewm::portal::PortalUiConfig& cfg);
+        void setPortalUiConfigJson(const String& json);
+
+
     private:
         EasyWiFiManager();
 
@@ -53,12 +58,9 @@ namespace ewm
         void ensureAPState_();
         void roamTryAll_();
 
-        // Portal hooks
         void portalConnectRequest_(const String& ssid, const String& pass, uint8_t prio);
         void portalOnStaConnected_();
 
-    private:
-        // pending connect (portal)
         String pendingSsid_;
         String pendingPass_;
         uint8_t pendingPrio_{100};
@@ -67,6 +69,7 @@ namespace ewm
         String hostname_{"esp32-setup"};
         String apSsid_{"ESP32-Setup"};
         String apPass_{""};
+        String portalUiCfgJson_{"{}"};
 
         bool backgroundAP_{false};
 
