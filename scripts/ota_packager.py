@@ -25,7 +25,7 @@ def sha256sum(filepath):
 
 
 def get_next_version():
-    base = 'Nixie_V.6.0.'
+    base = 'Nixie_V.6.6.'
     if os.path.exists(VERSION_FILE):
         with open(VERSION_FILE, 'r') as vf:
             last = vf.read().strip()
