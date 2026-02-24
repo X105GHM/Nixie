@@ -37,13 +37,32 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
 
     std::string body;
     char *buffer = static_cast<char *>(malloc(256));
+    if (!buffer)
+    {
+        Logger::log(LoggerType::OTA, F("Manifest buffer allocation failed"));
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return std::nullopt;
+    }
+
     int total = 0;
     int len;
+
     while ((len = esp_http_client_read(client, buffer, 256)) > 0)
     {
         body.append(buffer, len);
         total += len;
     }
+
+    if (len < 0)
+    {
+        Logger::log(LoggerType::OTA, F("Manifest read failed"));
+        free(buffer);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return std::nullopt;
+    }
+
     free(buffer);
 
     Logger::log(LoggerType::OTA, "Manifest (%d Bytes):\n%s", total, body.c_str());
@@ -277,6 +296,9 @@ esp_err_t OTAManager::performSPIFFSUpdate(const std::string &spiffsUrl) noexcept
     if (!part)
     {
         Logger::log(LoggerType::OTA, F("SPIFFS partition not found"));
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
     }
 
     Logger::log(LoggerType::OTA, "SPIFFS partition @ 0x%08x, size %u bytes", part->address, part->size);
@@ -289,17 +311,43 @@ esp_err_t OTAManager::performSPIFFSUpdate(const std::string &spiffsUrl) noexcept
     const size_t bufSize = 4096;
     std::unique_ptr<uint8_t[]> buffer(new uint8_t[bufSize]);
     size_t offset = 0;
-    int read_len;
-    while ((read_len = esp_http_client_read(client,reinterpret_cast<char *>(buffer.get()), bufSize)) > 0)
+    int read_len = 0;
+
+    size_t nextLog = 64 * 1024; // alle 64 KB
+
+    while ((read_len = esp_http_client_read(client, reinterpret_cast<char *>(buffer.get()), bufSize)) > 0)
     {
-
-        Logger::log(LoggerType::OTA, "Writing %d bytes at offset 0x%08x", read_len, offset);
-
         if (esp_partition_write(part, offset, buffer.get(), read_len) != ESP_OK)
         {
             Logger::log(LoggerType::OTA, F("SPIFFS write failed"));
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            return ESP_FAIL;
         }
+
         offset += read_len;
+
+        if (offset >= nextLog)
+        {
+            if (content_length > 0)
+            {
+                int percent = static_cast<int>((offset * 100) / content_length);
+                Logger::log(LoggerType::OTA, "SPIFFS progress: %u/%d bytes (%d%%)", static_cast<unsigned>(offset), content_length, percent);
+            }
+            else
+            {
+                Logger::log(LoggerType::OTA, "SPIFFS progress: %u bytes", static_cast<unsigned>(offset));
+            }
+            nextLog += 64 * 1024;
+        }
+    }
+
+    if (read_len < 0)
+    {
+        Logger::log(LoggerType::OTA, F("SPIFFS read failed"));
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
     }
 
     Logger::log(LoggerType::OTA, "SPIFFS download complete, total written: %u bytes", offset);

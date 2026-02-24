@@ -8,12 +8,14 @@
 #include "HSS/HSS.hpp"
 #include "Acoustics/Buzzer/Buzzer.hpp"
 #include "Acoustics/Relay/Relay.hpp"
+#include "WiFiConnector/WiFiConnector.hpp"
 
 static constexpr gpio_num_t BUTTON_PIN = GPIO_NUM_41;
 
 extern HSS hssController;
 extern Buzzer buzzer;
 extern Relay relay;
+extern WiFiConnector wificonnector;
 
 class ButtonPoll
 {

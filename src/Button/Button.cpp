@@ -160,10 +160,10 @@ void ButtonPoll::bindUserActions() noexcept
 
             for(int i = 0; i < 2; ++i)
             {
-            buzzer.setLevel(1);
-            vTaskDelay(pdMS_TO_TICKS(50));
-            buzzer.setLevel(0);
-            vTaskDelay(pdMS_TO_TICKS(50));
+                buzzer.setLevel(1);
+                vTaskDelay(pdMS_TO_TICKS(50));
+                buzzer.setLevel(0);
+                vTaskDelay(pdMS_TO_TICKS(50));
             }
         }
     });
@@ -171,14 +171,7 @@ void ButtonPoll::bindUserActions() noexcept
     // TRIPLE:
     onTriplePress([]
     {
-        Logger::log(logType, "ACTION: HSS On");
-        for(int i = 0; i < 3; ++i)
-        {
-            buzzer.setLevel(1);
-            vTaskDelay(pdMS_TO_TICKS(100));
-            buzzer.setLevel(0);
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
-        hssController.enable160();
+        wificonnector.eraseCredentials();
+        Logger::log(logType, "ACTION: Reset WiFi-Credentials");
     });
 }

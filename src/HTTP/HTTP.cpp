@@ -73,10 +73,28 @@ void HTTPHandler::begin() noexcept
     }
 
     server_.onNotFound([this]() noexcept {
-        if (!handleFileRead(server_.uri())) {
-            server_.send(404, "text/plain", "404: File Not Found");
-            Logger::log(LOGTYPE, "404 Not Found: %s", server_.uri().c_str());
+       
+        if (server_.uri().length() > 128) 
+        {
+            server_.send(414, "text/plain", "URI too long");
+            return;
         }
+
+        auto m = server_.method();
+        if (m != HTTP_GET && m != HTTP_HEAD) 
+        {
+            server_.send(405, "text/plain", "Method Not Allowed");
+            return;
+        }
+
+        if (!handleFileRead(server_.uri())) 
+        {
+            server_.send(404, "text/plain", "404: File Not Found");
+        }
+    });
+
+    server_.on("/", HTTP_POST, [this]() noexcept {
+        server_.send(405, "text/plain", "Method Not Allowed");
     });
 
     server_.on("/set/OFF", HTTP_GET, [this]() noexcept {
@@ -802,6 +820,7 @@ void HTTPHandler::begin() noexcept
 void HTTPHandler::handleClient() noexcept 
 {
     server_.handleClient();
+    vTaskDelay(1);
 }
 
 void HTTPHandler::handleReset() noexcept 

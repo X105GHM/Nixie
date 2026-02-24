@@ -122,8 +122,10 @@ void setup()
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 3, &displayTaskHandle, 1);
     Logger::log(LOGTYPE, F("DisplayDigits Task started"));
+    // displayDigitsTask belegt nach dem Start (Core 1, höhere Prio) die CPU so stark;
+    // dadurch wird setup()/loopTask verdrängt und die folgenden Zeilen werden verzögert oder nie ausgeführt.
+    xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 3, &displayTaskHandle, 1);
 }
 
 void loop() 
