@@ -95,7 +95,7 @@ void ClockControl::timeCycle() noexcept
                 inTime = true;
             }
 
-            if (Globals::tickerEnabled)
+            if (Globals::tickerEnabled && displayEnabled && Globals::loadDetected)
             {
                 relay.toggle();
             }

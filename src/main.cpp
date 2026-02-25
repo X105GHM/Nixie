@@ -69,6 +69,21 @@ void setup()
     Logger::begin(Serial);
     Logger::log(LOGTYPE, F("System start"));
 
+    psramInit();
+
+    if (psramFound())
+    {
+        const size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+        const size_t psramFree  = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+
+        Logger::log(LOGTYPE, "PSRAM OK: total=%u bytes, free=%u bytes", static_cast<unsigned>(psramTotal), static_cast<unsigned>(psramFree));
+    }
+    else
+    {
+        Logger::log(LOGTYPE, "PSRAM NOT FOUND / init failed");
+    }
+
+
     if (storage.init() != ESP_OK) 
     {
         Logger::log(LOGTYPE, "PersistentStorage init failed");
@@ -108,12 +123,6 @@ void setup()
 
     xTaskCreatePinnedToCore(brownoutStarter, "BrownoutStarter", 2048, nullptr, 4, &brownoutTaskHandle, 0);
     Logger::log(LOGTYPE, F("BrownoutStarter Task started"));
-
-    vTaskDelay(pdMS_TO_TICKS(100));
-
-    xTaskCreatePinnedToCore(idle_task, "IdleLoad0",2048, nullptr,tskIDLE_PRIORITY, nullptr,0);
-    xTaskCreatePinnedToCore(idle_task, "IdleLoad1",2048, nullptr, tskIDLE_PRIORITY, nullptr,1);
-    Logger::log(LOGTYPE, F("CPU-Load Task started"));
 
     vTaskDelay(pdMS_TO_TICKS(100));
 

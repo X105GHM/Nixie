@@ -171,7 +171,7 @@ void ButtonPoll::bindUserActions() noexcept
     // TRIPLE:
     onTriplePress([]
     {
-        wificonnector.eraseCredentials();
+        wifiConnector.eraseCredentials();
         Logger::log(logType, "ACTION: Reset WiFi-Credentials");
     });
 }

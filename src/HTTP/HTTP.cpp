@@ -51,13 +51,18 @@ String HTTPHandler::getContentType(const String &filename) noexcept
     return "text/plain";
 }
 
-bool HTTPHandler::handleFileRead(const String &path) noexcept 
+bool HTTPHandler::handleFileRead(const String &path) noexcept
 {
+    if (!server_.client() || !server_.client().connected()) return false;
+
     String filePath = path;
     if (filePath.endsWith("/")) filePath += "index.html";
     if (!SPIFFS.exists(filePath)) return false;
 
     File file = SPIFFS.open(filePath, "r");
+    if (!file) return false;
+
+    server_.sendHeader("Connection", "close");
     String ct = getContentType(filePath);
     server_.streamFile(file, ct);
     file.close();
@@ -76,6 +81,7 @@ void HTTPHandler::begin() noexcept
        
         if (server_.uri().length() > 128) 
         {
+            server_.sendHeader("Connection", "close");
             server_.send(414, "text/plain", "URI too long");
             return;
         }
@@ -83,12 +89,14 @@ void HTTPHandler::begin() noexcept
         auto m = server_.method();
         if (m != HTTP_GET && m != HTTP_HEAD) 
         {
+            server_.sendHeader("Connection", "close");
             server_.send(405, "text/plain", "Method Not Allowed");
             return;
         }
 
         if (!handleFileRead(server_.uri())) 
         {
+            server_.sendHeader("Connection", "close");
             server_.send(404, "text/plain", "404: File Not Found");
         }
     });
