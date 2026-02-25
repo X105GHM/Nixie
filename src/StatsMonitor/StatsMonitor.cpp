@@ -29,14 +29,7 @@ void StatsMonitor::update()
 {
     coreLoad0_ = cpu_load_get_core(0);
 
-    if(displayEnabled && !ACP_enabled && !Globals::PWM_disabled)
-    {
-        coreLoad1_ = 99.0f;
-    }
-    else
-    {
-        coreLoad1_ = cpu_load_get_core(1);
-    }
+    coreLoad1_ = cpu_load_get_core(1);
 
     totalLoad_ = 0.5f * (coreLoad0_ + coreLoad1_);
 }
