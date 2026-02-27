@@ -282,7 +282,8 @@ void displayDate() noexcept
 
 void displayWeather() noexcept
 {
-    WeatherClient weather( std::string(OPENWEATHER_API_KEY));
+    static const std::string apiKey{OPENWEATHER_API_KEY};
+    WeatherClient weather(apiKey);
     const std::string &zip = Globals::zipCode;
 
     Logger::log(LoggerType::GENERAL, "displayWeather(): going to fetch temp for ZIP: %s", zip.c_str());

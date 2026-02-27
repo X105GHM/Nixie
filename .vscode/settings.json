@@ -58,5 +58,6 @@
         "mutex": "cpp",
         "thread": "cpp"
     },
-    "liveServer.settings.port": 5502
+    "liveServer.settings.port": 5502,
+    "idf.currentSetup": "C:\\Users\\agebh\\esp\\v5.5.1\\esp-idf"
 }
