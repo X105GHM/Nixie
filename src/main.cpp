@@ -1,5 +1,3 @@
-#define configCHECK_FOR_STACK_OVERFLOW 2
-
 #include <WiFi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -22,8 +20,6 @@
 #include "StatsMonitor/StatsMonitor.hpp"
 
 static constexpr LoggerType LOGTYPE = LoggerType::GENERAL;
-
-extern "C" void idle_task(void* pvParameters);
 
 static void initTime() 
 {
@@ -135,9 +131,8 @@ void setup()
     // displayDigitsTask belegt nach dem Start (Core 1, höhere Prio) die CPU so stark;
     // dadurch wird setup()/loopTask verdrängt und die folgenden Zeilen werden verzögert oder nie ausgeführt.
     xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 3, &displayTaskHandle, 1);
+
+    vTaskDelete(NULL);
 }
 
-void loop() 
-{
-    vTaskDelay(pdMS_TO_TICKS(1000));
-}
+void loop() {}

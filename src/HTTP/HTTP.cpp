@@ -127,6 +127,7 @@ void HTTPHandler::begin() noexcept
         Logger::log(LOGTYPE, F("System apply loadGlobals requested via HTTP"));       
         Memory::loadGlobals();
         Globals::applyLogConfig();
+        server_.send(200, "text/plain", "OK");
     });
 
     server_.on("/set/loadDetectedOverwrite", HTTP_GET, [this]() noexcept {     
@@ -676,7 +677,7 @@ void HTTPHandler::begin() noexcept
         }
         String zipArg = server_.arg("zip");
         Globals::zipCode = std::string(zipArg.c_str());
-        Logger::log(LOGTYPE, F("HTTP /set/zip missing parameter 'zip'"));
+        Logger::log(LOGTYPE, "ZIP-Code updated to %s", zipArg.c_str());
         server_.send(200, "text/plain", "ZIP-Code updated to " + zipArg);
     });
 

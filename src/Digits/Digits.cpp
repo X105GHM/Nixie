@@ -36,6 +36,8 @@ void displayDigitsTask(void *pvParameters) noexcept
 
     Logger::log(LoggerType::DIGIT, "Display task started on core ", String(xPortGetCoreID()));
 
+    vTaskDelay(pdMS_TO_TICKS(10));
+
     for (;;)
     {
         if (!ACP_enabled) 
