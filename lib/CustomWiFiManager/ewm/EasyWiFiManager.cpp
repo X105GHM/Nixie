@@ -14,8 +14,8 @@ namespace ewm
     }
 
     EasyWiFiManager::EasyWiFiManager()
-        : storage_("EWM1", "EWM1B"),
-          wifiMutex_(xSemaphoreCreateRecursiveMutex()),
+        : wifiMutex_(xSemaphoreCreateRecursiveMutex()), 
+          storage_("EWM1", "EWM1B"),
           wifi_(wifiMutex_),
           portal_(80, wifiMutex_)
     {

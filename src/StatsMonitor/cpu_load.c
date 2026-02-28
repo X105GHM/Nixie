@@ -76,8 +76,8 @@ static void cpu_load_update_internal(void)
     float load0 = 100.0f * (1.0f - idle_frac0);
     float load1 = 100.0f * (1.0f - idle_frac1);
 
-    if (load0 < 0) load0 = 0; if (load0 > 100) load0 = 100;
-    if (load1 < 0) load1 = 0; if (load1 > 100) load1 = 100;
+    if (load0 < 0) {load0 = 0;} if (load0 > 100) {load0 = 100;} 
+    if (load1 < 0) {load1 = 0;} if (load1 > 100) {load1 = 100;} 
 
     last_load[0] = load0;
     last_load[1] = load1;

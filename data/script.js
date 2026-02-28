@@ -143,6 +143,10 @@ document.addEventListener("DOMContentLoaded", () => {
         case 'brownout':
           url = `/get/brownout`;
           break;
+
+        case 'taskStats':
+          url = `/get/taskStats`;
+          break;
       }
     }
 
@@ -193,6 +197,486 @@ document.addEventListener("DOMContentLoaded", () => {
     clockEl.textContent = new Date().toLocaleTimeString("de-DE");
   }, 1000);
 
+  // === Stats Monitor ======================================================
+  const statsMonitorEls = {
+    barCard: document.getElementById("barCard"),
+    mainBody: document.getElementById("statsMonitorMainBody"),
+    coreCard: document.getElementById("statsMonitorCoreCard"),
+    barCanvas: document.getElementById("barCanvas"),
+    pie0: document.getElementById("pie0"),
+    pie1: document.getElementById("pie1"),
+    legend: document.getElementById("legend"),
+    pieLegend0: document.getElementById("pieLegend0"),
+    pieLegend1: document.getElementById("pieLegend1"),
+    toggle: document.getElementById("toggleMonitor"),
+    unitSelect: document.getElementById("unitSelect"),
+    windowText: document.getElementById("windowText"),
+    lastUpdateText: document.getElementById("lastUpdateText"),
+    core0Total: document.getElementById("core0Total"),
+    core1Total: document.getElementById("core1Total")
+  };
+
+  const statsMonitor = {
+    enabled: true,
+    timer: null,
+    data: null,
+    displayUnit: "us"
+  };
+
+  function statsMonitorAvailable() {
+    return !!(
+      statsMonitorEls.barCanvas &&
+      statsMonitorEls.pie0 &&
+      statsMonitorEls.pie1
+    );
+  }
+
+  function statsIsDark() {
+    return document.body.classList.contains("dark");
+  }
+
+  function statsPalette() {
+    if (statsIsDark()) {
+      return {
+        text: "#e0e0e0",
+        muted: "rgba(224,224,224,0.75)",
+        grid: "rgba(255,255,255,0.10)",
+        panel: "rgba(255,255,255,0.05)",
+        idle: "rgba(255,255,255,0.16)",
+        donutHole: "rgba(30,30,30,0.92)",
+        shadow: "rgba(0,0,0,0.30)"
+      };
+    }
+
+    return {
+      text: "#333",
+      muted: "rgba(51,51,51,0.72)",
+      grid: "rgba(0,0,0,0.10)",
+      panel: "rgba(0,0,0,0.04)",
+      idle: "rgba(0,0,0,0.12)",
+      donutHole: "rgba(255,255,255,0.94)",
+      shadow: "rgba(0,0,0,0.10)"
+    };
+  }
+
+  function hashString(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) {
+      h = ((h << 5) - h) + str.charCodeAt(i);
+      h |= 0;
+    }
+    return Math.abs(h);
+  }
+
+  function statsTaskColor(name, alpha = 1) {
+    const hue = hashString(name || "?") % 360;
+    return `hsla(${hue}, 72%, 56%, ${alpha})`;
+  }
+
+  function fitStatsCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const cssW = Math.max(1, Math.floor(rect.width));
+    const cssH = Math.max(1, Math.floor(rect.height));
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w: cssW, h: cssH };
+  }
+
+  function statsSum(arr) {
+    return arr.reduce((a, b) => a + b, 0);
+  }
+
+  function statsUnitSymbol(u) {
+    if (u === "ms") return "ms";
+    if (u === "ns") return "ns";
+    return "µs";
+  }
+
+  function statsConvertFromUs(us, u) {
+    if (u === "ms") return us / 1000;
+    if (u === "ns") return us * 1000;
+    return us;
+  }
+
+  function statsFormatNumber(x) {
+    const ax = Math.abs(x);
+    if (ax >= 1000) return Math.round(x).toLocaleString("de-DE");
+    if (ax >= 100) return (Math.round(x * 10) / 10).toString();
+    return (Math.round(x * 100) / 100).toString();
+  }
+
+  function statsCompact(x) {
+    const ax = Math.abs(x);
+    const sign = x < 0 ? "-" : "";
+    if (ax >= 1e9) return sign + (Math.round((ax / 1e9) * 100) / 100) + "G";
+    if (ax >= 1e6) return sign + (Math.round((ax / 1e6) * 100) / 100) + "M";
+    if (ax >= 1e3) return sign + (Math.round((ax / 1e3) * 100) / 100) + "k";
+    if (ax >= 100) return sign + Math.round(ax);
+    return sign + (Math.round(ax * 10) / 10);
+  }
+
+  function statsFormatPct(x) {
+    const s = (Math.round((Number(x) || 0) * 10) / 10).toFixed(1);
+    return s.endsWith(".0") ? s.slice(0, -2) : s;
+  }
+
+  function statsFormatValue(val) {
+    return Math.abs(val) >= 1000 ? statsCompact(val) : statsFormatNumber(val);
+  }
+
+  function roundStatsRect(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, h / 2, w / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function setStatsPieLegend(el, items) {
+    if (!el) return;
+    el.innerHTML = "";
+    items.forEach(it => {
+      const row = document.createElement("div");
+      row.className = "pie-leg-item";
+      row.innerHTML = `
+        <div class="pie-leg-left">
+          <span class="swatch" style="background:${it.color}"></span>
+          <span class="pie-leg-name">${it.name}</span>
+        </div>
+        <div class="pie-leg-pct">${it.pct}%</div>
+      `;
+      el.appendChild(row);
+    });
+  }
+
+  function buildStatsLegend(tasks) {
+    if (!statsMonitorEls.legend) return;
+    statsMonitorEls.legend.innerHTML = "";
+    tasks.forEach(t => {
+      const item = document.createElement("div");
+      item.className = "legend-item";
+      item.innerHTML = `
+        <span class="swatch" style="background:${statsTaskColor(t.name)}"></span>
+        <span>${t.name}</span>
+        <span class="mono" style="opacity:.75;">(Core ${t.core})</span>
+      `;
+      statsMonitorEls.legend.appendChild(item);
+    });
+  }
+
+  function drawStatsBars() {
+    if (!statsMonitor.data || !statsMonitorEls.barCanvas) return;
+
+    const palette = statsPalette();
+    const tasks = Array.isArray(statsMonitor.data.tasks) ? statsMonitor.data.tasks : [];
+
+    const minHeight = 320;
+    const perTaskHeight = 34;
+    const dynamicHeight = Math.max(minHeight, 70 + tasks.length * perTaskHeight);
+    statsMonitorEls.barCanvas.style.height = `${dynamicHeight}px`;
+
+    const { ctx, w, h } = fitStatsCanvas(statsMonitorEls.barCanvas);
+
+    ctx.clearRect(0, 0, w, h);
+
+    if (!tasks.length) {
+      ctx.fillStyle = palette.muted;
+      ctx.font = "14px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Keine Task-Daten verfügbar", w / 2, h / 2);
+      return;
+    }
+
+    const padL = (w < 420) ? 120 : 160;
+    const padR = 18;
+    const padT = 22;
+    const padB = 18;
+
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+
+    const valuesUs = tasks.map(t => Number(t.runtime_delta_us || 0));
+    const maxUs = Math.max(1, ...valuesUs);
+    const maxDisp = statsConvertFromUs(maxUs, statsMonitor.displayUnit);
+
+    const baseFont = (w < 420)
+      ? "11px ui-monospace, Menlo, Consolas, monospace"
+      : "12px ui-monospace, Menlo, Consolas, monospace";
+
+    ctx.font = baseFont;
+
+    let ticks = 5;
+    while (ticks > 2) {
+      const spacing = plotW / ticks;
+      const testLabel = statsCompact(maxDisp);
+      const labelW = ctx.measureText(testLabel).width;
+      if (spacing >= labelW + 14) break;
+      ticks--;
+    }
+
+    ctx.strokeStyle = palette.grid;
+    ctx.lineWidth = 1;
+
+    for (let i = 0; i <= ticks; i++) {
+      const x = padL + (plotW * i / ticks);
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + plotH);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = palette.muted;
+    ctx.font = baseFont;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`Unit: ${statsUnitSymbol(statsMonitor.displayUnit)}`, padL + 12, padT - 6);
+
+    ctx.textAlign = "center";
+    for (let i = 0; i <= ticks; i++) {
+      const x = padL + (plotW * i / ticks);
+      const valDisp = (maxDisp * i / ticks);
+      ctx.fillText(statsCompact(valDisp), x, padT - 6);
+    }
+
+    const rowH = plotH / tasks.length;
+    const barH = rowH * 0.56;
+
+    tasks.forEach((t, idx) => {
+      const yCenter = padT + rowH * idx + rowH / 2;
+      const y = yCenter - barH / 2;
+
+      const valUs = Number(t.runtime_delta_us || 0);
+      const barW = (valUs / maxUs) * plotW;
+
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = palette.text;
+      ctx.font = (w < 420) ? "12px Arial" : "13px Arial";
+      ctx.fillText(t.name || "?", 12, yCenter);
+
+      ctx.fillStyle = palette.muted;
+      ctx.font = "11px ui-monospace, Menlo, Consolas, monospace";
+      ctx.fillText(`Core ${t.core}`, 12, yCenter + 16);
+
+      ctx.fillStyle = palette.panel;
+      roundStatsRect(ctx, padL, y, plotW, barH, 10);
+      ctx.fill();
+
+      ctx.fillStyle = statsTaskColor(t.name || "?");
+      roundStatsRect(ctx, padL, y, Math.max(3, barW), barH, 10);
+      ctx.fill();
+
+      const valDisp = statsConvertFromUs(valUs, statsMonitor.displayUnit);
+      const txt = `${statsFormatValue(valDisp)} ${statsUnitSymbol(statsMonitor.displayUnit)} • ${statsFormatPct(t.pct_total)}%`;
+
+      ctx.fillStyle = palette.text;
+      ctx.font = "11px ui-monospace, Menlo, Consolas, monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(txt, padL + Math.min(plotW - 140, barW + 8), yCenter);
+    });
+  }
+
+  function drawStatsPie(canvas, coreIndex) {
+    if (!statsMonitor.data || !canvas) return;
+
+    const palette = statsPalette();
+    const tasks = (statsMonitor.data.tasks || []).filter(t => Number(t.core) === coreIndex);
+    const { ctx, w, h } = fitStatsCanvas(canvas);
+
+    ctx.clearRect(0, 0, w, h);
+
+    const cx = w / 2;
+    const cy = h / 2;
+    const r = Math.min(w, h) * 0.36;
+
+    const busyPct = tasks.reduce((sum, t) => sum + (Number(t.pct_core) || 0), 0);
+    const loadPct = Math.max(0, Math.min(100, busyPct));
+
+    const windowUs = Number(statsMonitor.data.window_ms || 0) * 1000;
+    const usedUs = Math.round(windowUs * (loadPct / 100));
+    const idleUs = Math.max(0, windowUs - usedUs);
+
+    const slices = tasks.map(t => ({
+      name: t.name || "?",
+      pct: Number(t.pct_core || 0),
+      color: statsTaskColor(t.name || "?")
+    }));
+
+    if (100 - loadPct > 0.05) 
+    {
+      slices.push({
+      name: "Idle",
+      pct: 100 - loadPct,
+      color: palette.idle
+      });
+    }
+
+    const totalPct = statsSum(slices.map(s => s.pct)) || 1;
+    let a0 = -Math.PI / 2;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 8, 0, Math.PI * 2);
+    ctx.fillStyle = palette.shadow;
+    ctx.fill();
+
+    slices.forEach(s => {
+      const a1 = a0 + (s.pct / totalPct) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, a0, a1);
+      ctx.closePath();
+      ctx.fillStyle = s.color;
+      ctx.fill();
+      a0 = a1;
+    });
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.60, 0, Math.PI * 2);
+    ctx.fillStyle = palette.donutHole;
+    ctx.fill();
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillStyle = palette.muted;
+    ctx.font = "12px ui-monospace, Menlo, Consolas, monospace";
+    ctx.fillText(`Core ${coreIndex}`, cx, cy - 18);
+
+    ctx.fillStyle = palette.text;
+    ctx.font = "700 22px Arial";
+    ctx.fillText(`${Math.round(loadPct)}%`, cx, cy + 6);
+
+    const legendItems = slices.map(s => ({
+      name: s.name,
+      color: s.color,
+      pct: statsFormatPct(s.pct)
+    }));
+
+    const usedDisp = statsConvertFromUs(usedUs, statsMonitor.displayUnit);
+    const idleDisp = statsConvertFromUs(idleUs, statsMonitor.displayUnit);
+    const uSym = statsUnitSymbol(statsMonitor.displayUnit);
+
+    if (coreIndex === 0) {
+      setStatsPieLegend(statsMonitorEls.pieLegend0, legendItems);
+      if (statsMonitorEls.core0Total) {
+        statsMonitorEls.core0Total.textContent =
+          `Used: ${statsFormatNumber(usedDisp)} ${uSym} • Idle: ${statsFormatNumber(idleDisp)} ${uSym}`;
+      }
+    } else {
+      setStatsPieLegend(statsMonitorEls.pieLegend1, legendItems);
+      if (statsMonitorEls.core1Total) {
+        statsMonitorEls.core1Total.textContent =
+          `Used: ${statsFormatNumber(usedDisp)} ${uSym} • Idle: ${statsFormatNumber(idleDisp)} ${uSym}`;
+      }
+    }
+  }
+
+  function renderStatsMonitor() {
+    if (!statsMonitorAvailable() || !statsMonitor.data) return;
+
+    buildStatsLegend(statsMonitor.data.tasks || []);
+    drawStatsBars();
+    drawStatsPie(statsMonitorEls.pie0, 0);
+    drawStatsPie(statsMonitorEls.pie1, 1);
+  }
+
+  async function fetchStatsMonitor() {
+    if (!statsMonitorAvailable() || !statsMonitor.enabled) return;
+
+    try {
+      const res = await fetch("/get/taskStats", { cache: "no-store" });
+      if (!res.ok) throw new Error(res.status);
+
+      const data = await res.json();
+      statsMonitor.data = data;
+
+      if (statsMonitorEls.windowText) {
+        statsMonitorEls.windowText.textContent = `${data.window_ms || 0} ms`;
+      }
+
+      if (statsMonitorEls.lastUpdateText) {
+        statsMonitorEls.lastUpdateText.textContent = data.timestamp || new Date().toLocaleTimeString("de-DE");
+      }
+
+      renderStatsMonitor();
+    } catch (e) {
+      console.warn("Stats monitor error:", e);
+    }
+  }
+
+  function startStatsMonitor() {
+    if (!statsMonitorAvailable()) return;
+
+    stopStatsMonitor(false);
+    statsMonitor.enabled = true;
+
+    setStatsMonitorVisibility(true);
+    statsMonitorEls.barCard?.classList.remove("disabled");
+
+    fetchStatsMonitor();
+    statsMonitor.timer = setInterval(fetchStatsMonitor, 2000);
+  }
+
+  function stopStatsMonitor(markDisabled = true) {
+    if (statsMonitor.timer) {
+      clearInterval(statsMonitor.timer);
+      statsMonitor.timer = null;
+    }
+
+    statsMonitor.enabled = false;
+
+    setStatsMonitorVisibility(false);
+
+    if (markDisabled) {
+      statsMonitorEls.barCard?.classList.add("disabled");
+    }
+  }
+
+  if (statsMonitorAvailable()) {
+    setStatsMonitorVisibility(statsMonitorEls.toggle?.checked ?? true);
+
+    statsMonitorEls.unitSelect?.addEventListener("change", () => {
+      statsMonitor.displayUnit = statsMonitorEls.unitSelect.value;
+      renderStatsMonitor();
+    });
+
+    statsMonitorEls.toggle?.addEventListener("change", () => {
+      if (statsMonitorEls.toggle.checked) {
+        startStatsMonitor();
+      } else {
+        stopStatsMonitor();
+      }
+    });
+
+    window.addEventListener("resize", renderStatsMonitor);
+  }
+
+  function setStatsMonitorVisibility(enabled) {
+    if (!statsMonitorEls.mainBody || !statsMonitorEls.coreCard) return;
+
+    if (enabled) {
+      statsMonitorEls.mainBody.classList.remove("monitor-hidden");
+      statsMonitorEls.coreCard.classList.remove("monitor-hidden");
+
+      requestAnimationFrame(() => {
+        statsMonitorEls.mainBody.classList.remove("monitor-collapsing");
+        statsMonitorEls.coreCard.classList.remove("monitor-collapsing");
+      });
+    } else {
+      statsMonitorEls.mainBody.classList.add("monitor-hidden");
+      statsMonitorEls.coreCard.classList.add("monitor-hidden");
+    }
+  }
+
   // === Dark/Light Mode ==================================================
   const themeToggle = document.getElementById("themeToggle");
   if (localStorage.getItem("darkMode") === "true") document.body.classList.add("dark");
@@ -200,6 +684,7 @@ document.addEventListener("DOMContentLoaded", () => {
   themeToggle.addEventListener("change", () => {
     document.body.classList.toggle("dark", themeToggle.checked);
     localStorage.setItem("darkMode", themeToggle.checked);
+    renderRuntimeMonitor();
   });
 
   // === Nixie-Single-Digit-Flow unter ACP-Panel ======================
@@ -454,7 +939,7 @@ document.addEventListener("DOMContentLoaded", () => {
   makeToggleHandler(silentToggle, "silentMode");
   makeToggleHandler(weatherToggle, "weatherUpdate");
   makeToggleHandler(PWMToggle, "NixiePWM");
-  makeToggleHandler(cricketToggle, "cricketSound");
+  makeToggleHandler(cricketToggle, "randomCricket");
 
   // Reset Button
   ResetButton.addEventListener("click", async () => {
@@ -518,7 +1003,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   ResetStartValuesButton.addEventListener("click", async () => {
     try {
-      await fetch("/set//set/resetValue");
+      await fetch("/set/resetValue");
     } catch (e) {
       console.error(e);
       alert("Fehler beim Zurücksetzen der Startwerte.");
@@ -1033,4 +1518,5 @@ document.addEventListener("DOMContentLoaded", () => {
   initCharts();
   pollInfo();
   loadWifiList();
+  startRuntimeMonitor();
 });

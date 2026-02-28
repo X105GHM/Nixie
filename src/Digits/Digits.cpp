@@ -40,6 +40,8 @@ void displayDigitsTask(void *pvParameters) noexcept
 
     for (;;)
     {
+        esp_task_wdt_reset();
+
         if (!ACP_enabled) 
         {
             uint32_t b      = min(brightness, (uint32_t)100);
@@ -47,7 +49,7 @@ void displayDigitsTask(void *pvParameters) noexcept
             delayMicrosYield(onTime);
         }
 
-        if (!displayEnabled)
+        if (!displayEnabled || !Globals::loadDetected)
         {
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;
@@ -64,7 +66,7 @@ void displayDigitsTask(void *pvParameters) noexcept
                 SPI.transfer(var32 >> 16);
                 SPI.transfer(var32 >> 8);
                 SPI.transfer(var32);
-                var32 |= symbolArray[singleDigit % 10] << singleDigit - (singleDigit % 10);
+                var32 |= symbolArray[singleDigit % 10] << (singleDigit - (singleDigit % 10));
                 SPI.transfer(var32 >> 24);
                 SPI.transfer(var32 >> 16);
                 SPI.transfer(var32 >> 8);
@@ -72,7 +74,7 @@ void displayDigitsTask(void *pvParameters) noexcept
             }
             else
             {
-                var32 |= symbolArray[singleDigit % 10] << singleDigit - (singleDigit % 10) - 30;
+                var32 |= symbolArray[singleDigit % 10] << (singleDigit - (singleDigit % 10) - 30);
                 SPI.transfer(var32 >> 24);
                 SPI.transfer(var32 >> 16);
                 SPI.transfer(var32 >> 8);

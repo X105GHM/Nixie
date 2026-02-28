@@ -6,33 +6,6 @@ static const std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$
 
 static const char* tzNames[] = {"CET","EET","WET","UTC","EST","CST","MST","PST","HST","JST","IST","AEST","AWST"};
 
-static String jsonEscape_(const String& s) noexcept 
-{
-  String r; r.reserve(s.length()+8);
-  for (size_t i=0;i<s.length();++i)
-  {
-    char c=s[i];
-    switch(c)
-    {
-      case '\"': r+="\\\""; break;
-      case '\\': r+="\\\\"; break;
-      case '\b': r+="\\b";  break;
-      case '\f': r+="\\f";  break;
-      case '\n': r+="\\n";  break;
-      case '\r': r+="\\r";  break;
-      case '\t': r+="\\t";  break;
-      default:
-        if ((uint8_t)c<0x20)
-        {
-            char b[7]; sprintf(b,"\\u%04x",(uint8_t)c); 
-            r+=b; 
-        }
-        else r+=c;
-    }
-  }
-  return r;
-}
-
 constexpr int tzCount = sizeof(tzNames) / sizeof(tzNames[0]);
 
 HTTPHandler::HTTPHandler(int port) noexcept
@@ -71,9 +44,12 @@ bool HTTPHandler::handleFileRead(const String &path) noexcept
 
 void HTTPHandler::begin() noexcept 
 {
-    if (!SPIFFS.begin(true)) {
+    if (!SPIFFS.begin(true)) 
+    {
         Logger::log(LOGTYPE, F("SPIFFS Mount failed"));
-    } else {
+    } 
+    else 
+    {
         Logger::log(LOGTYPE, F("SPIFFS ready"));
     }
 
@@ -100,7 +76,7 @@ void HTTPHandler::begin() noexcept
             server_.send(404, "text/plain", "404: File Not Found");
         }
     });
-
+    
     server_.on("/", HTTP_POST, [this]() noexcept {
         server_.send(405, "text/plain", "Method Not Allowed");
     });
@@ -817,6 +793,11 @@ void HTTPHandler::begin() noexcept
         server_.send(204, "text/plain", "");
     });
 
+    server_.on("/get/taskStats", HTTP_GET, [this]() noexcept {
+        server_.sendHeader("Cache-Control", "no-store");
+        server_.send(200, "application/json", StatsMonitor::instance().getTaskStatsJson(12, true));
+    });
+
     server_.on("/get/info", HTTP_GET, [this]() noexcept {
         Logger::log(LOGTYPE, F("Info requested via HTTP"));
         handleInfo();
@@ -870,7 +851,7 @@ void HTTPHandler::handleInfo() noexcept
     auto timerPreset     = timer.getConfiguredSeconds();
     auto alarmSet        = alarmClock.isAlarmConfigured();
     AlarmTime at         = alarmClock.getAlarmTime();
-    char alarmTimeBuf[6];
+    char alarmTimeBuf[8];
 
     snprintf(alarmTimeBuf, sizeof(alarmTimeBuf), "%02u:%02u", at.hour, at.minute);
     String binStr;

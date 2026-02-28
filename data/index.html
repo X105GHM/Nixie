@@ -70,7 +70,8 @@
                 <div class="card"><strong>Flash-Speed:</strong> <span id="flashSpeed">–</span></div>
                 <div class="card"><strong>Nixie PWM:</strong> <span id="NixiePWM">–</span></div>
                 <div class="card"><strong>PWM Frequenz:</strong> <span id="PWM_Frequenzy">–</span></div>
-                <div class="card"><strong>Manuelle Helligkeit:</strong> <span id="manualBrightnessEnabled">–</span></div>
+                <div class="card"><strong>Manuelle Helligkeit:</strong> <span id="manualBrightnessEnabled">–</span>
+                </div>
                 <div class="card"><strong>Helligkeit:</strong> <span id="brightness">–</span></div>
                 <div class="card"><strong>Zeitabhänige Anzeige:</strong> <span id="timeLimitEnabled">–</span></div>
                 <div class="card"><strong>Anzeige Startzeit:</strong> <span id="timeLimitFrom">–</span></div>
@@ -80,6 +81,75 @@
                 <div class="card"><strong>Timer-Zeit:</strong> <span id="TimerConfiguredSeconds">–</span></div>
                 <div class="card"><strong>Wecker:</strong> <span id="AlarmActive">–</span></div>
                 <div class="card"><strong>Wecker-Zeit:</strong> <span id="AlarmTime">–</span></div>
+            </div>
+
+            <div id="runtime-monitor" class="runtime-monitor">
+                <section class="card" id="barCard">
+                    <div class="runtime-card-header">
+                        <div class="runtime-title-row">
+                            <h3 class="runtime-card-title">Task Runtime Monitor</h3>
+
+                            <div class="runtime-header-actions">
+                                <div class="runtime-unit">
+                                    <span class="runtime-unit-label">Einheit</span>
+                                    <select id="unitSelect" class="runtime-select">
+                                        <option value="ms">ms</option>
+                                        <option value="us" selected>µs</option>
+                                        <option value="ns">ns</option>
+                                    </select>
+                                </div>
+
+                                <label class="switch" title="Monitor an/aus">
+                                    <input id="toggleMonitor" type="checkbox"/>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="runtime-meta">
+                            <span>Fenster:</span>
+                            <span class="mono" id="windowText">—</span>
+                            <span class="runtime-sep">•</span>
+                            <span>Letztes Update:</span>
+                            <span class="mono" id="lastUpdateText">—</span>
+                        </div>
+                    </div>
+
+                    <div class="runtime-card-body" id="statsMonitorMainBody">
+                        <canvas id="barCanvas" class="runtime-canvas"></canvas>
+                        <div class="runtime-legend" id="legend"></div>
+                    </div>
+                </section>
+
+                <section class="card runtime-core-card" id="statsMonitorCoreCard">
+                    <div class="runtime-card-header">
+                        <h3 class="runtime-card-title">Core Load</h3>
+                        <div class="runtime-meta">
+                            <span>Anzeige:</span>
+                            <span class="mono">% Anteil pro Task am Core-Fenster</span>
+                        </div>
+                    </div>
+
+                    <div class="runtime-card-body">
+                        <div class="runtime-pies">
+                            <div class="runtime-pie-wrap">
+                                <div class="runtime-pie-row">
+                                    <canvas id="pie0" class="runtime-pie"></canvas>
+                                    <div class="runtime-pie-legend" id="pieLegend0"></div>
+                                </div>
+                                <div class="runtime-pie-foot mono" id="core0Total">—</div>
+                            </div>
+
+                            <div class="runtime-pie-wrap">
+                                <div class="runtime-pie-row">
+                                    <canvas id="pie1" class="runtime-pie"></canvas>
+                                    <div class="runtime-pie-legend" id="pieLegend1"></div>
+                                </div>
+                                <div class="runtime-pie-foot mono" id="core1Total">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
         </section>
 
@@ -115,12 +185,12 @@
         <section id="log" class="tab-content">
             <h2>Log</h2>
             <div style="margin-bottom: 10px;">
-            <label class="switch">
-                <input type="checkbox" id="logTrimToggle" checked />
-                <span class="slider"></span>
-              </label>
-              <span style="margin-left: 8px;">Auto-Trimmen</span>
-              </div>
+                <label class="switch">
+                    <input type="checkbox" id="logTrimToggle" checked />
+                    <span class="slider"></span>
+                </label>
+                <span style="margin-left: 8px;">Auto-Trimmen</span>
+            </div>
             <div id="networkLogContainer">
                 <pre id="networkLog"></pre>
             </div>
@@ -410,20 +480,21 @@
             <div class="log-config-group wifi-group">
                 <h4>WiFi Manager</h4>
                 <div class="wifi-header">
-                  <div>
-                    <button id="wifiRefreshBtn">Aktualisieren</button>
-                  </div>
-                  <div class="wifi-add">
-                    <input id="wifiSsidInput" type="text" placeholder="SSID" />
-                    <input id="wifiPwdInput" type="password" placeholder="Passwort (optional)" />
-                    <button id="wifiAddBtn" title="Netz hinzufügen">➕</button>
-                  </div>
+                    <div>
+                        <button id="wifiRefreshBtn">Aktualisieren</button>
+                    </div>
+                    <div class="wifi-add">
+                        <input id="wifiSsidInput" type="text" placeholder="SSID" />
+                        <input id="wifiPwdInput" type="password" placeholder="Passwort (optional)" />
+                        <button id="wifiAddBtn" title="Netz hinzufügen">➕</button>
+                    </div>
                 </div>
-              
+
                 <ul id="wifiList" class="wifi-list"><!-- wird per JS gefüllt --></ul>
-                <div class="wifi-hint">Tipp: Ziehen, um die Reihenfolge (Priorität) zu ändern. Höchste Priorität steht oben.</div>
-              </div>
-              
+                <div class="wifi-hint">Tipp: Ziehen, um die Reihenfolge (Priorität) zu ändern. Höchste Priorität steht
+                    oben.</div>
+            </div>
+
         </section>
 
         <section id="info" class="tab-content">

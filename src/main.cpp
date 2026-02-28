@@ -56,11 +56,21 @@ static void brownoutStarter(void *pvParameters)
     vTaskDelete(nullptr);
 }
 
-static TaskHandle_t statsMonitorHandle = nullptr;
+static void statsTask(void *pvParameters)
+{
+    vTaskDelay(pdMS_TO_TICKS(10000));
+
+    for (;;)
+    {
+        StatsMonitor::instance().sampleTaskTimes(1000, true);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
 
 void setup() 
 {
     Serial.begin(115200);
+    esp_log_level_set("*", ESP_LOG_NONE);
 
     Logger::begin(Serial);
     Logger::log(LOGTYPE, F("System start"));
@@ -98,7 +108,7 @@ void setup()
     // Loadcheck
     {
         auto readVoltage = [](){ return supplyWatch.readUHSS(); };
-        bool hasLoad = hssController.testLoad(readVoltage, 125.0f /*Threshold in Volt*/, 28 /*28 ms → schneller Abfall = Last*/, 50 /*50 ms → maximal warten*/);
+        bool hasLoad = hssController.testLoad(readVoltage, 130.0f /*Threshold in Volt*/, 55 /*55 ms → schneller Abfall = Last*/, 80 /*80 ms → maximal warten*/);
         Globals::loadDetected = hasLoad;
         Logger::log(LoggerType::HSS, hasLoad ? F("LoadTest: Load detected") : F("LoadTest: No load detected"));
     }
@@ -127,10 +137,13 @@ void setup()
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
+    xTaskCreatePinnedToCore(statsTask, "StatsTask", 6144, nullptr, 1, nullptr, 0);
+    Logger::log(LOGTYPE, F("StatsTask started"));
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 20, &displayTaskHandle, 1);
     Logger::log(LOGTYPE, F("DisplayDigits Task started"));
-    // displayDigitsTask belegt nach dem Start (Core 1, höhere Prio) die CPU so stark;
-    // dadurch wird setup()/loopTask verdrängt und die folgenden Zeilen werden verzögert oder nie ausgeführt.
-    xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 3, &displayTaskHandle, 1);
 
     vTaskDelete(NULL);
 }

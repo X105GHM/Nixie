@@ -1099,3 +1099,276 @@ body.dark {
     margin-top: 8px;
     font-size: .92em;
 }
+/* ================================================
+   Runtime Monitor (integrierter Stats-Monitor)
+   ================================================ */
+
+#runtime-monitor {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+#runtime-monitor .runtime-card-header {
+    padding: 14px 16px 10px 16px;
+    border-bottom: 1px solid #ccc;
+    background: #fff;
+}
+
+#runtime-monitor .runtime-card-title {
+    margin: 0;
+    font-size: 1rem;
+    letter-spacing: 0.2px;
+}
+
+#runtime-monitor .runtime-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+#runtime-monitor .runtime-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#runtime-monitor .runtime-meta {
+    margin-top: 8px;
+    color: #666;
+    font-size: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#runtime-monitor .runtime-sep {
+    opacity: 0.6;
+}
+
+#runtime-monitor .runtime-card-body {
+    padding: 14px 16px 16px 16px;
+}
+
+#runtime-monitor .runtime-unit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: rgba(0, 0, 0, 0.03);
+}
+
+#runtime-monitor .runtime-unit-label {
+    color: #666;
+    font-size: 12px;
+}
+
+#runtime-monitor .runtime-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: #fff;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 6px 28px 6px 10px;
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+}
+
+#runtime-monitor .runtime-canvas {
+    width: 100%;
+    height: 320px;
+    display: block;
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 12px;
+}
+
+#runtime-monitor .runtime-legend {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+#runtime-monitor .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(0, 0, 0, 0.03);
+    color: #666;
+    font-size: 12px;
+}
+
+#runtime-monitor .swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+#runtime-monitor .runtime-pies {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+#runtime-monitor .runtime-pie-wrap {
+    padding: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.03);
+}
+
+#runtime-monitor .runtime-pie-row {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 12px;
+    align-items: center;
+}
+
+#runtime-monitor .runtime-pie {
+    width: 100%;
+    height: 210px;
+    display: block;
+}
+
+#runtime-monitor .runtime-pie-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+}
+
+#runtime-monitor .pie-leg-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: #666;
+}
+
+#runtime-monitor .pie-leg-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+#runtime-monitor .pie-leg-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#runtime-monitor .pie-leg-pct {
+    color: #333;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+#runtime-monitor .runtime-pie-foot {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #666;
+}
+
+#runtime-monitor .disabled {
+    opacity: 0.55;
+    filter: grayscale(0.35);
+}
+
+/* Dark Mode */
+body.dark #runtime-monitor .runtime-card-header {
+    background: #1e1e1e;
+    border-bottom-color: #444;
+}
+
+body.dark #runtime-monitor .runtime-meta,
+body.dark #runtime-monitor .runtime-unit-label,
+body.dark #runtime-monitor .legend-item,
+body.dark #runtime-monitor .pie-leg-item,
+body.dark #runtime-monitor .runtime-pie-foot {
+    color: #bdbdbd;
+}
+
+body.dark #runtime-monitor .runtime-unit {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+body.dark #runtime-monitor .runtime-select {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #444;
+}
+
+body.dark #runtime-monitor .runtime-canvas {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark #runtime-monitor .legend-item {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+body.dark #runtime-monitor .runtime-pie-wrap {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+body.dark #runtime-monitor .pie-leg-pct {
+    color: #e0e0e0;
+}
+
+#runtime-monitor .monitor-hidden {
+    display: none;
+}
+
+#runtime-monitor .runtime-card-body,
+#runtime-monitor .runtime-core-card {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#runtime-monitor .monitor-collapsing {
+    opacity: 0;
+    transform: translateY(-6px);
+}
+
+@media (max-width: 680px) {
+    #runtime-monitor .runtime-canvas {
+        height: 360px;
+    }
+
+    #runtime-monitor .runtime-pies {
+        grid-template-columns: 1fr;
+    }
+
+    #runtime-monitor .runtime-pie-row {
+        grid-template-columns: 1fr;
+    }
+
+    #runtime-monitor .runtime-pie {
+        height: 220px;
+    }
+
+    #runtime-monitor .runtime-header-actions {
+        gap: 10px;
+    }
+
+    #runtime-monitor .runtime-unit {
+        padding: 6px 8px;
+    }
+}

@@ -1,7 +1,5 @@
 #include "Brownout.hpp"
 
-static const char *TAG = "Brownout";
-
 Brownout::Brownout(SupplyWatch &sw, HSS &hss, Memory::PersistentStorage &storage, uint32_t interval_us) noexcept
     : sw_(sw), hss_(hss), storage_(storage), timer_(nullptr), interval_us_(interval_us)
 {

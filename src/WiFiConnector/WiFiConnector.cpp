@@ -49,46 +49,72 @@ void WiFiConnector::connect() noexcept
 
 void WiFiConnector::startMDNSWithCollisionCheck_(const char *baseName) noexcept
 {
-    String hostName;
-    int suffix = 1;
-    bool okName = false;
-
-    while (!okName)
+    if (!baseName || !*baseName)
     {
-        hostName = (suffix == 1) ? baseName : (String(baseName) + String(suffix));
+        baseName = "nixieclock";
+    }
 
-        if (!MDNS.begin(hostName.c_str()))
+    String hostName(baseName);
+
+    delay(100 + (esp_random() % 300));
+
+    if (mdns_init() != ESP_OK)
+    {
+        Logger::log(logType_, "mdns_init() preflight failed, using base name '%s'", baseName);
+    }
+    else
+    {
+        constexpr uint32_t queryTimeoutMs = 750;
+        constexpr int maxSuffix = 15;
+
+        esp_ip4_addr_t addr{};
+        bool foundFreeName = false;
+
+        for (int suffix = 1; suffix <= maxSuffix; ++suffix)
         {
-            Logger::log(logType_, "Error in MDNS.begin(%s)", hostName.c_str());
-            suffix++;
-            continue;
+            hostName = (suffix == 1) ? String(baseName) : (String(baseName) + String(suffix));
+
+            addr.addr = 0;
+            esp_err_t err = mdns_query_a(hostName.c_str(), queryTimeoutMs, &addr);
+
+            if (err == ESP_ERR_NOT_FOUND)
+            {
+                Logger::log(logType_, "mDNS preflight: %s.local seems free", hostName.c_str());
+                foundFreeName = true;
+                break;
+            }
+
+            if (err == ESP_OK)
+            {
+                Logger::log(logType_, "mDNS preflight: %s.local already exists", hostName.c_str());
+            }
+            else
+            {
+                Logger::log(logType_, "mDNS preflight query for %s failed (err=%d)",
+                            hostName.c_str(), (int)err);
+            }
+
+            delay(120);
         }
-        MDNS.addService("http", "tcp", 80);
 
-        delay(200);
+        mdns_free();
 
-        int n = MDNS.queryService("http", "tcp");
-        Logger::log(logType_, "mDNS: %d HTTP service(s) found", n);
-
-        int countMe = 0;
-        for (int i = 0; i < n; ++i)
+        if (!foundFreeName)
         {
-            if (String(MDNS.hostname(i)) == hostName)
-                ++countMe;
-        }
-
-        if (countMe <= 1)
-        {
-            okName = true;
-            Logger::log(logType_, "mDNS responder started as %s.local", hostName.c_str());
-        }
-        else
-        {
-            Logger::log(logType_, "Hostname conflict for %s, trying next suffix", hostName.c_str());
-            MDNS.end();
-            suffix++;
+            Logger::log(logType_, "mDNS preflight found no free suffix, falling back to '%s'",
+                        baseName);
+            hostName = String(baseName);
         }
     }
+
+    if (!MDNS.begin(hostName.c_str()))
+    {
+        Logger::log(logType_, "Error in MDNS.begin(%s)", hostName.c_str());
+        return;
+    }
+
+    MDNS.addService("http", "tcp", 80);
+    Logger::log(logType_, "mDNS responder started as %s.local", hostName.c_str());
 }
 
 void WiFiConnector::startMDNSOnce_() noexcept
