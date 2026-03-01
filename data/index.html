@@ -100,7 +100,7 @@
                                 </div>
 
                                 <label class="switch" title="Monitor an/aus">
-                                    <input id="toggleMonitor" type="checkbox"/>
+                                    <input id="toggleMonitor" type="checkbox" />
                                     <span class="slider"></span>
                                 </label>
                             </div>
@@ -510,6 +510,66 @@
 
         </section>
     </main>
+
+    <!-- OTA Popup -->
+    <div id="otaModal" class="ota-modal hidden">
+        <div class="ota-modal-card">
+            <div class="ota-modal-header">
+                <h3>OTA Update</h3>
+                <button id="otaCloseBtn" class="ota-close-btn" type="button">✕</button>
+            </div>
+            
+            <div class="ota-modal-body">
+                <div id="otaLiveArea">
+                    <div class="ota-status-line">
+                        <strong>Status:</strong> <span id="otaStageText">–</span>
+                    </div>
+                    <div class="ota-status-line">
+                        <strong>Meldung:</strong> <span id="otaMessageText">–</span>
+                    </div>
+
+                    <div class="ota-progress-block" id="otaAppBlock">
+                        <div class="ota-progress-head">
+                            <span>Firmware</span>
+                            <span id="otaAppPercent">0%</span>
+                        </div>
+                        <div class="ota-progress-bar">
+                            <div id="otaAppBar" class="ota-progress-fill"></div>
+                        </div>
+                        <div class="ota-progress-meta mono">
+                            <span id="otaAppBytes">0 / 0</span>
+                        </div>
+                    </div>
+
+                    <div class="ota-progress-block" id="otaSpiffsBlock">
+                        <div class="ota-progress-head">
+                            <span>SPIFFS</span>
+                            <span id="otaSpiffsPercent">0%</span>
+                        </div>
+                        <div class="ota-progress-bar">
+                            <div id="otaSpiffsBar" class="ota-progress-fill"></div>
+                        </div>
+                        <div class="ota-progress-meta mono">
+                            <span id="otaSpiffsBytes">0 / 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="otaResultArea" class="hidden">
+                    <div class="ota-result-title" id="otaResultTitle">OTA abgeschlossen</div>
+                    <div class="ota-result-text" id="otaResultText">–</div>
+                    <div class="ota-reboot-flag hidden" id="otaRebootFlag">
+                        Neustart erforderlich, damit die neue Firmware aktiv wird.
+                    </div>
+                </div>
+            </div>
+
+            <div class="ota-modal-footer">
+                <button id="otaRestartBtn" class="hidden" type="button">Jetzt neu starten</button>
+                <button id="otaOkBtn" class="hidden" type="button">OK</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

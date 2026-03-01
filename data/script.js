@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   const skipSync = new Set();
   let lastData = {};
+  let otaPollingActive = false;
 
   // === Netzwerk-Logger ===========================================
   const netLogEl = document.getElementById("networkLog");
@@ -590,7 +591,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function fetchStatsMonitor() {
-    if (!statsMonitorAvailable() || !statsMonitor.enabled) return;
+    if (!statsMonitorAvailable() || !statsMonitor.enabled || otaPollingActive) return;
 
     try {
       const res = await fetch("/get/taskStats", { cache: "no-store" });
@@ -863,6 +864,197 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     });
   }
+
+    // === OTA Popup / Progress ============================================
+  const otaModal = document.getElementById("otaModal");
+  const otaCloseBtn = document.getElementById("otaCloseBtn");
+  const otaOkBtn = document.getElementById("otaOkBtn");
+  const otaRestartBtn = document.getElementById("otaRestartBtn");
+
+  const otaLiveArea = document.getElementById("otaLiveArea");
+  const otaResultArea = document.getElementById("otaResultArea");
+  const otaRebootFlag = document.getElementById("otaRebootFlag");
+
+  const otaStageText = document.getElementById("otaStageText");
+  const otaMessageText = document.getElementById("otaMessageText");
+
+  const otaAppBlock = document.getElementById("otaAppBlock");
+  const otaAppBar = document.getElementById("otaAppBar");
+  const otaAppPercent = document.getElementById("otaAppPercent");
+  const otaAppBytes = document.getElementById("otaAppBytes");
+
+  const otaSpiffsBlock = document.getElementById("otaSpiffsBlock");
+  const otaSpiffsBar = document.getElementById("otaSpiffsBar");
+  const otaSpiffsPercent = document.getElementById("otaSpiffsPercent");
+  const otaSpiffsBytes = document.getElementById("otaSpiffsBytes");
+
+  const otaResultTitle = document.getElementById("otaResultTitle");
+  const otaResultText = document.getElementById("otaResultText");
+
+  const otaUi = {
+    pollTimer: null,
+    visible: false,
+    seenRunning: false,
+    completionHandled: false
+  };
+
+  function otaFormatBytes(n) {
+    const x = Number(n) || 0;
+    return x.toLocaleString("de-DE");
+  }
+
+  function showOtaModal() {
+    otaModal.classList.remove("hidden");
+    otaUi.visible = true;
+  }
+
+  function hideOtaModal() {
+    otaModal.classList.add("hidden");
+    otaUi.visible = false;
+  }
+
+  function otaSetLiveView() {
+    otaLiveArea.classList.remove("hidden");
+    otaResultArea.classList.add("hidden");
+    otaOkBtn.classList.add("hidden");
+  }
+
+  function otaSetResultView() {
+    otaLiveArea.classList.add("hidden");
+    otaResultArea.classList.remove("hidden");
+    otaOkBtn.classList.remove("hidden");
+  }
+
+  function otaResetBars() {
+    otaAppBar.style.width = "0%";
+    otaAppPercent.textContent = "0%";
+    otaAppBytes.textContent = "0 / 0";
+
+    otaSpiffsBar.style.width = "0%";
+    otaSpiffsPercent.textContent = "0%";
+    otaSpiffsBytes.textContent = "0 / 0";
+  }
+
+  function updateOtaUi(data) {
+    otaStageText.textContent = data.stage || "–";
+    otaMessageText.textContent = data.message || "–";
+
+    const appPct = Number(data.appProgressPct || 0);
+    const appDone = Number(data.appBytesDone || 0);
+    const appTotal = Number(data.appBytesTotal || 0);
+
+    const spiffsPct = Number(data.spiffsProgressPct || 0);
+    const spiffsDone = Number(data.spiffsBytesDone || 0);
+    const spiffsTotal = Number(data.spiffsBytesTotal || 0);
+
+    otaAppBar.style.width = `${Math.max(0, Math.min(100, appPct))}%`;
+    otaAppPercent.textContent = `${appPct}%`;
+    otaAppBytes.textContent = `${otaFormatBytes(appDone)} / ${otaFormatBytes(appTotal)}`;
+
+    otaSpiffsBar.style.width = `${Math.max(0, Math.min(100, spiffsPct))}%`;
+    otaSpiffsPercent.textContent = `${spiffsPct}%`;
+    otaSpiffsBytes.textContent = `${otaFormatBytes(spiffsDone)} / ${otaFormatBytes(spiffsTotal)}`;
+
+    // Balken nur während aktuellem Update sichtbar
+    const running = !!data.running;
+    otaAppBlock.classList.toggle("hidden", !running);
+    otaSpiffsBlock.classList.toggle("hidden", !running);
+
+    otaRebootFlag.classList.toggle("hidden", !data.rebootRequired);
+    otaRestartBtn.classList.toggle("hidden", !data.rebootRequired);
+
+    if (running) {
+      otaSetLiveView();
+      showOtaModal();
+      otaUi.seenRunning = true;
+      return;
+    }
+
+    // Nur wenn wirklich ein aktuelles Update lief oder wir schon sichtbar sind
+    const shouldShowResult = otaUi.seenRunning || otaUi.visible;
+
+    if (shouldShowResult && !otaUi.completionHandled) {
+      otaUi.completionHandled = true;
+      otaSetResultView();
+      showOtaModal();
+
+      if (data.stage === "done") {
+        otaResultTitle.textContent = "OTA abgeschlossen";
+        otaResultText.textContent =
+          data.rebootRequired
+            ? "Das Update wurde erfolgreich abgeschlossen."
+            : "Das Update wurde erfolgreich abgeschlossen. Kein Neustart erforderlich.";
+      } else if (data.stage === "error") {
+        otaResultTitle.textContent = "OTA fehlgeschlagen";
+        otaResultText.textContent =
+          `${data.message || "Unbekannter Fehler"} (${data.lastResult || "ESP_FAIL"})`;
+      }
+    }
+  }
+
+  async function fetchOtaStatus() {
+    const res = await fetch("/get/otaStatus", { cache: "no-store" });
+    if (!res.ok) throw new Error(`OTA status ${res.status}`);
+    return await res.json();
+  }
+
+  async function otaResetStatusOnController() {
+    try {
+      await fetch("/set/otaResetStatus", { cache: "no-store" });
+    } catch (e) {
+      console.warn("OTA reset status failed", e);
+    }
+  }
+
+  function stopOtaPolling() {
+    if (otaUi.pollTimer) {
+      clearInterval(otaUi.pollTimer);
+      otaUi.pollTimer = null;
+    }
+  }
+
+  function startOtaPolling() {
+    stopOtaPolling();
+    otaPollingActive = true;
+
+    otaUi.completionHandled = false;
+
+    otaUi.pollTimer = setInterval(async () => {
+      try {
+        const data = await fetchOtaStatus();
+        updateOtaUi(data);
+
+        if (!data.running && (data.stage === "done" || data.stage === "error")) {
+          stopOtaPolling();
+          otaPollingActive = false;
+        }
+      } catch (e) {
+        console.warn("OTA polling failed", e);
+      }
+    }, 1000);
+  }
+
+  async function closeOtaPopup() {
+    stopOtaPolling();
+    hideOtaModal();
+    otaPollingActive = false;
+    otaUi.seenRunning = false;
+    otaUi.completionHandled = false;
+    otaResetBars();
+    await otaResetStatusOnController();
+  }
+
+  otaCloseBtn.addEventListener("click", closeOtaPopup);
+  otaOkBtn.addEventListener("click", closeOtaPopup);
+
+  otaRestartBtn.addEventListener("click", async () => {
+    try {
+      await fetch("/set/reset");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Neustart.");
+    }
+  });
 
   // === Device Controls ====================================================
   const displayToggle = document.getElementById("displayToggle"),
@@ -1200,12 +1392,28 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // OTA Update Button
+    // OTA Update Button
   setOTA.addEventListener("click", async () => {
     try {
-      await fetch("/set/ota");
+      otaUi.seenRunning = false;
+      otaUi.completionHandled = false;
+      otaResetBars();
+      otaSetLiveView();
+      showOtaModal();
+
+      const res = await fetch("/set/ota", { cache: "no-store" });
+      const text = await res.text();
+
+      if (!res.ok) {
+        hideOtaModal();
+        alert(`Fehler beim Starten des OTA-Updates: ${text}`);
+        return;
+      }
+
+      startOtaPolling();
     } catch (e) {
       console.error(e);
+      hideOtaModal();
       alert("Fehler beim Starten des OTA-Updates.");
     }
   });
@@ -1511,12 +1719,33 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function pollInfo() {
-    await fetchInfo();
+  try {
+    if (!otaPollingActive) {
+      await fetchInfo();
+    }
+  } catch (e) {
+    console.warn("pollInfo error:", e);
+  } finally {
     setTimeout(pollInfo, 500);
   }
+}
 
   initCharts();
   pollInfo();
   loadWifiList();
-  startRuntimeMonitor();
+
+  (async () => {
+    try {
+      const data = await fetchOtaStatus();
+      if (data.running || data.stage === "done" || data.stage === "error") {
+        updateOtaUi(data);
+        if (data.running) {
+          startOtaPolling();
+        }
+      }
+    } catch (e) {
+      console.warn("Initial OTA status fetch failed", e);
+    }
+  })();
+
 });

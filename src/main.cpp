@@ -70,7 +70,7 @@ static void statsTask(void *pvParameters)
 void setup() 
 {
     Serial.begin(115200);
-    esp_log_level_set("*", ESP_LOG_NONE);
+    esp_log_level_set("*", ESP_LOG_ERROR); // Suppress ESP-IDF logs, we use our own logging system
 
     Logger::begin(Serial);
     Logger::log(LOGTYPE, F("System start"));

@@ -6,6 +6,17 @@ static const std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$
 
 static const char* tzNames[] = {"CET","EET","WET","UTC","EST","CST","MST","PST","HST","JST","IST","AEST","AWST"};
 
+static bool otaBusy() noexcept
+{
+    return OTAManager::instance().isRunning();
+}
+
+static void sendOtaBusy(WebServer& server) noexcept
+{
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(503, "application/json", "{\"error\":\"OTA active\"}");
+}
+
 constexpr int tzCount = sizeof(tzNames) / sizeof(tzNames[0]);
 
 HTTPHandler::HTTPHandler(int port) noexcept
@@ -55,6 +66,12 @@ void HTTPHandler::begin() noexcept
 
     server_.onNotFound([this]() noexcept {
        
+        if (otaBusy())
+        {
+            sendOtaBusy(server_);
+            return;
+        }
+
         if (server_.uri().length() > 128) 
         {
             server_.sendHeader("Connection", "close");
@@ -592,57 +609,72 @@ void HTTPHandler::begin() noexcept
             newTarget = Globals::FirmwareTarget::NixieV6_BOS;
         }
 
-        if (newTarget == Globals::FirmwareTarget::COUNT) {
+        if (newTarget == Globals::FirmwareTarget::COUNT) 
+        {
             server_.send(400, "text/plain", "Invalid 'target' value");
             Logger::log(LOGTYPE, "HTTP /set/firmware invalid value: %s", arg.c_str());
             return;
         }
 
-        Globals::currentFirmwareTarget = newTarget;
-        Logger::log(LOGTYPE, "Firmware target set to %s", arg.c_str());
-        server_.send(200, "text/plain", String("firmwareTarget=") + arg);
-    });
+            Globals::currentFirmwareTarget = newTarget;
+            Logger::log(LOGTYPE, "Firmware target set to %s", arg.c_str());
+            server_.send(200, "text/plain", String("firmwareTarget=") + arg);
+        });
 
     server_.on("/set/ota", HTTP_GET, [this]() noexcept {
-        Logger::log(LOGTYPE, F("SPIFFS für OTA unmounten..."));
-        SPIFFS.end();
-
         Globals::FirmwareTarget target = Globals::currentFirmwareTarget;
         std::string baseUrl = Globals::getFirmwareUrl(target);
+        displayEnabled = false;
 
-        if (baseUrl.empty()) 
+        if (baseUrl.empty())
         {
-            Logger::log(LOGTYPE, F("OTA failed: invalid firmware target"));
-            SPIFFS.begin(true);
-            server_.send(400, "text/plain", "Invalid firmware target");
+            Logger::log(LOGTYPE, "OTA failed: invalid firmware target");
+            server_.sendHeader("Cache-Control", "no-store");
+            server_.send(400, "application/json", "{\"started\":false,\"error\":\"Invalid firmware target\"}");
             return;
         }
 
-        Logger::log(LOGTYPE, "Checking OTA in folder: %s", baseUrl.c_str());
-        OTAManager ota;
-        esp_err_t result = ota.checkAndUpdate(baseUrl);
+        auto& ota = OTAManager::instance();
 
-        Logger::log(LOGTYPE, F("SPIFFS mounten..."));
-        if (!SPIFFS.begin(/*formatOnFail=*/ true)) 
+        if (ota.isRunning())
         {
-            Logger::log(LOGTYPE, F("SPIFFS.begin(true) failed"));
-            server_.send(500, "text/plain", "SPIFFS remount & format failed");
+            Logger::log(LOGTYPE, "OTA start rejected: already running");
+            server_.sendHeader("Cache-Control", "no-store");
+            server_.send(409, "application/json", "{\"started\":false,\"error\":\"OTA already running\"}");
             return;
         }
-        Logger::log(LOGTYPE, F("SPIFFS remounted"));
 
-        if (result == ESP_OK) 
+        Logger::log(LOGTYPE, "Starting OTA async in folder: %s", baseUrl.c_str());
+
+        if (!ota.startAsync(baseUrl))
         {
-            Logger::log(LOGTYPE, F("OTA completed or not required"));
-            server_.send(200, "text/plain", "OTA successful or not required");
-        } 
-        else 
-        {
-            Logger::log(LOGTYPE, "OTA failed (%s)", esp_err_to_name(result));
-            server_.send(500, "text/plain", "OTA failed");
+            Logger::log(LOGTYPE, "OTA task could not be started");
+            server_.sendHeader("Cache-Control", "no-store");
+            server_.send(500, "application/json", "{\"started\":false,\"error\":\"Could not start OTA task\"}");
+            return;
         }
+
+        server_.sendHeader("Cache-Control", "no-store");
+        server_.send(202, "application/json", ota.getStatusJson());
     });
 
+    server_.on("/get/otaStatus", HTTP_GET, [this]() noexcept {
+        server_.sendHeader("Cache-Control", "no-store");
+        server_.send(200, "application/json", OTAManager::instance().getStatusJson());
+    });
+
+    server_.on("/set/otaResetStatus", HTTP_GET, [this]() noexcept {
+        auto& ota = OTAManager::instance();
+
+        if (ota.isRunning())
+        {
+            server_.send(409, "text/plain", "OTA still running");
+            return;
+        }
+
+        ota.resetStatus();
+        server_.send(200, "text/plain", "OK");
+    });
 
     server_.on("/set/zip", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("zip")) 
@@ -794,11 +826,24 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/get/taskStats", HTTP_GET, [this]() noexcept {
+
+        if (otaBusy())
+        {
+            sendOtaBusy(server_);
+            return;
+        }
+
         server_.sendHeader("Cache-Control", "no-store");
         server_.send(200, "application/json", StatsMonitor::instance().getTaskStatsJson(12, true));
     });
 
     server_.on("/get/info", HTTP_GET, [this]() noexcept {
+        if (otaBusy())
+        {
+            sendOtaBusy(server_);
+            return;
+        }
+
         Logger::log(LOGTYPE, F("Info requested via HTTP"));
         handleInfo();
     });
