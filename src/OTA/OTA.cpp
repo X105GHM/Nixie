@@ -183,13 +183,15 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
         return end_err;
     }
 
-    esp_app_desc_t new_desc;
-    if (esp_ota_get_partition_description(update_partition, &new_desc) != ESP_OK)
+    esp_app_desc_t new_desc{};
+    esp_err_t desc_err = esp_ota_get_partition_description(update_partition, &new_desc);
+    if (desc_err != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, F("Could not read new partition"));
-        esp_http_client_close(client);
-        esp_http_client_cleanup(client);
-        return ESP_FAIL;
+        Logger::log(LoggerType::OTA, "Could not read new partition description: %s", esp_err_to_name(desc_err));
+    }
+    else
+    {
+        Logger::log(LoggerType::OTA, "New firmware version in slot: %s", new_desc.version);
     }
 
     const esp_partition_t *running_partition = esp_ota_get_running_partition();

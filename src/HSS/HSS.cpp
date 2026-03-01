@@ -128,6 +128,6 @@ bool HSS::testLoad(const std::function<float()> &readVoltage, float thresholdV, 
             return false;
         }
 
-        delay(1);
+        vTaskDelay(pdMS_TO_TICKS(1));
     }
 }
