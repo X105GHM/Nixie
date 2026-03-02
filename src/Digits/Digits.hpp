@@ -37,7 +37,7 @@ void displayTime() noexcept;
 void displayDate() noexcept;
 void displayWeather() noexcept;
 
-static void delayMicrosYield(uint32_t usec) 
+[[maybe_unused]] static void delayMicrosYield(uint32_t usec) 
 {
     int64_t start = esp_timer_get_time();
     while ((esp_timer_get_time() - start) < usec) 

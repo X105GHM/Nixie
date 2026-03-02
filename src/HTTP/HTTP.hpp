@@ -31,7 +31,7 @@ extern WiFiConnector wifiConnector;
 
 extern TaskHandle_t clockTaskHandle;
 
-static const char *firmwareTargetToString(Globals::FirmwareTarget target)
+[[maybe_unused]] static const char *firmwareTargetToString(Globals::FirmwareTarget target)
 {
     switch (target)
     {
