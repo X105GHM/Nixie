@@ -221,7 +221,7 @@ document.addEventListener("DOMContentLoaded", () => {
     enabled: true,
     timer: null,
     data: null,
-    displayUnit: "us"
+    displayUnit: "ms"
   };
 
   function statsMonitorAvailable() {
@@ -293,9 +293,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function statsUnitSymbol(u) {
-    if (u === "ms") return "ms";
+    if (u === "µs") return "µs";
     if (u === "ns") return "ns";
-    return "µs";
+    return "ms";
   }
 
   function statsConvertFromUs(us, u) {
@@ -512,12 +512,11 @@ document.addEventListener("DOMContentLoaded", () => {
       color: statsTaskColor(t.name || "?")
     }));
 
-    if (100 - loadPct > 0.05) 
-    {
+    if (100 - loadPct > 0.05) {
       slices.push({
-      name: "Idle",
-      pct: 100 - loadPct,
-      color: palette.idle
+        name: "Idle",
+        pct: 100 - loadPct,
+        color: palette.idle
       });
     }
 
@@ -865,7 +864,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-    // === OTA Popup / Progress ============================================
+  // === OTA Popup / Progress ============================================
   const otaModal = document.getElementById("otaModal");
   const otaCloseBtn = document.getElementById("otaCloseBtn");
   const otaOkBtn = document.getElementById("otaOkBtn");
@@ -1392,7 +1391,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-    // OTA Update Button
+  // OTA Update Button
   setOTA.addEventListener("click", async () => {
     try {
       otaUi.seenRunning = false;
@@ -1719,16 +1718,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function pollInfo() {
-  try {
-    if (!otaPollingActive) {
-      await fetchInfo();
+    try {
+      if (!otaPollingActive) {
+        await fetchInfo();
+      }
+    } catch (e) {
+      console.warn("pollInfo error:", e);
+    } finally {
+      setTimeout(pollInfo, 500);
     }
-  } catch (e) {
-    console.warn("pollInfo error:", e);
-  } finally {
-    setTimeout(pollInfo, 500);
   }
-}
 
   initCharts();
   pollInfo();
