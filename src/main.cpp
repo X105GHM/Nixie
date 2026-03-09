@@ -59,10 +59,11 @@ static void brownoutStarter(void *pvParameters)
 static void statsTask(void *pvParameters)
 {
     vTaskDelay(pdMS_TO_TICKS(10000));
-
     for (;;)
     {
-        StatsMonitor::instance().sampleTaskTimes(1000, true);
+        auto& sm = StatsMonitor::instance();
+        sm.update();
+        sm.sampleTaskTimes(1000, true);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

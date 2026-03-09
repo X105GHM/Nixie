@@ -37,10 +37,6 @@ void ClockControl::timeCycle() noexcept
             static int cricketTriggerMinute2 = -1;
             static int lastCricketMinute = -1;
 
-            StatsMonitor &sm = StatsMonitor::instance();
-
-            sm.update();
-
             if (timeInfo.tm_hour != currentHour && Globals::cricketSoundEnabled) 
             {
             currentHour = timeInfo.tm_hour;

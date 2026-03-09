@@ -9,7 +9,6 @@
 #include "Hss/HSS.hpp"
 #include "Globals/Globals.hpp"
 #include "TimeWeather/WeatherClient/WeatherClient.hpp"
-#include "StatsMonitor/StatsMonitor.hpp"
 #include "Timer/Timer.hpp"
 #include "AlarmClock/AlarmClock.hpp"
 #include "Acoustics/Buzzer/Buzzer.hpp"

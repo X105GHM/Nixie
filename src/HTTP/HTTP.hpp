@@ -19,6 +19,7 @@
 #include "Temperature/Temperature.hpp"
 #include "Globals/Globals.hpp"
 #include "OTA/OTA.hpp"
+#include "StatsMonitor/StatsMonitor.hpp"
 #include "WiFiConnector/WiFiConnector.hpp"
 
 extern Memory::PersistentStorage storage;
