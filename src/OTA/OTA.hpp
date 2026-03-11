@@ -6,6 +6,7 @@
 #include "esp_http_client.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
+#include "esp_crt_bundle.h"
 
 #include <optional>
 #include <string>
@@ -15,7 +16,6 @@
 #include <freertos/semphr.h>
 
 #include "Logger/Logger.hpp"
-#include "HTTP/certs.hpp"
 #include "Digits/Digits.hpp"
 
 class OTAManager

@@ -357,9 +357,9 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
     esp_http_client_config_t config{};
     config.url = manifestUrl.c_str();
     config.transport_type = HTTP_TRANSPORT_OVER_SSL;
-    config.cert_pem = isrg_root_x1;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.cert_pem = nullptr;
     config.skip_cert_common_name_check = false;
-    config.use_global_ca_store = false;
     config.disable_auto_redirect = false;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -446,9 +446,9 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     esp_http_client_config_t config{};
     config.url = firmwareUrl.c_str();
     config.transport_type = HTTP_TRANSPORT_OVER_SSL;
-    config.cert_pem = isrg_root_x1;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.cert_pem = nullptr;
     config.skip_cert_common_name_check = false;
-    config.use_global_ca_store = false;
     config.disable_auto_redirect = false;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -596,9 +596,9 @@ esp_err_t OTAManager::performSPIFFSUpdate(const std::string &spiffsUrl) noexcept
     esp_http_client_config_t config{};
     config.url = spiffsUrl.c_str();
     config.transport_type = HTTP_TRANSPORT_OVER_SSL;
-    config.cert_pem = isrg_root_x1;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.cert_pem = nullptr;
     config.skip_cert_common_name_check = false;
-    config.use_global_ca_store = false;
     config.disable_auto_redirect = false;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
