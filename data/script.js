@@ -889,6 +889,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const otaResultTitle = document.getElementById("otaResultTitle");
   const otaResultText = document.getElementById("otaResultText");
+  const updateBannerBadge = document.getElementById("updateBannerBadge");
 
   const otaUi = {
     pollTimer: null,
@@ -1090,6 +1091,7 @@ document.addEventListener("DOMContentLoaded", () => {
     alarmSettings = document.getElementById("alarmSettings"),
     cricketToggle = document.getElementById("cricketToggle"),
     CricketButton = document.getElementById("cricketButton");
+    CheckUpdate = document.getElementById("checkUpdate");
 
   const tzNames = ["CET", "EET", "WET", "UTC", "EST", "CST", "MST", "PST", "HST", "JST", "IST", "AEST", "AWST"];
 
@@ -1180,6 +1182,16 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) {
       console.error(e);
       alert("Fehler beim Setzen des Cricket-Sounds.");
+    }
+  });
+
+  // Check Update
+  CheckUpdate.addEventListener("click", async () => {
+    try {
+      await fetch("/get/checkUpdate");
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Überprüfen auf Updates.");
     }
   });
 
@@ -1640,6 +1652,22 @@ document.addEventListener("DOMContentLoaded", () => {
       // sync brightness
       if (!skipSync.has("brightnessSlider") && !skipSync.has("brightnessToggle")) {
         syncBrightnessUI(!!data.manualBrightnessEnabled, data.Brightness);
+      }
+
+      if (updateBannerBadge) {
+        const rawUpdateValue =
+        data.updateAvailable ??
+        data.UpdateAvailable ??
+        data.update_available ??
+        0;
+
+        const hasUpdate =
+        rawUpdateValue === 1 ||
+        rawUpdateValue === "1" ||
+        rawUpdateValue === true ||
+        rawUpdateValue === "true";
+
+        updateBannerBadge.classList.toggle("hidden", !hasUpdate);
       }
 
       const tzDisplay = document.getElementById("CurrentTimeZone");

@@ -12,6 +12,7 @@
 #include "Timer/Timer.hpp"
 #include "AlarmClock/AlarmClock.hpp"
 #include "Acoustics/Buzzer/Buzzer.hpp"
+#include "OTA/OTA.hpp"
 #include <ctime>
 
 extern Relay relay;

@@ -30,11 +30,7 @@ a {
     color: #fff;
     padding: 0.5rem 1rem;
     text-align: center;
-    position: fixed;
-    top: 0;
-    left: 0;
     width: 100%;
-    z-index: 1000;
 }
 
 #banner h1 {
@@ -46,15 +42,19 @@ a {
     margin-top: 0.25rem;
 }
 
+#banner .update-banner-badge {
+    pointer-events: none;
+}
+
+
 /* ================================================
      Navigation
      ================================================ */
 nav {
-    margin-top: 4rem;
     background-color: #333;
     color: #fff;
     position: sticky;
-    top: 2.5rem;
+    top: 0;
     z-index: 999;
 }
 
@@ -1505,4 +1505,43 @@ body.dark .ota-progress-bar {
 
 .hidden {
     display: none !important;
+}
+
+.update-banner-badge {
+    display: inline-block;
+    margin-top: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border-radius: 999px;
+    background: #ff9800;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    animation: updatePulse 1.8s infinite;
+    max-width: calc(100vw - 2rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@keyframes updatePulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+
+    50% {
+        transform: scale(1.04);
+        box-shadow: 0 4px 14px rgba(255, 152, 0, 0.45);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+}
+
+body.dark .update-banner-badge {
+    background: #ff9800;
+    color: #111;
 }

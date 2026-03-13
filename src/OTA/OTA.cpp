@@ -18,6 +18,45 @@ OTAManager::OTAManager() noexcept
     resetStatus();
 }
 
+bool OTAManager::checkForUpdateAvailable(const std::string& baseUrl) noexcept
+{
+    const std::string manifestUrl = baseUrl + "/manifest.json";
+
+    Logger::log(LoggerType::OTA, "Checking update availability from %s", manifestUrl.c_str());
+    setStageMessage_(Stage::Manifest, "Checking manifest");
+
+    auto verOpt = fetchManifestVersion(manifestUrl);
+    if (!verOpt)
+    {
+        Logger::log(LoggerType::OTA, "Could not load manifest for availability check");
+        Globals::updateAvailable = false;
+        return false;
+    }
+
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    esp_app_desc_t desc{};
+    const char* runningVersion = "";
+
+    if (running && esp_ota_get_partition_description(running, &desc) == ESP_OK)
+    {
+        runningVersion = desc.version;
+    }
+    else
+    {
+        Logger::log(LoggerType::OTA, "Could not read running partition description");
+        Globals::updateAvailable = false;
+        return false;
+    }
+
+    setVersions_(runningVersion, verOpt->c_str());
+
+    const bool updateAvailable = (*verOpt != runningVersion);
+    Globals::updateAvailable = updateAvailable;
+
+    Logger::log(LoggerType::OTA, "Manifest version: %s, running version: %s, updateAvailable=%s", verOpt->c_str(), runningVersion, updateAvailable ? "true" : "false");
+    return updateAvailable;
+}
+
 bool OTAManager::startAsync(const std::string& baseUrl) noexcept
 {
     if (isRunning())

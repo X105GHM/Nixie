@@ -9,6 +9,7 @@ namespace Globals
     bool WeatherUpdateEnabled       = false; // Mem
     bool PWM_disabled               = false; // Mem
     bool cricketSoundEnabled        = false;
+    bool updateAvailable            = false;
 
     bool loadDetected               = false;
 

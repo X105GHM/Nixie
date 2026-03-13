@@ -676,6 +676,12 @@ void HTTPHandler::begin() noexcept
         server_.send(200, "text/plain", "OK");
     });
 
+    server_.on("/get/checkUpdate", HTTP_GET, [this]() noexcept {
+        const std::string baseUrl = Globals::getFirmwareUrl(Globals::currentFirmwareTarget);
+        (void)OTAManager::instance().checkForUpdateAvailable(baseUrl);
+        server_.send(200, "text/plain", "OK");
+    });
+
     server_.on("/set/zip", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("zip")) 
         {
@@ -942,6 +948,7 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse += "  \"Firmware_Target\": \""    + String(ftName)                 + "\",\n";
     jsonResponse += "  \"Hardware_Version\": \""   + String(Globals::HardwareVersion.c_str()) + "\",\n";
     jsonResponse += "  \"Software_Version\": \""   + String(Globals::SoftwareVersion.c_str()) + "\",\n";
+    jsonResponse += "  \"UpdateAvailable\": "          + String(Globals::updateAvailable)  + ",\n";
     jsonResponse += "  \"zipCode\": \""            + String(Globals::zipCode.c_str()) + "\",\n";
     jsonResponse += "  \"tickerEnabled\": "       + String(Globals::tickerEnabled) + ",\n";
     jsonResponse += "  \"timeLimitEnabled\": "    + String(Globals::timeLimitEnabled) + ",\n";

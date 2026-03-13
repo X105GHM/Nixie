@@ -1,5 +1,5 @@
 #ifndef SOFTWARE_VERSION
-  #define SOFTWARE_VERSION "6.6.8"
+  #define SOFTWARE_VERSION "6.6.9"
 #endif
 
 #pragma once
@@ -40,6 +40,8 @@ namespace Globals
     extern bool loadDetected;
     
     extern bool cricketSoundEnabled;
+
+    extern bool updateAvailable; 
 
     extern std::string zipCode;
 

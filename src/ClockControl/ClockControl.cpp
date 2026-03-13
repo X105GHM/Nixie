@@ -37,12 +37,31 @@ void ClockControl::timeCycle() noexcept
             static int cricketTriggerMinute2 = -1;
             static int lastCricketMinute = -1;
 
+            static int lastUpdateCheckYear  = -1;
+            static int lastUpdateCheckMonth = -1;
+            static int lastUpdateCheckDay   = -1;
+
             if (timeInfo.tm_hour != currentHour && Globals::cricketSoundEnabled) 
             {
-            currentHour = timeInfo.tm_hour;
+                currentHour = timeInfo.tm_hour;
 
-            cricketTriggerMinute1 = esp_random() % 60;
-            cricketTriggerMinute2 = (esp_random() % 2 == 0) ? esp_random() % 60 : -1;
+                cricketTriggerMinute1 = esp_random() % 60;
+                cricketTriggerMinute2 = (esp_random() % 2 == 0) ? esp_random() % 60 : -1;
+            }
+
+            if (timeInfo.tm_hour == 0 && timeInfo.tm_min == 0 && timeInfo.tm_sec >= 3 && timeInfo.tm_sec <= 8
+                && !(lastUpdateCheckYear  == timeInfo.tm_year && lastUpdateCheckMonth == timeInfo.tm_mon && lastUpdateCheckDay == timeInfo.tm_mday))
+            {
+                lastUpdateCheckYear  = timeInfo.tm_year;
+                lastUpdateCheckMonth = timeInfo.tm_mon;
+                lastUpdateCheckDay   = timeInfo.tm_mday;
+
+                Logger::log(LoggerType::OTA, "Daily OTA manifest check triggered");
+
+                const std::string baseUrl = Globals::getFirmwareUrl(Globals::currentFirmwareTarget);
+                Globals::updateAvailable = OTAManager::instance().checkForUpdateAvailable(baseUrl);
+
+                Logger::log(LoggerType::OTA,"Daily OTA check finished, updateAvailable=%s", Globals::updateAvailable ? "true" : "false");
             }
 
             static bool lastState160 = false;

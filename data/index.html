@@ -18,6 +18,7 @@
     <header id="banner">
         <h1>Nixie Clock V6</h1>
         <div id="clock">00:00:00</div>
+        <div id="updateBannerBadge" class="update-banner-badge hidden">Update verfügbar</div>
     </header>
 
     <!-- Navigation -->
@@ -434,6 +435,12 @@
                 </div>
 
                 <!-- Firmware-Target -->
+
+                <div class="device-setting">
+                    <label for="firmwareSelect">Firmware-Update abfragen</label>
+                    <button id="checkUpdate">Update?</button>
+                </div>
+
                 <div class="device-setting">
                     <label for="firmwareSelect">Firmware</label>
                     <select id="firmwareSelect">

@@ -60,6 +60,7 @@ public:
 
     OTAManager() noexcept;
 
+    bool checkForUpdateAvailable(const std::string& baseUrl) noexcept;
     bool startAsync(const std::string& baseUrl) noexcept;
     bool isRunning() const noexcept;
 
