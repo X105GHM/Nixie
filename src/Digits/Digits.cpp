@@ -36,7 +36,28 @@ void displayDigitsTask(void *pvParameters) noexcept
 
     Logger::log(LoggerType::DIGIT, "Display task started on core ", String(xPortGetCoreID()));
 
-    vTaskDelay(pdMS_TO_TICKS(10));
+
+    // Loadcheck
+    {
+        uint32_t all8 = 0x08020080;
+        gpio_set_level(PIN_OE, 0);
+
+        SPI.transfer(all8 >> 24);
+        SPI.transfer(all8 >> 16);
+        SPI.transfer(all8 >> 8);
+        SPI.transfer(all8);
+
+        SPI.transfer(all8 >> 24);
+        SPI.transfer(all8 >> 16);
+        SPI.transfer(all8 >> 8);
+        SPI.transfer(all8);
+
+        SPI.endTransaction(); 
+
+        gpio_set_level(PIN_OE, 1);
+        vTaskDelay(pdMS_TO_TICKS(800));
+        gpio_set_level(PIN_OE, 0);
+    }
 
     for (;;)
     {

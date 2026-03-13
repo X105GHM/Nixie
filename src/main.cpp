@@ -106,14 +106,6 @@ void setup()
 
     initTime();
 
-    // Loadcheck
-    {
-        auto readVoltage = [](){ return supplyWatch.readUHSS(); };
-        bool hasLoad = hssController.testLoad(readVoltage, 130.0f /*Threshold in Volt*/, 55 /*55 ms → schneller Abfall = Last*/, 80 /*80 ms → maximal warten*/);
-        Globals::loadDetected = hasLoad;
-        Logger::log(LoggerType::HSS, hasLoad ? F("LoadTest: Load detected") : F("LoadTest: No load detected"));
-    }
-
     displayEnabled = true;
 
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -145,6 +137,14 @@ void setup()
 
     xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 20, &displayTaskHandle, 1);
     Logger::log(LOGTYPE, F("DisplayDigits Task started"));
+
+    // Loadcheck
+    {
+        auto readVoltage = [](){ return supplyWatch.readUHSS(); };
+        bool hasLoad = hssController.testLoad(readVoltage, 130.0f /*Threshold in Volt*/, 55 /*55 ms → schneller Abfall = Last*/, 80 /*80 ms → maximal warten*/);
+        Globals::loadDetected = hasLoad;
+        Logger::log(LoggerType::HSS, hasLoad ? F("LoadTest: Load detected") : F("LoadTest: No load detected"));
+    }
 
     vTaskDelete(NULL);
 }
