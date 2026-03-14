@@ -39,7 +39,7 @@ void displayDigitsTask(void *pvParameters) noexcept
 
     // Loadcheck
     {
-        uint32_t all8 = 0x08020080;
+        uint32_t all8 = 0x3FFFFFFF;
         gpio_set_level(PIN_OE, 0);
 
         SPI.transfer(all8 >> 24);

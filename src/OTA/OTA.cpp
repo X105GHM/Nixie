@@ -18,6 +18,16 @@ OTAManager::OTAManager() noexcept
     resetStatus();
 }
 
+static std::string normalizeVersion(std::string v)
+{
+    constexpr const char* prefix = "Nixie_V.";
+    if (v.rfind(prefix, 0) == 0)
+    {
+        v.erase(0, std::strlen(prefix));
+    }
+    return v;
+}
+
 bool OTAManager::checkForUpdateAvailable(const std::string& baseUrl) noexcept
 {
     const std::string manifestUrl = baseUrl + "/manifest.json";
@@ -33,27 +43,21 @@ bool OTAManager::checkForUpdateAvailable(const std::string& baseUrl) noexcept
         return false;
     }
 
-    const esp_partition_t* running = esp_ota_get_running_partition();
-    esp_app_desc_t desc{};
-    const char* runningVersion = "";
+    const std::string manifestVersionRaw = *verOpt;
+    const std::string runningVersionRaw  = Globals::SoftwareVersion;
 
-    if (running && esp_ota_get_partition_description(running, &desc) == ESP_OK)
-    {
-        runningVersion = desc.version;
-    }
-    else
-    {
-        Logger::log(LoggerType::OTA, "Could not read running partition description");
-        Globals::updateAvailable = false;
-        return false;
-    }
+    const std::string manifestVersion = normalizeVersion(manifestVersionRaw);
+    const std::string runningVersion  = normalizeVersion(runningVersionRaw);
 
-    setVersions_(runningVersion, verOpt->c_str());
+    setVersions_(runningVersionRaw.c_str(), manifestVersionRaw.c_str());
 
-    const bool updateAvailable = (*verOpt != runningVersion);
+    const bool updateAvailable = (manifestVersion != runningVersion);
     Globals::updateAvailable = updateAvailable;
 
-    Logger::log(LoggerType::OTA, "Manifest version: %s, running version: %s, updateAvailable=%s", verOpt->c_str(), runningVersion, updateAvailable ? "true" : "false");
+    Logger::log(LoggerType::OTA, "Manifest version raw: %s, running version raw: %s", manifestVersionRaw.c_str(), runningVersionRaw.c_str());
+
+    Logger::log(LoggerType::OTA, "Manifest version normalized: %s, running version normalized: %s, updateAvailable=%s", manifestVersion.c_str(), runningVersion.c_str(), updateAvailable ? "true" : "false");
+
     return updateAvailable;
 }
 
