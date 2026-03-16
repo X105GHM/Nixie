@@ -1760,6 +1760,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initCharts();
   pollInfo();
   loadWifiList();
+  fetchOtaStatus();
 
   (async () => {
     try {

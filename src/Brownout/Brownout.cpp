@@ -59,5 +59,9 @@ void Brownout::timerCallback(void *arg)
         }
 
         esp_timer_stop(self->timer_);
+
+        delay(1000);
+
+        displayEnabled = true;
     }
 }

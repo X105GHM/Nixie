@@ -1,8 +1,8 @@
 {
-  "version": "Nixie_V.6.6.12",
-  "timestamp": "2026-03-14 19:12:09",
+  "version": "Nixie_V.6.6.13",
+  "timestamp": "2026-03-16 19:01:05",
   "files": {
     "firmware.bin": "3bc5815b8264e0425bc248ab02f44d34034db0982c7afe5ed4b0ea7710a3869b",
-    "spiffs.bin": "f19a078e2d6a729aa3a85ffe01e1abcde658ba3d4aded9d0bea3ec9d3bafab81"
+    "spiffs.bin": "673410735b06d029a77337dc75ccb557afefa0a63b6b40850fdde65c0130116c"
   }
 }
