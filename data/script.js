@@ -198,6 +198,23 @@ document.addEventListener("DOMContentLoaded", () => {
     clockEl.textContent = new Date().toLocaleTimeString("de-DE");
   }, 1000);
 
+  const skipSyncTimeouts = new Map();
+
+  function holdSkipSync(id, ms = 30000) {
+    skipSync.add(id);
+
+    if (skipSyncTimeouts.has(id)) {
+      clearTimeout(skipSyncTimeouts.get(id));
+    }
+
+    const t = setTimeout(() => {
+      skipSync.delete(id);
+      skipSyncTimeouts.delete(id);
+    }, ms);
+
+    skipSyncTimeouts.set(id, t);
+  }
+
   // === Stats Monitor ======================================================
   const statsMonitorEls = {
     barCard: document.getElementById("barCard"),
@@ -677,6 +694,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function formatHourMinute(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "–";
+    return `${String(n).padStart(2, "0")}:00`;
+  }
+
   // === Dark/Light Mode ==================================================
   const themeToggle = document.getElementById("themeToggle");
   if (localStorage.getItem("darkMode") === "true") document.body.classList.add("dark");
@@ -1090,10 +1113,35 @@ document.addEventListener("DOMContentLoaded", () => {
     alarmTimeInput = document.getElementById("alarmTimeInput"),
     alarmSettings = document.getElementById("alarmSettings"),
     cricketToggle = document.getElementById("cricketToggle"),
-    CricketButton = document.getElementById("cricketButton");
-    CheckUpdate = document.getElementById("checkUpdate");
+    CricketButton = document.getElementById("cricketButton"),
+    CheckUpdate = document.getElementById("checkUpdate"),
+    brightnessNightStartInput = document.getElementById("brightnessNightStartInput"),
+    brightnessNightEndInput = document.getElementById("brightnessNightEndInput"),
+    brightnessDimStartInput = document.getElementById("brightnessDimStartInput"),
+    brightnessDimEndInput = document.getElementById("brightnessDimEndInput"),
+    brightnessNightValueInput = document.getElementById("brightnessNightValueInput"),
+    brightnessDimValueInput = document.getElementById("brightnessDimValueInput"),
+    brightnessDayValueInput = document.getElementById("brightnessDayValueInput"),
+    applyBrightnessConfig = document.getElementById("applyBrightnessConfig");
 
   const tzNames = ["CET", "EET", "WET", "UTC", "EST", "CST", "MST", "PST", "HST", "JST", "IST", "AEST", "AWST"];
+
+
+  [
+    brightnessNightStartInput,
+    brightnessNightEndInput,
+    brightnessDimStartInput,
+    brightnessDimEndInput,
+    brightnessNightValueInput,
+    brightnessDimValueInput,
+    brightnessDayValueInput
+  ].forEach(input => {
+    if (!input) return;
+
+    input.addEventListener("focus", () => holdSkipSync(input.id, 30000));
+    input.addEventListener("input", () => holdSkipSync(input.id, 30000));
+    input.addEventListener("change", () => holdSkipSync(input.id, 30000));
+  });
 
   // Display ON/OFF special
   displayToggle.addEventListener("change", async () => {
@@ -1130,6 +1178,7 @@ document.addEventListener("DOMContentLoaded", () => {
   makeToggleHandler(tickerToggle, "ticker");
   makeToggleHandler(timeLimitToggle, "timeLimit");
   makeToggleHandler(silentToggle, "silentMode");
+  makeToggleHandler(noACPatNightToggle, "noACPatNight");
   makeToggleHandler(weatherToggle, "weatherUpdate");
   makeToggleHandler(PWMToggle, "NixiePWM");
   makeToggleHandler(cricketToggle, "randomCricket");
@@ -1245,6 +1294,45 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => skipSync.delete("timerTimeInput"), 5000);
   });
 
+  applyBrightnessConfig.addEventListener("click", async () => {
+    try {
+      [
+        brightnessNightStartInput,
+        brightnessNightEndInput,
+        brightnessDimStartInput,
+        brightnessDimEndInput,
+        brightnessNightValueInput,
+        brightnessDimValueInput,
+        brightnessDayValueInput
+      ].forEach(input => {
+        if (input) holdSkipSync(input.id, 30000);
+      });
+
+      const requests = [
+        fetch(`/set/brightnessConfig?field=nightStart&value=${encodeURIComponent(brightnessNightStartInput.value)}`),
+        fetch(`/set/brightnessConfig?field=nightEnd&value=${encodeURIComponent(brightnessNightEndInput.value)}`),
+        fetch(`/set/brightnessConfig?field=dimStart&value=${encodeURIComponent(brightnessDimStartInput.value)}`),
+        fetch(`/set/brightnessConfig?field=dimEnd&value=${encodeURIComponent(brightnessDimEndInput.value)}`),
+        fetch(`/set/brightnessConfig?field=nightValue&value=${encodeURIComponent(brightnessNightValueInput.value)}`),
+        fetch(`/set/brightnessConfig?field=dimValue&value=${encodeURIComponent(brightnessDimValueInput.value)}`),
+        fetch(`/set/brightnessConfig?field=dayValue&value=${encodeURIComponent(brightnessDayValueInput.value)}`)
+      ];
+
+      const results = await Promise.all(requests);
+      const failed = results.find(r => !r.ok);
+
+      if (failed) {
+        alert("Mindestens ein Brightness-Wert konnte nicht gespeichert werden.");
+        return;
+      }
+
+      await fetchInfo();
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Speichern der automatischen Helligkeit.");
+    }
+  });
+
   alarmToggle.addEventListener("change", async () => {
     skipSync.add("alarmToggle");
 
@@ -1323,9 +1411,17 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Brightness
-  function syncBrightnessUI(enabled, val) {
-    brightnessToggle.checked = enabled;
-    brightnessContainer.style.display = enabled ? "flex" : "none";
+  function syncBrightnessUI(manualEnabled, val) {
+    brightnessToggle.checked = manualEnabled;
+    brightnessContainer.style.display = manualEnabled ? "flex" : "none";
+
+    const autoBrightnessConfigGroup = document.getElementById("autoBrightnessConfigGroup");
+    if (autoBrightnessConfigGroup) {
+      const nixiePwmEnabled = !!lastData.NixiePWM;
+      autoBrightnessConfigGroup.style.display =
+        (manualEnabled || nixiePwmEnabled) ? "none" : "block";
+    }
+
     brightnessSlider.value = val;
     brightnessValue.textContent = val;
   }
@@ -1628,7 +1724,10 @@ document.addEventListener("DOMContentLoaded", () => {
         Hardware_Version: 'hardwareVersion', Software_Version: 'softwareVersion',
         NixiePWM: 'NixiePWM', PWM_Frequenzy: 'PWM_Frequenzy',
         manualBrightnessEnabled: 'manualBrightnessEnabled',
-        loadDetected: 'loadDetected', Brightness: 'brightness', timeLimitFrom: 'timeLimitFrom', timeLimitTo: 'timeLimitTo',
+        loadDetected: 'loadDetected', Brightness: 'brightness', brightnessNightStartHour: 'brightnessNightStartHour',
+        brightnessNightEndHour: 'brightnessNightEndHour', brightnessDimStartHour: 'brightnessDimStartHour', brightnessDimEndHour: 'brightnessDimEndHour',
+        brightnessNightValue: 'brightnessNightValue', brightnessDimValue: 'brightnessDimValue', brightnessDayValue: 'brightnessDayValue',
+        timeLimitFrom: 'timeLimitFrom', timeLimitTo: 'timeLimitTo', noACPatNight: 'noACPatNight',
         DisplayEnabled: 'DisplayEnabled', tickerEnabled: 'tickerEnabled', timeLimitEnabled: 'timeLimitEnabled',
         silentModeEnabled: 'silentModeEnabled', WeatherUpdateEnabled: 'WeatherUpdateEnabled', zipCode: 'zipCode',
         CurrentTimeZone: 'CurrentTimeZone', TimerActive: 'TimerActive', TimerConfiguredSeconds: 'TimerConfiguredSeconds',
@@ -1636,16 +1735,27 @@ document.addEventListener("DOMContentLoaded", () => {
       };
 
       const boolFields = ['DisplayEnabled', 'tickerEnabled', 'timeLimitEnabled', 'silentModeEnabled',
-        'WeatherUpdateEnabled', 'manualBrightnessEnabled', 'NixiePWM', 'TimerActive', 'AlarmActive', 'loadDetected'];
+        'WeatherUpdateEnabled', 'manualBrightnessEnabled', 'NixiePWM', 'TimerActive', 'AlarmActive', 'loadDetected', 'noACPatNight'];
 
       Object.entries(map).forEach(([k, id]) => {
         const el = document.getElementById(id);
         if (!el || skipSync.has(id)) return;
 
         let val = data[k];
+
         if (boolFields.includes(k)) {
           val = val == 1 ? 'on' : 'off';
         }
+
+        if (
+          k === "brightnessNightStartHour" ||
+          k === "brightnessNightEndHour" ||
+          k === "brightnessDimStartHour" ||
+          k === "brightnessDimEndHour"
+        ) {
+          val = formatHourMinute(val);
+        }
+
         el.textContent = val;
       });
 
@@ -1654,18 +1764,41 @@ document.addEventListener("DOMContentLoaded", () => {
         syncBrightnessUI(!!data.manualBrightnessEnabled, data.Brightness);
       }
 
+      if (!skipSync.has("brightnessNightStartInput") && brightnessNightStartInput) {
+        brightnessNightStartInput.value = data.brightnessNightStartHour ?? 22;
+      }
+      if (!skipSync.has("brightnessNightEndInput") && brightnessNightEndInput) {
+        brightnessNightEndInput.value = data.brightnessNightEndHour ?? 6;
+      }
+      if (!skipSync.has("brightnessDimStartInput") && brightnessDimStartInput) {
+        brightnessDimStartInput.value = data.brightnessDimStartHour ?? 20;
+      }
+      if (!skipSync.has("brightnessDimEndInput") && brightnessDimEndInput) {
+        brightnessDimEndInput.value = data.brightnessDimEndHour ?? 8;
+      }
+      if (!skipSync.has("brightnessNightValueInput") && brightnessNightValueInput) {
+        brightnessNightValueInput.value = data.brightnessNightValue ?? 15;
+      }
+      if (!skipSync.has("brightnessDimValueInput") && brightnessDimValueInput) {
+        brightnessDimValueInput.value = data.brightnessDimValue ?? 75;
+      }
+      if (!skipSync.has("brightnessDayValueInput") && brightnessDayValueInput) {
+        brightnessDayValueInput.value = data.brightnessDayValue ?? 100;
+      }
+
+
       if (updateBannerBadge) {
         const rawUpdateValue =
-        data.updateAvailable ??
-        data.UpdateAvailable ??
-        data.update_available ??
-        0;
+          data.updateAvailable ??
+          data.UpdateAvailable ??
+          data.update_available ??
+          0;
 
         const hasUpdate =
-        rawUpdateValue === 1 ||
-        rawUpdateValue === "1" ||
-        rawUpdateValue === true ||
-        rawUpdateValue === "true";
+          rawUpdateValue === 1 ||
+          rawUpdateValue === "1" ||
+          rawUpdateValue === true ||
+          rawUpdateValue === "true";
 
         updateBannerBadge.classList.toggle("hidden", !hasUpdate);
       }

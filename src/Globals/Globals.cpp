@@ -10,6 +10,7 @@ namespace Globals
     bool PWM_disabled               = false; // Mem
     bool cricketSoundEnabled        = false;
     bool updateAvailable            = false;
+    bool noACPatNight               = false; // Mem
 
     bool loadDetected               = false;
 
@@ -22,6 +23,15 @@ namespace Globals
     std::string timeLimitFrom       = "06:00:00"; // Mem
 
     std::string timeLimitTo         = "00:00:00"; // Mem
+
+    uint8_t brightnessNightStartHour = 22;  // Mem
+    uint8_t brightnessNightEndHour   = 6;   // Mem
+    uint8_t brightnessDimStartHour   = 20;  // Mem
+    uint8_t brightnessDimEndHour     = 8;   // Mem
+
+    uint8_t brightnessNightValue     = 15;  // Mem
+    uint8_t brightnessDimValue       = 75;  // Mem
+    uint8_t brightnessDayValue       = 100; // Mem
 
     uint32_t logConfig = // Mem
         LOG_HTTP        |

@@ -115,18 +115,29 @@ void ClockControl::timeCycle() noexcept
                 relay.toggle();
             }
 
-            if ((timeInfo.tm_hour < 6 || timeInfo.tm_hour >= 22) && !Globals::manualBrightnessEnabled)
+            if (!Globals::manualBrightnessEnabled)
             {
-                brightness = 15;
+                const uint8_t hour = static_cast<uint8_t>(timeInfo.tm_hour);
+
+                const bool isNight = (hour < Globals::brightnessNightEndHour) || (hour >= Globals::brightnessNightStartHour);
+
+                const bool isDim = (hour < Globals::brightnessDimEndHour) || (hour >= Globals::brightnessDimStartHour);
+
+                if (isNight)
+                {
+                    brightness = Globals::brightnessNightValue;
+                }
+                else if (isDim)
+                {
+                    brightness = Globals::brightnessDimValue;
+                }
+                else
+                {
+                    brightness = Globals::brightnessDayValue;
+                }
             }
-            else if ((timeInfo.tm_hour < 8 || timeInfo.tm_hour >= 20) && !Globals::manualBrightnessEnabled)
-            {
-                brightness = 75;
-            }
-            else if (!Globals::manualBrightnessEnabled)
-            {
-                brightness = 100;
-            }
+
+            const bool isNightTime = (timeInfo.tm_hour < Globals::brightnessNightEndHour) || (timeInfo.tm_hour >= Globals::brightnessNightStartHour);
 
             if (timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 50 && timeInfo.tm_sec < 55 && displayEnabled && Globals::loadDetected)
             {
@@ -134,7 +145,7 @@ void ClockControl::timeCycle() noexcept
                 displayDate();
                 vTaskDelay(pdMS_TO_TICKS(5000));
             }
-            else if (((timeInfo.tm_min == 57 && timeInfo.tm_sec == 15) || (timeInfo.tm_min == 27 && timeInfo.tm_sec == 15)) && displayEnabled && Globals::loadDetected)
+            else if (((timeInfo.tm_min == 57 && timeInfo.tm_sec == 15) || (timeInfo.tm_min == 27 && timeInfo.tm_sec == 15)) && displayEnabled && Globals::loadDetected && !(Globals::noACPatNight && isNightTime))
             {
                 Logger::log(LoggerType::TIME, F("Running ACP"));
                 digits = 0;

@@ -59,7 +59,14 @@ namespace Memory
             Globals::timeLimitTo                                                + "|" +
             std::to_string(brightness)                                          + "|" +
             std::to_string(PWM_PERIOD_US)                                       + "|" +
-            std::to_string(static_cast<int>(Globals::currentTimeZone));
+            std::to_string(static_cast<int>(Globals::currentTimeZone))          + "|" +
+            std::to_string(Globals::brightnessNightStartHour)                   + "|" +
+            std::to_string(Globals::brightnessNightEndHour)                     + "|" +
+            std::to_string(Globals::brightnessDimStartHour)                     + "|" +
+            std::to_string(Globals::brightnessDimEndHour)                       + "|" +
+            std::to_string(Globals::brightnessNightValue)                       + "|" +
+            std::to_string(Globals::brightnessDimValue)                         + "|" +
+            std::to_string(Globals::brightnessDayValue);
 
         nvs_set_str(handle, KEY_STRING, packed.c_str());
         nvs_commit(handle);
@@ -150,11 +157,21 @@ namespace Memory
         Globals::manualBrightnessEnabled = false;
         Globals::WeatherUpdateEnabled    = false;
         Globals::PWM_disabled            = false;
+        Globals::noACPatNight            = false;
 
         Globals::zipCode                 = "88457";
         Globals::currentFirmwareTarget   = Globals::FirmwareTarget::NixieV6_std;
         Globals::timeLimitFrom           = "06:00:00";
         Globals::timeLimitTo             = "00:00:00";
+
+        Globals::brightnessNightStartHour = 22;
+        Globals::brightnessNightEndHour   = 6;
+        Globals::brightnessDimStartHour   = 20;
+        Globals::brightnessDimEndHour     = 8;
+
+        Globals::brightnessNightValue     = 15;
+        Globals::brightnessDimValue       = 75;
+        Globals::brightnessDayValue       = 100;
 
         Globals::logConfig               = 0;
 
@@ -175,7 +192,8 @@ namespace Memory
             (Globals::SilentModeEnabled       ? 1 << 2 : 0) |
             (Globals::manualBrightnessEnabled ? 1 << 3 : 0) |
             (Globals::WeatherUpdateEnabled    ? 1 << 4 : 0) |
-            (Globals::PWM_disabled            ? 1 << 5 : 0);
+            (Globals::PWM_disabled            ? 1 << 5 : 0) |
+            (Globals::noACPatNight            ? 1 << 6 : 0);
         storage.setIntValue(flags);
 
         storage.setFloatValue(static_cast<float>(Globals::logConfig));
@@ -188,7 +206,14 @@ namespace Memory
             Globals::timeLimitTo                                                + "|" +
             std::to_string(brightness)                                          + "|" +
             std::to_string(PWM_PERIOD_US)                                       + "|" +
-            std::to_string(static_cast<int>(Globals::currentTimeZone));
+            std::to_string(static_cast<int>(Globals::currentTimeZone))          + "|" +
+            std::to_string(Globals::brightnessNightStartHour)                   + "|" +
+            std::to_string(Globals::brightnessNightEndHour)                     + "|" +
+            std::to_string(Globals::brightnessDimStartHour)                     + "|" +
+            std::to_string(Globals::brightnessDimEndHour)                       + "|" +
+            std::to_string(Globals::brightnessNightValue)                       + "|" +
+            std::to_string(Globals::brightnessDimValue)                         + "|" +
+            std::to_string(Globals::brightnessDayValue);
 
         storage.setStringValue(packed);
 
@@ -213,29 +238,45 @@ namespace Memory
         Globals::manualBrightnessEnabled = flags & (1 << 3);
         Globals::WeatherUpdateEnabled    = flags & (1 << 4);
         Globals::PWM_disabled            = flags & (1 << 5);
+        Globals::noACPatNight            = flags & (1 << 6);
 
         Globals::logConfig = static_cast<uint32_t>(storage.getFloatValue());
 
         std::string packed = storage.getStringValue();
 
-        size_t p1 = packed.find('|');
-        size_t p2 = packed.find('|', p1 + 1);
-        size_t p3 = packed.find('|', p2 + 1);
-        size_t p4 = packed.find('|', p3 + 1);
-        size_t p5 = packed.find('|', p4 + 1);
-        size_t p6 = packed.find('|', p5 + 1);
-        size_t p7 = packed.find('|', p6 + 1);
-
-        if (p1!=std::string::npos && p2!=std::string::npos && p3!=std::string::npos && p4!=std::string::npos && p5!=std::string::npos && p6!=std::string::npos && p7!=std::string::npos)
+        std::vector<size_t> pos;
+        size_t start = 0;
+        while (true)
         {
-            Globals::zipCode                = packed.substr(0,       p1);
-            Globals::HardwareVersion        = packed.substr(p1+1,   p2-p1-1);
-            Globals::currentFirmwareTarget  = static_cast<Globals::FirmwareTarget>(std::stoi(packed.substr(p2+1, p3-p2-1)));
-            Globals::timeLimitFrom          = packed.substr(p3+1,   p4-p3-1);
-            Globals::timeLimitTo            = packed.substr(p4+1,   p5-p4-1);
-            brightness                      = std::stoi(packed.substr(p5+1, p6-p5-1));
-            PWM_PERIOD_US                   = std::stoul(packed.substr(p6+1, p7-p6-1));  
-            Globals::currentTimeZone        = static_cast<Globals::TimeZone>(std::stoi(packed.substr(p7+1)));
+            size_t p = packed.find('|', start);
+            if (p == std::string::npos) break;
+            pos.push_back(p);
+           start = p + 1;
+        }
+
+        if (pos.size() >= 7)
+        {
+            Globals::zipCode               = packed.substr(0, pos[0]);
+            Globals::HardwareVersion       = packed.substr(pos[0] + 1, pos[1] - pos[0] - 1);
+            Globals::currentFirmwareTarget = static_cast<Globals::FirmwareTarget>(std::stoi(packed.substr(pos[1] + 1, pos[2] - pos[1] - 1)));
+            Globals::timeLimitFrom         = packed.substr(pos[2] + 1, pos[3] - pos[2] - 1);
+            Globals::timeLimitTo           = packed.substr(pos[3] + 1, pos[4] - pos[3] - 1);
+            brightness                     = std::stoi(packed.substr(pos[4] + 1, pos[5] - pos[4] - 1));
+            PWM_PERIOD_US                  = std::stoul(packed.substr(pos[5] + 1, pos[6] - pos[5] - 1));
+            Globals::currentTimeZone       = static_cast<Globals::TimeZone>(std::stoi(packed.substr(pos[6] + 1, (pos.size() >= 8 ? pos[7] : packed.size()) - pos[6] - 1)));
+        }
+
+        // Neue Felder nur laden, wenn sie vorhanden sind.
+        // Sonst bleiben die Defaultwerte aus Globals.cpp erhalten.
+        if (pos.size() >= 14)
+        {
+            Globals::brightnessNightStartHour = static_cast<uint8_t>(std::stoi(packed.substr(pos[7] + 1,  pos[8]  - pos[7]  - 1)));
+            Globals::brightnessNightEndHour   = static_cast<uint8_t>(std::stoi(packed.substr(pos[8] + 1,  pos[9]  - pos[8]  - 1)));
+            Globals::brightnessDimStartHour   = static_cast<uint8_t>(std::stoi(packed.substr(pos[9] + 1,  pos[10] - pos[9]  - 1)));
+            Globals::brightnessDimEndHour     = static_cast<uint8_t>(std::stoi(packed.substr(pos[10] + 1, pos[11] - pos[10] - 1)));
+            Globals::brightnessNightValue     = static_cast<uint8_t>(std::stoi(packed.substr(pos[11] + 1, pos[12] - pos[11] - 1)));
+            Globals::brightnessDimValue       = static_cast<uint8_t>(std::stoi(packed.substr(pos[12] + 1, pos[13] - pos[12] - 1)));
+            Globals::brightnessDayValue       = static_cast<uint8_t>(std::stoi(packed.substr(pos[13] + 1)));
         }
     }
 

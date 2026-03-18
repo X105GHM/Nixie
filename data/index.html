@@ -59,6 +59,7 @@
                 <div class="card"><strong>Display Status:</strong> <span id="DisplayEnabled">–</span></div>
                 <div class="card"><strong>Last erkannt:</strong> <span id="loadDetected">–</span></div>
                 <div class="card"><strong>Ruhemodus:</strong> <span id="silentModeEnabled">–</span></div>
+                <div class="card"><strong>Nachts keine ACP:</strong> <span id="noACPatNight">–</span></div>
                 <div class="card"><strong>Wetter Updates:</strong> <span id="WeatherUpdateEnabled">–</span></div>
                 <div class="card"><strong>Ticker:</strong> <span id="tickerEnabled">–</span></div>
                 <div class="card"><strong>Autor:</strong> <span id="autor">–</span></div>
@@ -71,9 +72,15 @@
                 <div class="card"><strong>Flash-Speed:</strong> <span id="flashSpeed">–</span></div>
                 <div class="card"><strong>Nixie PWM:</strong> <span id="NixiePWM">–</span></div>
                 <div class="card"><strong>PWM Frequenz:</strong> <span id="PWM_Frequenzy">–</span></div>
-                <div class="card"><strong>Manuelle Helligkeit:</strong> <span id="manualBrightnessEnabled">–</span>
-                </div>
+                <div class="card"><strong>Manuelle Helligkeit:</strong> <span id="manualBrightnessEnabled">–</span></div>
                 <div class="card"><strong>Helligkeit:</strong> <span id="brightness">–</span></div>
+                <div class="card"><strong>Nacht Start:</strong> <span id="brightnessNightStartHour">–</span></div>
+                <div class="card"><strong>Nacht Ende:</strong> <span id="brightnessNightEndHour">–</span></div>
+                <div class="card"><strong>Dimm Start:</strong> <span id="brightnessDimStartHour">–</span></div>
+                <div class="card"><strong>Dimm Ende:</strong> <span id="brightnessDimEndHour">–</span></div>
+                <div class="card"><strong>Nacht Helligkeit:</strong> <span id="brightnessNightValue">–</span></div>
+                <div class="card"><strong>Dimm Helligkeit:</strong> <span id="brightnessDimValue">–</span></div>
+                <div class="card"><strong>Tag Helligkeit:</strong> <span id="brightnessDayValue">–</span></div>
                 <div class="card"><strong>Zeitabhänige Anzeige:</strong> <span id="timeLimitEnabled">–</span></div>
                 <div class="card"><strong>Anzeige Startzeit:</strong> <span id="timeLimitFrom">–</span></div>
                 <div class="card"><strong>Anzeige Stop:</strong> <span id="timeLimitTo">–</span></div>
@@ -297,6 +304,14 @@
                 </div>
 
                 <div class="device-setting">
+                    <label for="noACPatNightToggle">Nachts keine ACP</label>
+                    <label class="switch">
+                        <input type="checkbox" id="noACPatNightToggle" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="device-setting">
                     <label for="PWMToggle">Nixie PWM</label>
                     <label class="switch">
                         <input type="checkbox" id="PWMToggle" />
@@ -316,6 +331,50 @@
                     <label for="brightnessSlider">Helligkeit</label>
                     <input type="range" id="brightnessSlider" min="1" max="100" value="50" />
                     <span id="brightnessValue">50</span>
+                </div>
+
+                <div class="settings-group" id="autoBrightnessConfigGroup">
+                    <h4>Automatische Helligkeit</h4>
+
+                    <div class="device-setting">
+                        <label for="brightnessNightStartInput">Nacht Start</label>
+                        <input type="number" id="brightnessNightStartInput" min="0" max="23" value="22" />
+                    </div>
+
+                    <div class="device-setting">
+                        <label for="brightnessNightEndInput">Nacht Ende</label>
+                        <input type="number" id="brightnessNightEndInput" min="0" max="23" value="6" />
+                    </div>
+
+                    <div class="device-setting">
+                        <label for="brightnessDimStartInput">Dimm Start</label>
+                        <input type="number" id="brightnessDimStartInput" min="0" max="23" value="20" />
+                    </div>
+
+                    <div class="device-setting">
+                        <label for="brightnessDimEndInput">Dimm Ende</label>
+                        <input type="number" id="brightnessDimEndInput" min="0" max="23" value="8" />
+                    </div>
+
+                    <div class="device-setting">
+                        <label for="brightnessNightValueInput">Nacht Helligkeit</label>
+                        <input type="number" id="brightnessNightValueInput" min="0" max="100" value="15" />
+                    </div>
+
+                    <div class="device-setting">
+                        <label for="brightnessDimValueInput">Dimm Helligkeit</label>
+                        <input type="number" id="brightnessDimValueInput" min="0" max="100" value="75" />
+                    </div>
+
+                    <div class="device-setting">
+                        <label for="brightnessDayValueInput">Tag Helligkeit</label>
+                        <input type="number" id="brightnessDayValueInput" min="0" max="100" value="100" />
+                    </div>
+
+                    <div class="device-setting">
+                        <label>Automatik übernehmen</label>
+                        <button id="applyBrightnessConfig">Übernehmen</button>
+                    </div>
                 </div>
 
                 <div class="device-setting">

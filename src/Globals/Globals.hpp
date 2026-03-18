@@ -1,5 +1,5 @@
 #ifndef SOFTWARE_VERSION
-  #define SOFTWARE_VERSION "6.6.13"
+  #define SOFTWARE_VERSION "6.6.15"
 #endif
 
 #pragma once
@@ -43,6 +43,8 @@ namespace Globals
 
     extern bool updateAvailable; 
 
+    extern bool noACPatNight;
+
     extern std::string zipCode;
 
     extern std::string HardwareVersion;
@@ -53,6 +55,14 @@ namespace Globals
 
     extern std::string timeLimitTo;
 
+    extern uint8_t brightnessNightStartHour;
+    extern uint8_t brightnessNightEndHour;
+    extern uint8_t brightnessDimStartHour;
+    extern uint8_t brightnessDimEndHour;
+
+    extern uint8_t brightnessNightValue;
+    extern uint8_t brightnessDimValue;
+    extern uint8_t brightnessDayValue;
 
     void applyLogConfig();
 

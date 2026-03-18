@@ -483,6 +483,93 @@ void HTTPHandler::begin() noexcept
         server_.send(200, "text/plain",String("timeLimitEnabled=") + (Globals::timeLimitEnabled ? "1" : "0") +"\nfrom=" + Globals::timeLimitFrom.c_str() +"\nto=" + Globals::timeLimitTo.c_str());
     });
 
+    server_.on("/set/brightnessConfig", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("field") || !server_.hasArg("value"))
+        {
+            server_.send(400, "text/plain", "Missing 'field' or 'value' parameter");
+            Logger::log(LOGTYPE, F("HTTP /set/brightnessConfig fehlte 'field' oder 'value'"));
+            return;
+        }
+
+        const String field = server_.arg("field");
+        const String val   = server_.arg("value");
+        const long parsedValue = val.toInt();
+
+        if (parsedValue < 0 || parsedValue > 255)
+        {
+            server_.send(400, "text/plain", "Invalid value range");
+            Logger::log(LOGTYPE, "HTTP /set/brightnessConfig invalid range: %ld", parsedValue);
+            return;
+        }
+
+        const uint8_t newValue = static_cast<uint8_t>(parsedValue);
+        bool validField = true;
+
+        if (field == "nightStart")
+        {
+            if (newValue > 23)
+            {
+                server_.send(400, "text/plain", "nightStart must be 0..23");
+                return;
+            }
+            Globals::brightnessNightStartHour = newValue;
+        }
+        else if (field == "nightEnd")
+        {
+            if (newValue > 23)
+            {
+                server_.send(400, "text/plain", "nightEnd must be 0..23");
+                return;
+            }
+            Globals::brightnessNightEndHour = newValue;
+        }
+        else if (field == "dimStart")
+        {
+            if (newValue > 23)
+            {
+                server_.send(400, "text/plain", "dimStart must be 0..23");
+                return;
+            }
+            Globals::brightnessDimStartHour = newValue;
+        }
+        else if (field == "dimEnd")
+        {
+        if (newValue > 23)
+        {
+            server_.send(400, "text/plain", "dimEnd must be 0..23");
+            return;
+        }
+            Globals::brightnessDimEndHour = newValue;
+        }
+        else if (field == "nightValue")
+        {
+            Globals::brightnessNightValue = newValue;
+        }
+        else if (field == "dimValue")
+        {
+            Globals::brightnessDimValue = newValue;
+        }
+        else if (field == "dayValue")
+        {
+            Globals::brightnessDayValue = newValue;
+        }
+        else
+        {
+            validField = false;
+        }
+
+        if (!validField)
+        {
+            server_.send(400, "text/plain",
+                     "Invalid field. Use: nightStart, nightEnd, dimStart, dimEnd, nightValue, dimValue, dayValue");
+            Logger::log(LOGTYPE, "HTTP /set/brightnessConfig invalid field: %s", field.c_str());
+            return;
+        }
+
+        Logger::log(LOGTYPE, "Brightness config updated: %s=%u", field.c_str(), static_cast<unsigned>(newValue));
+        server_.send(200, "text/plain", field + "=" + String(newValue));
+    });
+
     server_.on("/set/silentMode", HTTP_GET, [this]() noexcept{
         if (!server_.hasArg("value")) 
         {
@@ -512,6 +599,22 @@ void HTTPHandler::begin() noexcept
 
         server_.send(200, "text/plain",
                      String("SilentModeEnabled=") + (Globals::SilentModeEnabled ? "1" : "0")); 
+    });
+
+    server_.on("/set/noACPatNight", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("value"))
+        {
+            server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
+            Logger::log(LOGTYPE, F("HTTP /set/noACPatNight fehlte Parameter 'value'"));
+            return;
+        }
+
+        String val = server_.arg("value");
+        Globals::noACPatNight = (val != "0");
+
+        Logger::log(LOGTYPE, "noACPatNight set to %s via HTTP", Globals::noACPatNight ? "true" : "false");
+
+        server_.send(200, "text/plain", String("noACPatNight=") + (Globals::noACPatNight ? "1" : "0"));
     });
 
     server_.on("/set/manualBrightness", HTTP_GET, [this]() noexcept {
@@ -953,12 +1056,20 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse += "  \"tickerEnabled\": "       + String(Globals::tickerEnabled) + ",\n";
     jsonResponse += "  \"timeLimitEnabled\": "    + String(Globals::timeLimitEnabled) + ",\n";
     jsonResponse += "  \"silentModeEnabled\": "   + String(Globals::SilentModeEnabled) + ",\n";
+    jsonResponse += "  \"noACPatNight\": "      + String(Globals::noACPatNight) + ",\n";
     jsonResponse += "  \"manualBrightnessEnabled\": " + String(Globals::manualBrightnessEnabled) + ",\n";
     jsonResponse += "  \"WeatherUpdateEnabled\": "    + String(Globals::WeatherUpdateEnabled) + ",\n";
     jsonResponse += "  \"cricketSoundEnabled\": "    + String(Globals::cricketSoundEnabled) + ",\n";
     jsonResponse += "  \"logConfigBinary\": \""    + binStr                         + "\",\n";
     jsonResponse += "  \"loadDetected\": "        + String(Globals::loadDetected)  + ",\n";
     jsonResponse += "  \"Brightness\": "          + String(brightness)             + ",\n";
+    jsonResponse += "  \"brightnessNightStartHour\": " + String(Globals::brightnessNightStartHour) + ",\n";
+    jsonResponse += "  \"brightnessNightEndHour\": "   + String(Globals::brightnessNightEndHour)   + ",\n";
+    jsonResponse += "  \"brightnessDimStartHour\": "   + String(Globals::brightnessDimStartHour)   + ",\n";
+    jsonResponse += "  \"brightnessDimEndHour\": "     + String(Globals::brightnessDimEndHour)     + ",\n";
+    jsonResponse += "  \"brightnessNightValue\": "     + String(Globals::brightnessNightValue)     + ",\n";
+    jsonResponse += "  \"brightnessDimValue\": "       + String(Globals::brightnessDimValue)       + ",\n";
+    jsonResponse += "  \"brightnessDayValue\": "       + String(Globals::brightnessDayValue)       + ",\n";
     jsonResponse += "  \"timeLimitFrom\": \""   + String(Globals::timeLimitFrom.c_str()) + "\",\n";
     jsonResponse += "  \"timeLimitTo\": \""     + String(Globals::timeLimitTo.c_str()) + "\",\n";
     jsonResponse += "  \"SingleACP\": "         + String(singleDigitACP) + ",\n";
