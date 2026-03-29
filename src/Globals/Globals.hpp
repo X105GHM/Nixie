@@ -1,5 +1,5 @@
 #ifndef SOFTWARE_VERSION
-  #define SOFTWARE_VERSION "6.6.15"
+  #define SOFTWARE_VERSION "6.6.16"
 #endif
 
 #pragma once
