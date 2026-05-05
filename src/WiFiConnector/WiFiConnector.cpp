@@ -20,6 +20,7 @@ void WiFiConnector::connect() noexcept
     ewm.setHostname("nixieclock");
     ewm.setAPCredentials(apSsid_, (apPass_ ? apPass_ : ""));
     ewm.setInternetProbe("1.1.1.1", 53);
+    ewm.setRequireInternetOnConnect(true);
 
     ewm::portal::PortalUiConfig ui;
     ui.mdnsHost = "nixieclock.local";

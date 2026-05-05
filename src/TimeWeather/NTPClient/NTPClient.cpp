@@ -2,20 +2,45 @@
 
 NTPClient::NTPClient() noexcept {}
 
-void NTPClient::initTime(const std::string &timezone) noexcept
+bool NTPClient::initTime(const std::string &timezone, uint32_t timeoutMs) noexcept
 {
+    applyTimeZone(timezone);
+
     if (WiFi.status() != WL_CONNECTED)
     {
-        return;
+        Logger::log(LoggerType::TIME, "NTP skipped: WiFi not connected, TZ is still applied");
+        return false;
     }
-    configTime(0, 0, "pool.ntp.org");
-    struct tm timeInfo;
-    if (!getLocalTime(&timeInfo))
+
+    configTzTime(
+        timezone.c_str(),
+        "pool.ntp.org",
+        "time.google.com",
+        "time.cloudflare.com"
+    );
+
+    struct tm timeInfo {};
+    if (!getLocalTime(&timeInfo, timeoutMs))
     {
-        return;
+        Logger::log(LoggerType::TIME, "NTP sync failed / timeout");
+        return false;
     }
-    setenv("TZ", timezone.c_str(), 1);
+
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S %Z", &timeInfo);
+    Logger::log(LoggerType::TIME, "NTP synced: %s", buf);
+
+    return true;
+}
+
+void NTPClient::applyTimeZone(const std::string &timezone) noexcept
+{
+    const char* tz = timezone.empty() ? "UTC0" : timezone.c_str();
+
+    setenv("TZ", tz, 1);
     tzset();
+
+    Logger::log(LoggerType::TIME, "Timezone applied: %s", tz);
 }
 
 bool NTPClient::getTime(struct tm &timeInfo) const noexcept
