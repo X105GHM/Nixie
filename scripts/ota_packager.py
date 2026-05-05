@@ -25,23 +25,15 @@ def sha256sum(filepath):
     return h.hexdigest()
 
 
-def get_next_version():
-    base = "Nixie_V.6.6."
+def read_current_version():
+    if not os.path.exists(VERSION_FILE):
+        raise FileNotFoundError(f"Missing version file: {VERSION_FILE}")
 
-    if os.path.exists(VERSION_FILE):
-        with open(VERSION_FILE, "r", encoding="utf-8") as vf:
-            last = vf.read().strip()
-            try:
-                n = int(last.split(".")[-1]) + 1
-            except ValueError:
-                n = 0
-    else:
-        n = 0
+    with open(VERSION_FILE, "r", encoding="utf-8") as vf:
+        version = vf.read().strip()
 
-    version = f"{base}{n}"
-
-    with open(VERSION_FILE, "w", encoding="utf-8") as vf:
-        vf.write(version)
+    if not version:
+        raise ValueError(f"Version file is empty: {VERSION_FILE}")
 
     return version
 
@@ -119,7 +111,7 @@ def package_existing_build(source, target, env):  # type: ignore
 
     print(f"firmware.bin & spiffs.bin kopiert nach {OUTPUT_DIR}")
 
-    version = get_next_version()
+    version = read_current_version()
     write_manifest(version, firmware_dst, spiffs_dst)
     create_zip_with_timestamp(firmware_dst, spiffs_dst)
 

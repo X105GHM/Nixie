@@ -27,7 +27,6 @@ AlwaysBuild(env_package_ota)
 
 # Pre-Build: Script zum Einbinden der Software-Version
 # wird vor jedem 'build' Target ausgeführt
-env.AddPreAction('build', lambda source, target, env: env.Execute(f"{python_exe} {version_script}"))   # type: ignore
 
 # Custom PIO target: build_bins
 # Führt Firmware- und SPIFFS-Build aus und kopiert die .bin-Dateien nach bin/
