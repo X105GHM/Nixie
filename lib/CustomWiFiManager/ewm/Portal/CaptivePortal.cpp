@@ -29,6 +29,10 @@ namespace ewm
 
     void CaptivePortal::sendCommonHeaders_()
     {
+        server_.sendHeader("Access-Control-Allow-Origin", "*");
+        server_.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+        server_.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-EWM-CSRF");
+        server_.sendHeader("Access-Control-Max-Age", "600");
         server_.sendHeader("Cache-Control", "no-store");
         server_.sendHeader("Connection", "close");
     }
