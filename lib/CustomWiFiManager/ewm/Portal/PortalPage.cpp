@@ -655,7 +655,7 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
 
     modal.querySelector("#endAp").onclick = async () => {
         for (const u of postCandidates(EP.apOff)) {
-            try { await fetchJsonWithTimeout(u, TIM.perTryTimeoutMs, { method: "POST" }); break; } catch (e) { }
+            try { await fetchJsonWithTimeout(u, TIM.perTryTimeoutMs, { method: "POST", headers: csrfHeaders() }); break; } catch (e) { }
         }
         finish();
     };
@@ -675,7 +675,7 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
                 setLoading(btnConn, true);
                 const r = await fetch(EP.connect, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: csrfHeaders({ "Content-Type": "application/json" }),
                     body: JSON.stringify({ ssid }),
                     cache: "no-store"
                 });
@@ -695,7 +695,7 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
             try {
                 const r = await fetch(EP.del, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: csrfHeaders({ "Content-Type": "application/json" }),
                     body: JSON.stringify({ ssid }),
                     cache: "no-store"
                 });
@@ -747,7 +747,7 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
             setLoading(btnSave, true);
             const r = await fetch(EP.reorder, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: csrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({ order: ssids }),
                 cache: "no-store"
             });
@@ -764,7 +764,7 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
 
         try {
             setLoading(btnErase, true);
-            const r = await fetch(EP.erase, { method: "POST", cache: "no-store" });
+            const r = await fetch(EP.erase, { method: "POST", headers: csrfHeaders(), cache: "no-store" });
             if (!r.ok) showModalInfo("Fehler", await r.text());
             window.location.replace("/");
         } finally {
@@ -785,7 +785,7 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
             setLoading(btnConn, true);
             const r = await fetch(EP.connect, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: csrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({ ssid, password: pw, priority: pr }),
                 cache: "no-store",
                 keepalive: true
@@ -808,7 +808,7 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
             setLoading(btnAdd, true);
             const r = await fetch(EP.add, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: csrfHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({ ssid, password: pw, priority: pr }),
                 cache: "no-store"
             });
