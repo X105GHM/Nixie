@@ -83,7 +83,9 @@ namespace ewm
         }
 
         // Reparatur: schreibt geladenen Stand wieder in beide (wenn eine Kopie mal kaputt war)
-        saveBoth(hdrOut, dataOut);
+        const bool needsRepair = !okp || !okb || hp.crc32 != hb.crc32;
+        if (needsRepair) saveBoth(hdrOut, dataOut);
+
         return true;
     }
 }

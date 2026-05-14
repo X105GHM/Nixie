@@ -42,6 +42,10 @@ namespace ewm
 
         void setupWeb_(PortalHooks& hooks);
 
+        void sendCommonHeaders_();
+        void generateCsrfToken_();
+        bool isCsrfValid_();
+
         uint16_t port_{80};
         DNSServer dns_{};
         WebServer server_;
@@ -50,6 +54,7 @@ namespace ewm
         String apSsid_{"ESP32-Setup"};
         String apPass_{""};
         String uiCfgJson_{"{}"};
+        String csrfToken_{};
 
         ewm::portal::PortalUiConfig uiCfg_;
 

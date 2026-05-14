@@ -6,6 +6,8 @@ static const std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$
 
 static const char* tzNames[] = {"CET","EET","WET","UTC","EST","CST","MST","PST","HST","JST","IST","AEST","AWST"};
 
+//helper functions
+
 static bool otaBusy() noexcept
 {
     return OTAManager::instance().isRunning();
@@ -15,6 +17,106 @@ static void sendOtaBusy(WebServer& server) noexcept
 {
     server.sendHeader("Cache-Control", "no-store");
     server.send(503, "application/json", "{\"error\":\"OTA active\"}");
+}
+
+static bool isValidZipCode(const String& zip) noexcept
+{
+    if (zip.length() == 0 || zip.length() > 10)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < zip.length(); ++i)
+    {
+        if (!isDigit(zip[i]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static uint32_t parseZipDigitsSafe(const std::string& zip) noexcept
+{
+    if (zip.empty())
+    {
+        return 0;
+    }
+
+    uint32_t value = 0;
+    for (char c : zip)
+    {
+        if (c < '0' || c > '9')
+        {
+            return 0;
+        }
+
+        const uint32_t digit = static_cast<uint32_t>(c - '0');
+        if (value > (UINT32_MAX - digit) / 10U)
+        {
+            return 0;
+        }
+
+        value = value * 10U + digit;
+    }
+
+    return value;
+}
+
+static bool parseUInt32Strict(const String& input, uint32_t& out) noexcept
+{
+    if (input.length() == 0)
+    {
+        return false;
+    }
+
+    uint32_t value = 0;
+    for (size_t i = 0; i < input.length(); ++i)
+    {
+        char c = input[i];
+        if (c < '0' || c > '9')
+        {
+            return false;
+        }
+
+        const uint32_t digit = static_cast<uint32_t>(c - '0');
+        if (value > (UINT32_MAX - digit) / 10U)
+        {
+            return false;
+        }
+
+        value = value * 10U + digit;
+    }
+
+    out = value;
+    return true;
+}
+
+static bool parseAlarmTime(const String& input, uint8_t& hour, uint8_t& minute) noexcept
+{
+    if (input.length() != 5 || input[2] != ':')
+    {
+        return false;
+    }
+
+    if (!isDigit(input[0]) || !isDigit(input[1]) ||
+        !isDigit(input[3]) || !isDigit(input[4]))
+    {
+        return false;
+    }
+
+    const int h = (input[0] - '0') * 10 + (input[1] - '0');
+    const int m = (input[3] - '0') * 10 + (input[4] - '0');
+
+    if (h < 0 || h > 23 || m < 0 || m > 59)
+    {
+        return false;
+    }
+
+    hour = static_cast<uint8_t>(h);
+    minute = static_cast<uint8_t>(m);
+    return true;
 }
 
 constexpr int tzCount = sizeof(tzNames) / sizeof(tzNames[0]);
@@ -409,7 +511,7 @@ void HTTPHandler::begin() noexcept
         Globals::PWM_disabled = (val != "0");
         Logger::log(LOGTYPE, "Nixie_PWM set to %s via HTTP", 
                     Globals::PWM_disabled ? "true" : "false");
-        server_.send(200, "text/plain", String("tickerEnabled=") + (Globals::PWM_disabled ? "1" : "0"));
+        server_.send(200, "text/plain", String("NixiePWM=") + (Globals::PWM_disabled ? "1" : "0"));
     });
 
     server_.on("/set/PWMPeriod", HTTP_GET, [this]() noexcept {
@@ -786,13 +888,22 @@ void HTTPHandler::begin() noexcept
     });
 
     server_.on("/set/zip", HTTP_GET, [this]() noexcept {
-        if (!server_.hasArg("zip")) 
+        if (!server_.hasArg("zip"))
         {
             server_.send(400, "text/plain", "Missing 'zip' parameter");
             Logger::log(LOGTYPE, F("HTTP /set/zip missing parameter 'zip'"));
             return;
         }
+
         String zipArg = server_.arg("zip");
+
+        if (!isValidZipCode(zipArg))
+        {
+            server_.send(400, "text/plain", "Invalid 'zip' parameter");
+            Logger::log(LOGTYPE, "HTTP /set/zip invalid ZIP: %s", zipArg.c_str());
+            return;
+        }
+
         Globals::zipCode = std::string(zipArg.c_str());
         Logger::log(LOGTYPE, "ZIP-Code updated to %s", zipArg.c_str());
         server_.send(200, "text/plain", "ZIP-Code updated to " + zipArg);
@@ -844,72 +955,85 @@ void HTTPHandler::begin() noexcept
         server_.send(200, "application/json","{\n""  \"status\": \"ok\",\n""  \"CurrentTimeZoneIndex\": " + String(static_cast<int>(newTz)) + ",\n""  \"CurrentTimeZoneSpec\": \"" + String(spec) + "\"\n""}\n");
     });
 
-    server_.on("/set/timer", HTTP_GET, [this]() {
-        if (!server_.hasArg("enabled")) 
+    server_.on("/set/timer", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("enabled"))
         {
             server_.send(400, "text/plain", "Missing 'enabled' parameter");
             return;
         }
 
-        bool enable = server_.arg("enabled") == "1";
-
-        if (enable) 
+        const String enabledArg = server_.arg("enabled");
+        if (enabledArg != "0" && enabledArg != "1")
         {
-            if (!server_.hasArg("seconds")) 
+            server_.send(400, "text/plain", "Invalid 'enabled' parameter");
+            return;
+        }
+
+        const bool enable = enabledArg == "1";
+
+        if (enable)
+        {
+            if (!server_.hasArg("seconds"))
             {
                 server_.send(400, "text/plain", "Missing 'seconds' parameter");
                 return;
             }
 
-            uint32_t seconds = server_.arg("seconds").toInt();
-            timer.start(seconds, [&]() {
-            buzzer.startAlarm(3);
-            });
+            uint32_t seconds = 0;
+            if (!parseUInt32Strict(server_.arg("seconds"), seconds) || seconds == 0)
+            {
+                server_.send(400, "text/plain", "Invalid 'seconds' parameter");
+                return;
+            }
+
+            timer.start(seconds, []() {buzzer.startAlarm(3);});
 
             server_.send(200, "text/plain", "Timer started");
-        } 
-        else 
+        }
+        else
         {
             timer.stop();
             server_.send(200, "text/plain", "Timer stopped");
         }
     });
 
-    server_.on("/set/alarm", HTTP_GET, [this]() {
-        if (!server_.hasArg("enabled")) 
+    server_.on("/set/alarm", HTTP_GET, [this]() noexcept {
+        if (!server_.hasArg("enabled"))
         {
             server_.send(400, "text/plain", "Missing 'enabled' parameter");
             return;
         }
 
-        bool enable = server_.arg("enabled") == "1";
-
-        if (enable) 
+        const String enabledArg = server_.arg("enabled");
+        if (enabledArg != "0" && enabledArg != "1")
         {
-            if (!server_.hasArg("time")) 
+            server_.send(400, "text/plain", "Invalid 'enabled' parameter");
+            return;
+        }
+
+        const bool enable = enabledArg == "1";
+
+        if (enable)
+        {
+            if (!server_.hasArg("time"))
             {
                 server_.send(400, "text/plain", "Missing 'time' parameter");
                 return;
             }
 
-            String t = server_.arg("time");
-            int sep = t.indexOf(':');
-            if (sep < 0 || sep >= t.length() - 1) 
+            uint8_t hour = 0;
+            uint8_t minute = 0;
+            if (!parseAlarmTime(server_.arg("time"), hour, minute))
             {
                 server_.send(400, "text/plain", "Invalid time format (HH:MM)");
                 return;
             }
 
-            int h = t.substring(0, sep).toInt();
-            int m = t.substring(sep + 1).toInt();
-
-            alarmClock.setAlarm(h, m, [&]() {
-            buzzer.startAlarm(5);
-            });
+            alarmClock.setAlarm(hour, minute, []() {buzzer.startAlarm(5);});
 
             server_.send(200, "text/plain", "Alarm set");
-        } 
-        else     
+        }
+        else
         {
             alarmClock.removeAlarm();
             server_.send(200, "text/plain", "Alarm cleared");
@@ -1077,6 +1201,7 @@ void HTTPHandler::handleInfo() noexcept
     jsonResponse += "  \"PWM_Frequenzy\": "          + String(pwmFreq)  + ",\n";
     jsonResponse += "  \"SingleDigits\": "       + String(singleDigit) + ",\n";
     jsonResponse += "  \"CurrentTimeZone\": "       + String(static_cast<uint8_t>(Globals::currentTimeZone)) + ",\n";
+    jsonResponse += "  \"CurrentTimeZoneIndex\": " + String(static_cast<uint8_t>(Globals::currentTimeZone)) + ",\n";
     jsonResponse += "  \"TimerActive\": "       + String(timerActive ? "true" : "false") + ",\n";
     jsonResponse += "  \"TimerConfiguredSeconds\": " + String(timerPreset) + ",\n";
     jsonResponse += "  \"AlarmActive\": "       + String(alarmSet ? "true" : "false") + ",\n";

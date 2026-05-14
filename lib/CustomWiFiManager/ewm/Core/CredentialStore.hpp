@@ -27,7 +27,7 @@ namespace ewm
         const CredentialArray& data() const { return creds_; }
 
     private:
-        void normalizePrioritiesIfNeeded_(CredentialStorage& storage);
+        bool normalizePrioritiesIfNeeded_();
 
         StorageHeader hdr_{};
         CredentialArray creds_{};

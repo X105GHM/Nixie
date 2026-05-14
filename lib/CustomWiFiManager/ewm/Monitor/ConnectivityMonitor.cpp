@@ -10,6 +10,16 @@ namespace ewm
         enabled_ = enabled;
         checkIntervalMs_ = checkIntervalMs;
         internetTimeoutMs_ = internetTimeoutMs;
+
+        if (enabled_)
+        {
+            stopRequested_ = false;
+            startIfNeeded();
+        }
+        else
+        {
+            stop();
+        }
     }
 
     void ConnectivityMonitor::setOnNoConnectivity(std::function<void()> cb, uint32_t delayMs)
@@ -32,10 +42,18 @@ namespace ewm
     void ConnectivityMonitor::startIfNeeded()
     {
         if (!enabled_ || task_) return;
-        if (WiFi.status() != WL_CONNECTED) return;
 
-        xTaskCreatePinnedToCore(taskThunk, "ewm_mon", 4096, this, 1, &task_, ARDUINO_RUNNING_CORE);
-        EWM_LOG("Monitor task started");
+        stopRequested_ = false;
+        BaseType_t ok = xTaskCreatePinnedToCore(taskThunk, "ewm_mon", 4096, this, 1, &task_, ARDUINO_RUNNING_CORE);
+        if (ok == pdPASS)
+            EWM_LOG("Monitor task started");
+        else
+            task_ = nullptr;
+    }
+
+    void ConnectivityMonitor::stop()
+    {
+        stopRequested_ = true;
     }
 
     void ConnectivityMonitor::taskThunk(void* arg)
@@ -47,6 +65,15 @@ namespace ewm
     {
         for (;;)
         {
+            if (stopRequested_)
+                break;
+
+            if (!enabled_)
+            {
+                vTaskDelay(pdMS_TO_TICKS(250));
+                continue;
+            }
+
             bool ok = (WiFi.status() == WL_CONNECTED);
 
             if (ok && requireInternet_ && hasInternetFn_)
@@ -56,8 +83,11 @@ namespace ewm
             {
                 if (noConnSince_ == 0) noConnSince_ = millis();
 
-                EWM_LOG("Monitor: not ok -> roam");
-                if (roamFn_) roamFn_();
+                if (WiFi.status() == WL_CONNECTED || requireInternet_)
+                {
+                    EWM_LOG("Monitor: not ok -> roam");
+                    if (roamFn_) roamFn_();
+                }
 
                 if (onNoConn_ && (millis() - noConnSince_ >= noConnDelayMs_))
                 {
@@ -71,7 +101,13 @@ namespace ewm
                 noConnSince_ = 0;
             }
 
-            vTaskDelay(pdMS_TO_TICKS(checkIntervalMs_));
+            const uint32_t delayMs = checkIntervalMs_ ? checkIntervalMs_ : 1000;
+            vTaskDelay(pdMS_TO_TICKS(delayMs));
         }
+        
+        task_ = nullptr;
+        stopRequested_ = false;
+        EWM_LOG("Monitor task stopped");
+        vTaskDelete(nullptr);
     }
 }

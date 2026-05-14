@@ -356,6 +356,7 @@ div.buttons button {
     </div>
 <script>
 window.EwmPortalCfg = (() => { try { return __EWM_PORTAL_CFG__; } catch (e) { return {}; } })();
+window.EwmCsrfToken = "__CSRF_TOKEN__";
 
 (() => {
     const CFG = (typeof window.EwmPortalCfg === "object" && window.EwmPortalCfg) ? window.EwmPortalCfg : {};
@@ -390,6 +391,7 @@ window.EwmPortalCfg = (() => { try { return __EWM_PORTAL_CFG__; } catch (e) { re
 
     const mdnsHost = (CFG.mdnsHost || "").toString().trim().replace(/^https?:\/\//, "").replace(/\/+$/, "");
     const mdnsBase = mdnsHost ? ("http://" + mdnsHost) : "";
+    const CSRF = (window.EwmCsrfToken || "").toString();
 
     const $ = (q) => document.querySelector(q);
     const listEl = $("#list");
@@ -522,6 +524,8 @@ window.EwmPortalCfg = (() => { try { return __EWM_PORTAL_CFG__; } catch (e) { re
         modal.classList.add("show");
     };
 
+    const csrfHeaders = (extra = {}) => Object.assign({ "X-EWM-CSRF": CSRF }, extra);
+
     const fetchJsonWithTimeout = async (url, ms, opts = {}) => {
         if (state.stopped) throw new Error("stopped");
         const ac = new AbortController();
@@ -611,13 +615,29 @@ window.EwmPortalCfg = (() => { try { return __EWM_PORTAL_CFG__; } catch (e) { re
             setLoading(ssidSel, true);
             const r = await fetchJsonWithTimeout(EP.scan, TIM.scanTimeoutMs);
             const arr = Array.isArray(r) ? r : [];
-            ssidSel.innerHTML = arr.map(x => {
-                const ssid = String((x && x.ssid) || "");
-                const rssi = (x && typeof x.rssi !== "undefined") ? x.rssi : "";
-                return `<option value="${ssid.replace(/"/g, "&quot;")}">${ssid} (${rssi} dBm)</option>`;
-            }).join("") || `<option value="">(keine gefunden)</option>`;
+            ssidSel.textContent = "";
+
+            if (!arr.length) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "(keine gefunden)";
+                ssidSel.appendChild(opt);
+            } else {
+                for (const x of arr) {
+                    const ssid = String((x && x.ssid) || "");
+                    const rssi = (x && typeof x.rssi !== "undefined") ? x.rssi : "";
+                    const opt = document.createElement("option");
+                    opt.value = ssid;
+                    opt.textContent = `${ssid} (${rssi} dBm)`;
+                    ssidSel.appendChild(opt);
+                }
+            }
         } catch (e) {
-            ssidSel.innerHTML = `<option value="">(Scan fehlgeschlagen)</option>`;
+            ssidSel.textContent = "";
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "(Scan fehlgeschlagen)";
+            ssidSel.appendChild(opt);
         } finally {
             setLoading(ssidSel, false);
         }

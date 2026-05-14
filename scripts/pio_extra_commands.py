@@ -5,18 +5,12 @@ from SCons.Script import AlwaysBuild  # type: ignore
 
 Import("env")  # type: ignore
 
-# Pfad zur Python-Executable
 global python_exe
 python_exe = sys.executable
-# Projekt-Skripte-Verzeichnis
 scripts_dir = os.path.join(env['PROJECT_DIR'], 'scripts')   # type: ignore
-
-# Skripte
 version_script       = os.path.join(scripts_dir, 'get_software_version.py')
 ota_packager_script = os.path.join(scripts_dir, 'ota_packager.py')
 
-# Custom PIO target: package_ota
-# Erstellt das OTA-Paket mit firmware + SPIFFS + manifest
 env_package_ota = env.AddCustomTarget(   # type: ignore
     name        = 'package_ota',
     dependencies= [],
@@ -25,12 +19,6 @@ env_package_ota = env.AddCustomTarget(   # type: ignore
 )
 AlwaysBuild(env_package_ota)
 
-# Pre-Build: Script zum Einbinden der Software-Version
-# wird vor jedem 'build' Target ausgeführt
-
-# Custom PIO target: build_bins
-# Führt Firmware- und SPIFFS-Build aus und kopiert die .bin-Dateien nach bin/
-# Wir holen uns die Alias-Objekte für buildprog und buildfs
 alias_buildprog = env.Alias("buildprog")   # type: ignore
 alias_buildfs   = env.Alias("buildfs")   # type: ignore
 
@@ -53,7 +41,6 @@ def build_bins(source, target, env):
     shutil.copy(spiffs_src, os.path.join(out_dir, "spiffs.bin"))
     print(f"🔧 Kopiert firmware.bin und spiffs.bin nach {out_dir}")
 
-# Registriere das Custom-Target mit echten Alias-Abhängigkeiten
 env_build_bins = env.AddCustomTarget(   # type: ignore
     name        = 'build_bins',
     dependencies= [alias_buildprog, alias_buildfs],

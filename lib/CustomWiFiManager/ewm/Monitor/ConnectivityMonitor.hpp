@@ -17,6 +17,7 @@ namespace ewm
         void setRoamFn(std::function<void()> roamFn);
 
         void startIfNeeded();
+        void stop();
         bool running() const { return task_ != nullptr; }
 
     private:
@@ -24,8 +25,9 @@ namespace ewm
         void loop_();
 
     private:
-        bool enabled_{false};
-        bool requireInternet_{false};
+        volatile bool enabled_{false};
+        volatile bool requireInternet_{false};
+        volatile bool stopRequested_{false};
 
         uint32_t checkIntervalMs_{10000};
         uint32_t internetTimeoutMs_{15000};

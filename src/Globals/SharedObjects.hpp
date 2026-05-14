@@ -36,7 +36,6 @@ extern WiFiConnector     wifiConnector;
 extern HTTPHandler       httpHandler;
 extern Brownout*         brownoutInstance;
 extern Relay             relay;
-extern OTAManager        otaManager;
 extern NtcThermistor     temperatureSensor;
 extern Timer             timer;
 extern AlarmClock        alarmClock;

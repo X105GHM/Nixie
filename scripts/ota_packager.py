@@ -10,12 +10,10 @@ Import("env")  # type: ignore
 
 PROJECT_DIR = env.subst("$PROJECT_DIR")  # type: ignore
 BUILD_DIR = env.subst("$BUILD_DIR")      # type: ignore
-
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "bin")
 VERSION_FILE = os.path.join(OUTPUT_DIR, "version.txt")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
 
 def sha256sum(filepath):
     h = hashlib.sha256()
@@ -83,7 +81,6 @@ def find_firmware_bin():
     if not candidates:
         return None
 
-    # Meist ist firmware.bin oder projektname.bin richtig.
     if "firmware.bin" in candidates:
         return os.path.join(BUILD_DIR, "firmware.bin")
 
@@ -116,6 +113,5 @@ def package_existing_build(source, target, env):  # type: ignore
     create_zip_with_timestamp(firmware_dst, spiffs_dst)
 
     print("OTA-Paket-Build abgeschlossen")
-
 
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", package_existing_build)  # type: ignore

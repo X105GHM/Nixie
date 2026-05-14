@@ -75,7 +75,7 @@ namespace ewm
         c.priority = priority;
         c.last_ok = 0;
 
-        normalizePrioritiesIfNeeded_(storage);
+        normalizePrioritiesIfNeeded_();
         return save(storage);
     }
 
@@ -107,7 +107,7 @@ namespace ewm
                     if (creds_[k].priority > removedPrio)
                         creds_[k].priority--;
                 }
-                normalizePrioritiesIfNeeded_(storage);
+                normalizePrioritiesIfNeeded_();
                 return save(storage);
             }
         }
@@ -128,11 +128,11 @@ namespace ewm
         save(storage);
     }
 
-    void CredentialStore::normalizePrioritiesIfNeeded_(CredentialStorage &storage)
+    bool CredentialStore::normalizePrioritiesIfNeeded_()
     {
         const size_t n = hdr_.count;
         if (n == 0)
-            return;
+            return false;
 
         // Prüfen ob Duplikate / Lücken / out-of-range existieren
         bool need = false;
@@ -154,7 +154,7 @@ namespace ewm
         }
 
         if (!need)
-            return;
+            return false;
 
         std::array<Credential, 10> tmp = creds_;
         std::stable_sort(tmp.begin(), tmp.begin() + n, [](const Credential &a, const Credential &b)
@@ -164,6 +164,6 @@ namespace ewm
             tmp[i].priority = (uint8_t)i;
 
         creds_ = tmp;
-        save(storage);
+        return true;
     }
 }

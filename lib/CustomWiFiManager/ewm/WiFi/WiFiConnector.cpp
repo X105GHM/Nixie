@@ -29,16 +29,20 @@ namespace ewm
 
     bool WiFiConnector::initSta(const String& hostname)
     {
-        ewm::utils::WiFiLock lk(wifiMutex_);
-
-        WiFi.persistent(false);
-        WiFi.setAutoReconnect(false);
-        WiFi.setSleep(false);
+        {
+            ewm::utils::WiFiLock lk(wifiMutex_);
+            WiFi.persistent(false);
+            WiFi.setAutoReconnect(false);
+            WiFi.setSleep(false);
+        }
 
         bool ok = safeSwitchMode(WIFI_STA);
 
         #if defined(ESP_IDF_VERSION_MAJOR) && ESP_IDF_VERSION_MAJOR >= 4
+        {
+            ewm::utils::WiFiLock lk(wifiMutex_);
             WiFi.setHostname(hostname.c_str());
+        }
         #else
             (void)hostname;
         #endif
@@ -211,8 +215,10 @@ namespace ewm
 
     bool WiFiConnector::beginConnectAsync(const String& ssid, const String& pass)
     {
+        if (!safeSwitchMode(WIFI_STA))
+            return false;
+
         ewm::utils::WiFiLock lk(wifiMutex_);
-        safeSwitchMode(WIFI_STA);
         WiFi.disconnect(false, false);
         delay(80);
         WiFi.begin(ssid.c_str(), pass.c_str());

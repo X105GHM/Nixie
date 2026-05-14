@@ -6,6 +6,7 @@
 #include "ewm/Utils/MiniJson.hpp"
 #include "ewm/Log.hpp"
 #include <WiFi.h>
+#include <esp_system.h>
 
 namespace ewm
 {
@@ -24,6 +25,26 @@ namespace ewm
         t.trim();
         if (!t.startsWith("{") || !t.endsWith("}")) t = "{}";
             uiCfgJson_ = t;
+    }
+
+    void CaptivePortal::sendCommonHeaders_()
+    {
+        server_.sendHeader("Cache-Control", "no-store");
+        server_.sendHeader("Connection", "close");
+    }
+
+    void CaptivePortal::generateCsrfToken_()
+    {
+        char buf[17];
+        snprintf(buf, sizeof(buf), "%08lx%08lx",
+                 static_cast<unsigned long>(esp_random()),
+                 static_cast<unsigned long>(esp_random()));
+        csrfToken_ = buf;
+    }
+
+    bool CaptivePortal::isCsrfValid_()
+    {
+        return csrfToken_.length() > 0 && server_.header("X-EWM-CSRF") == csrfToken_;
     }
 
     void CaptivePortal::startAP_()
@@ -48,26 +69,33 @@ namespace ewm
 
     void CaptivePortal::setupWeb_(PortalHooks &hooks)
     {
+        static const char *headerKeys[] = {"X-EWM-CSRF"};
+        server_.collectHeaders(headerKeys, 1);
+
         auto addCors = [this]()
         {
-            server_.sendHeader("Access-Control-Allow-Origin", "*");
-            server_.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-            server_.sendHeader("Access-Control-Allow-Headers", "Content-Type");
-            server_.sendHeader("Access-Control-Max-Age", "600");
+            sendCommonHeaders_();
+        };
+
+        auto requireCsrf = [this, addCors]() -> bool
+        {
+            if (isCsrfValid_())
+                return true;
+
+            addCors();
+            server_.send(403, "text/plain", "CSRF token invalid.");
+            return false;
         };
 
         auto handleOptions = [this, addCors]()
         {
             addCors();
-            server_.sendHeader("Connection", "close");
             server_.send(204, "text/plain", "");
         };
 
         auto serveProbeOk = [this, addCors]()
         {
             addCors();
-            server_.sendHeader("Cache-Control", "no-store");
-            server_.sendHeader("Connection", "close");
             server_.send(200, "text/html",
                          "<!doctype html><meta charset='utf-8'>"
                          "<meta http-equiv='refresh' content='0;url=/'/>"
@@ -111,6 +139,7 @@ namespace ewm
 
             String page = ewm::portal::kPortalPage;
             page.replace("__EWM_PORTAL_CFG__", uiCfgJson_);
+            page.replace("__CSRF_TOKEN__", ewm::utils::json_escape(csrfToken_));
             page.replace("__OPTIONS__", options);
             page.replace("__LIST__", list);
             page.replace("__DEFAULT_PRIO__", String(nextPrio));
@@ -191,8 +220,10 @@ namespace ewm
 
         server_.on("/status", HTTP_OPTIONS, handleOptions);
 
-        server_.on("/add", HTTP_POST, [this, &hooks, addCors]()
+        server_.on("/add", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
         {
+            if(!requireCsrf()) return;
+
             String body = server_.arg("plain");
             String ssid, pw;
             int pr = 100;
@@ -219,8 +250,10 @@ namespace ewm
 
         server_.on("/add", HTTP_OPTIONS, handleOptions);
 
-        server_.on("/del", HTTP_POST, [this, &hooks, addCors]()
+        server_.on("/del", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
         {
+            if(!requireCsrf()) return;
+
             String body = server_.arg("plain");
             String ssid;
 
@@ -242,8 +275,10 @@ namespace ewm
 
         server_.on("/del", HTTP_OPTIONS, handleOptions);
 
-        server_.on("/reorder", HTTP_POST, [this, &hooks, addCors]()
+        server_.on("/reorder", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
         {
+            if(!requireCsrf()) return;
+
             String body = server_.arg("plain");
             std::vector<String> order;
 
@@ -263,8 +298,10 @@ namespace ewm
 
         server_.on("/reorder", HTTP_OPTIONS, handleOptions);
 
-        server_.on("/erase", HTTP_POST, [this, &hooks, addCors]()
+        server_.on("/erase", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
         {
+            if(!requireCsrf()) return;
+
             hooks.eraseAll();
             addCors();
             server_.sendHeader("Connection", "close");
@@ -273,8 +310,10 @@ namespace ewm
 
         server_.on("/erase", HTTP_OPTIONS, handleOptions);
 
-        server_.on("/ap_off", HTTP_POST, [this, addCors]()
+        server_.on("/ap_off", HTTP_POST, [this, addCors, requireCsrf]()
         {
+            if(!requireCsrf()) return;
+
             apGraceUntil_ = millis();
             running_ = false;
             addCors();
@@ -284,8 +323,10 @@ namespace ewm
 
         server_.on("/ap_off", HTTP_OPTIONS, handleOptions);
 
-        server_.on("/connect", HTTP_POST, [this, &hooks, addCors]()
+        server_.on("/connect", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
         {
+            if(!requireCsrf()) return;
+
             String body = server_.arg("plain");
             String ssid, pw;
             int pr = 100;
@@ -347,6 +388,8 @@ namespace ewm
     void CaptivePortal::runBlocking(PortalHooks hooks)
     {
         apGraceUntil_ = 0;
+
+        generateCsrfToken_();
 
         startAP_();
         setupWeb_(hooks);
