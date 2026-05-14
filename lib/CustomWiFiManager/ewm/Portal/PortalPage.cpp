@@ -521,6 +521,7 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
     const showModalInfo = (t, m) => {
         titleEl.textContent = t || "";
         textEl.textContent = m || "";
+        cdLine.style.display = "none";
         modal.classList.add("show");
     };
 
@@ -576,8 +577,16 @@ window.EwmCsrfToken = "__CSRF_TOKEN__";
             if (!s) {
                 state.failCount++;
                 if (state.connectRequested && state.failCount > TIM.giveUpAfterFails) {
-                    showHint("Status nicht erreichbar. Handy ist vermutlich ins Heim-WLAN gewechselt. Öffne die Ziel-URL.");
-                    showModalInfo("Info", "Status nicht erreichbar.");
+                    const target = computeTargetUrl();
+                    const msg = target
+                        ? "Status nicht erreichbar. Handy ist vermutlich ins Heim-WLAN gewechselt. Leite zur Nixie weiter…"
+                        : "Status nicht erreichbar. Handy ist vermutlich ins Heim-WLAN gewechselt. Öffne die Ziel-URL.";
+                    showHint(msg);
+                    showModalInfo("Info", msg);
+
+                    if (FIN.redirect && target && !state.finishTimer) {
+                        state.finishTimer = setTimeout(() => { finish(); }, Math.max(FIN.finishDelayMs, 1000));
+                    }
                     break;
                 }
                 continue;
