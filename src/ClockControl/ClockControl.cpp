@@ -82,7 +82,8 @@ void ClockControl::timeCycle() noexcept
                 lastState160 = currentState160;
             }
 
-            if (Globals::cricketSoundEnabled && (timeInfo.tm_min == cricketTriggerMinute1 || timeInfo.tm_min == cricketTriggerMinute2) && timeInfo.tm_sec == 0 && timeInfo.tm_min != lastCricketMinute)
+            if (Globals::cricketSoundEnabled && (timeInfo.tm_min == cricketTriggerMinute1 || 
+                timeInfo.tm_min == cricketTriggerMinute2) && timeInfo.tm_sec == 0 && timeInfo.tm_min != lastCricketMinute)
             {
                 lastCricketMinute = timeInfo.tm_min;
                 Logger::log(LoggerType::TIME, F("Cricket chirping triggered"));
@@ -145,7 +146,8 @@ void ClockControl::timeCycle() noexcept
                 displayDate();
                 vTaskDelay(pdMS_TO_TICKS(5000));
             }
-            else if (((timeInfo.tm_min == 57 && timeInfo.tm_sec == 15) || (timeInfo.tm_min == 27 && timeInfo.tm_sec == 15)) && displayEnabled && Globals::loadDetected && !(Globals::noACPatNight && isNightTime))
+            else if (((timeInfo.tm_min == 57 && timeInfo.tm_sec == 15) || (timeInfo.tm_min == 27 && timeInfo.tm_sec == 15)) && 
+                        displayEnabled && Globals::loadDetected && !(Globals::noACPatNight && isNightTime))
             {
                 Logger::log(LoggerType::TIME, F("Running ACP"));
                 digits = 0;
@@ -158,7 +160,8 @@ void ClockControl::timeCycle() noexcept
                 (void)hssCtrl.disable190();
                 vTaskDelay(pdMS_TO_TICKS(10));
             }
-            else if ((timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 0 && timeInfo.tm_sec < 5) && displayEnabled && Globals::WeatherUpdateEnabled && Globals::loadDetected)
+            else if ((timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 0 && timeInfo.tm_sec < 5) && displayEnabled && 
+                        Globals::WeatherUpdateEnabled && Globals::loadDetected)
             {
                 WeatherClient weather(std::string(OPENWEATHER_API_KEY));
 

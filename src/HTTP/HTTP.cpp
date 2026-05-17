@@ -37,33 +37,6 @@ static bool isValidZipCode(const String& zip) noexcept
     return true;
 }
 
-static uint32_t parseZipDigitsSafe(const std::string& zip) noexcept
-{
-    if (zip.empty())
-    {
-        return 0;
-    }
-
-    uint32_t value = 0;
-    for (char c : zip)
-    {
-        if (c < '0' || c > '9')
-        {
-            return 0;
-        }
-
-        const uint32_t digit = static_cast<uint32_t>(c - '0');
-        if (value > (UINT32_MAX - digit) / 10U)
-        {
-            return 0;
-        }
-
-        value = value * 10U + digit;
-    }
-
-    return value;
-}
-
 static bool parseUInt32Strict(const String& input, uint32_t& out) noexcept
 {
     if (input.length() == 0)
@@ -323,35 +296,42 @@ void HTTPHandler::begin() noexcept
         Logger::log(LOGTYPE, "ACP started via HTTP");
         digits = 0;
 
-        runWithClockSuspended(clockTaskHandle, [this]() {
-            auto check = [](esp_err_t e, const char* what) {
-                if (e != ESP_OK) {
+        if (!runWithClockSuspended(clockTaskHandle, [this]()
+        {
+            auto check = [](esp_err_t e, const char* what) 
+            {
+                if (e != ESP_OK) 
+                {
                     Logger::log(LOGTYPE, "%s failed (%d)", what, static_cast<int>(e));
                     return false;
                 }
+
                 return true;
             };
 
             Logger::log(LOGTYPE, "ACP task: enabling 190V + resistor reduction");
 
-            if (!check(hssController.enable190(), "Failed to enable 190V")) return;
+            if (!check(hssController.enable190(), "enable190")) return;
             vTaskDelay(pdMS_TO_TICKS(10));
 
-            if (!check(hssController.enableResistorReduction(), "Failed to reduce resistors")) return;
+            if (!check(hssController.enableResistorReduction(), "enableResistorReduction")) return;
             vTaskDelay(pdMS_TO_TICKS(10));
 
             ACP();
 
             Logger::log(LOGTYPE, "ACP task: disabling resistor reduction + 190V");
 
-            if (!check(hssController.disableResistorReduction(), "Failed to disable resistor reduction")) return;
+            if (!check(hssController.disableResistorReduction(), "disableResistorReduction")) return;
             vTaskDelay(pdMS_TO_TICKS(10));
 
-            if (!check(hssController.disable190(), "Failed to disable 190V")) return;
+            if (!check(hssController.disable190(), "disable190")) return;
             vTaskDelay(pdMS_TO_TICKS(10));
 
-            Logger::log(LOGTYPE, "ACP task finished");
-        });
+            Logger::log(LOGTYPE, "ACP task finished"); 
+        }))
+        {
+            Logger::log(LOGTYPE, "Failed to start ACP task");
+        }
 
         server_.send(200, "text/plain", "ACP started");
     });
@@ -375,18 +355,28 @@ void HTTPHandler::begin() noexcept
 
         server_.send(200, "text/plain", "Temperature display started");
 
-            runWithClockSuspended(clockTaskHandle, [this]() {
+        if (!runWithClockSuspended(clockTaskHandle, [this]() 
+        {
             mode_running.store(true, std::memory_order_relaxed);
+
             zipMaskingEnabled = true;
-            digits = Globals::zipCode.empty() ? 0 : std::stoi(Globals::zipCode)*10;
+            digits = Globals::zipCode.empty() ? 0 : std::stoi(Globals::zipCode) * 10;
+
             vTaskDelay(pdMS_TO_TICKS(3000));
+
             displayWeather();
+
             tempMaskingEnabled = true;
             zipMaskingEnabled = false;
+
             vTaskDelay(pdMS_TO_TICKS(5000));
+
             tempMaskingEnabled = false;
             mode_running.store(false, std::memory_order_relaxed);
-        });
+        }))
+        {
+            Logger::log(LOGTYPE, "Failed to start weather display task");
+        }
     });
 
     server_.on("/set/DATE", HTTP_GET, [this]() noexcept {
@@ -408,13 +398,19 @@ void HTTPHandler::begin() noexcept
 
         server_.send(200, "text/plain", "Date display started");
 
-        runWithClockSuspended(clockTaskHandle, [this]() 
+        if (!runWithClockSuspended(clockTaskHandle, [this]() 
         {
             mode_running.store(true, std::memory_order_relaxed);
+
             displayDate();
+
             vTaskDelay(pdMS_TO_TICKS(5000));
+
             mode_running.store(false, std::memory_order_relaxed);
-        });
+        }))
+        {
+            Logger::log(LOGTYPE, "Failed to start date display task");
+        }
     });
 
     server_.on("/set/CRICKET", HTTP_GET, [this]() noexcept {

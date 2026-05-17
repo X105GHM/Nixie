@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <regex>
 #include <functional>
+#include <memory>
+#include <new>
 #include "Logger/Logger.hpp"
 #include "SupplyWatch/SupplyWatch.hpp"
 #include "Brownout/Brownout.hpp"
@@ -62,22 +64,78 @@ private:
     void handleReset() noexcept;
     void handleInfo() noexcept;
 
-    static void runWithClockSuspended(TaskHandle_t clockHandle, std::function<void()> taskFunc)
+    static bool runWithClockSuspended(TaskHandle_t clockHandle, std::function<void()> taskFunc)
     {
+        if (!taskFunc)
+        {
+            Logger::log(LoggerType::Webserver, "runWithClockSuspended: empty task function");
+            return false;
+        }
+
+        struct Params
+        {
+            TaskHandle_t handle;
+            std::function<void()> func;
+        };
+
+        struct SuspendGuard
+        {
+            TaskHandle_t handle;
+
+            explicit SuspendGuard(TaskHandle_t h) : handle(h)
+            {
+                if (handle != nullptr)
+                {
+                    vTaskSuspend(handle);
+                }
+            }
+
+            ~SuspendGuard()
+            {
+                if (handle != nullptr)
+                {
+                    vTaskResume(handle);
+                }
+            }
+
+            SuspendGuard(const SuspendGuard &) = delete;
+            SuspendGuard &operator=(const SuspendGuard &) = delete;
+        };
+
         auto wrapper = [](void *param)
         {
-            auto [handle, func] = *static_cast<std::pair<TaskHandle_t, std::function<void()>> *>(param);
-            delete static_cast<std::pair<TaskHandle_t, std::function<void()>> *>(param);
+            std::unique_ptr<Params> params(static_cast<Params *>(param));
 
-            vTaskSuspend(handle);
-            func();
-            vTaskResume(handle);
+            {
+                SuspendGuard guard(params->handle);
+                params->func();
+            }
 
-            Logger::log(LoggerType::Webserver, "runWithClockSuspended abgeschlossen");
+            Logger::log(LoggerType::Webserver, "runWithClockSuspended completed");
             vTaskDelete(nullptr);
         };
 
-        auto *params = new std::pair<TaskHandle_t, std::function<void()>>(clockHandle, std::move(taskFunc));
-        xTaskCreate(wrapper, "RunWithClockSuspended", 4096, params, 1, nullptr);
+        auto *params = new (std::nothrow) Params
+        {
+            clockHandle,
+            std::move(taskFunc)
+        };
+
+        if (params == nullptr)
+        {
+            Logger::log(LoggerType::Webserver, "runWithClockSuspended: failed to allocate task parameters");
+            return false;
+        }
+
+        BaseType_t result = xTaskCreate(wrapper, "RunWithClockSuspended", 4096, params, 1, nullptr);
+
+        if (result != pdPASS)
+        {
+            delete params;
+            Logger::log(LoggerType::Webserver, "runWithClockSuspended: failed to create task");
+            return false;
+        }
+
+        return true;
     }
 };
