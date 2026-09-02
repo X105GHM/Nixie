@@ -1,7 +1,7 @@
 #pragma once
-#include <Arduino.h>
+#include <string>
 
 namespace ewm::utils
 {
-    String html_escape(const String& s);
+    std::string html_escape(const std::string& s);
 }

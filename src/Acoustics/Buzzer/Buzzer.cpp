@@ -1,16 +1,15 @@
 #include "Buzzer.hpp"
 
 Buzzer::Buzzer() noexcept
-    : state_(false)
 {
-    gpio_pad_select_gpio(BUZZER_PIN);
+    gpio_reset_pin(BUZZER_PIN);
     gpio_set_direction(BUZZER_PIN, GPIO_MODE_OUTPUT);
-    setLevel(state_);
+    setLevel(false);
 }
 
 void Buzzer::setLevel(bool level) noexcept
 {
-    state_ = level;
+    state_.store(level, std::memory_order_relaxed);
     gpio_set_level(BUZZER_PIN, level ? 1 : 0);
 }
 
@@ -53,21 +52,41 @@ void Buzzer::update() noexcept
 
 void Buzzer::startCricketInTask() noexcept
 {
-    if (cricketRunning_) return;
-    cricketRunning_ = true;
+    bool expected = false;
+    if (!cricketRunning_.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_relaxed)) return;
 
     Buzzer* self = this;
 
-    auto cricketWrapper = [](void* param) {
+    auto cricketWrapper = [](void* param)
+    {
         Buzzer* buzzer = static_cast<Buzzer*>(param);
         buzzer->playCricketSound();
-        buzzer->cricketRunning_ = false;
+
+        const UBaseType_t minimumFreeStack = uxTaskGetStackHighWaterMark(nullptr);
+        Logger::log(LoggerType::GENERAL,
+                    "Cricket task finished, minimum free stack=%u bytes",
+                    static_cast<unsigned>(minimumFreeStack));
+
+        buzzer->cricketRunning_.store(false, std::memory_order_release);
         vTaskDelete(nullptr);
     };
 
-    xTaskCreatePinnedToCore(cricketWrapper, "CricketTask", 2048, self, 3, nullptr, 0);
+    const BaseType_t result = xTaskCreatePinnedToCore(
+        cricketWrapper,
+        "CricketTask",
+        CRICKET_TASK_STACK_BYTES,
+        self,
+        3,
+        nullptr,
+        0);
+    if (result != pdPASS)
+    {
+        cricketRunning_.store(false, std::memory_order_release);
+        Logger::log(LoggerType::GENERAL, "Cricket task creation failed");
+        return;
+    }
 
-    Logger::log(LoggerType::GENERAL, F("Cricket sound started in task"));
+    Logger::log(LoggerType::GENERAL, "Cricket sound started in task");
 }
 
 void Buzzer::playCricketSound() noexcept
@@ -86,7 +105,7 @@ void Buzzer::playCricketSound() noexcept
                 int period_us = 1000000 / freq;
                 int halfPeriod = period_us / 2;
 
-                uint32_t start = esp_timer_get_time();
+                const int64_t start = esp_timer_get_time();
                 while ((esp_timer_get_time() - start) < (pulseDurationMs * 1000))
                 {
                     gpio_set_level(BUZZER_PIN, 1);
@@ -103,7 +122,7 @@ void Buzzer::playCricketSound() noexcept
     }
 
     gpio_set_level(BUZZER_PIN, 0);
-    Logger::log(LoggerType::GENERAL, F("Cricket sound chirp finished"));
+    Logger::log(LoggerType::GENERAL, "Cricket sound chirp finished");
 }
 
 void Buzzer::Silence() noexcept

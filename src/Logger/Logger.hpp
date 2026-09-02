@@ -1,9 +1,9 @@
 #pragma once
 
-#include <Arduino.h>
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
-#include <ctime>
+#include "esp_log.h"
 
 enum class LoggerType
 {
@@ -22,23 +22,21 @@ enum class LoggerType
 class Logger
 {
 public:
-    static void begin(Stream &output);
+    static void begin() noexcept;
 
-    static bool HTTPEnabled;
-    static bool TIMEEnabled;
-    static bool HSSEnabled;
-    static bool DIGITEnabled;
-    static bool WebserverEnabled;
-    static bool OTAEnabled;
-    static bool BUTTONEnabled;
-    static bool GENERALEnabled;
-    static bool WiFiEnabled;
+    static std::atomic_bool HTTPEnabled;
+    static std::atomic_bool TIMEEnabled;
+    static std::atomic_bool HSSEnabled;
+    static std::atomic_bool DIGITEnabled;
+    static std::atomic_bool WebserverEnabled;
+    static std::atomic_bool OTAEnabled;
+    static std::atomic_bool BUTTONEnabled;
+    static std::atomic_bool GENERALEnabled;
+    static std::atomic_bool WiFiEnabled;
 
-    static void log(LoggerType type, const __FlashStringHelper *message) noexcept;
     static void log(LoggerType type, const char *format, ...) noexcept;
 
 private:
-    static Stream *out_;
-    static const __FlashStringHelper *typeName(LoggerType type) noexcept;
-    static void printTimestamp() noexcept;
+    static bool isEnabled(LoggerType type) noexcept;
+    static const char *typeName(LoggerType type) noexcept;
 };

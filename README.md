@@ -79,7 +79,7 @@ The firmware is organized into modules and services (for example: clock control,
 
 A typical startup flow (as implemented in the project) follows this structure:
 
-1. Initialize serial logging
+1. Initialize native ESP-IDF logging
 2. Initialize/check PSRAM
 3. Initialize persistent storage and load saved settings
 4. Connect to Wi-Fi
@@ -176,8 +176,8 @@ A printable enclosure for the Nixie V6 project is available on Printables:
 
 The project is configured for an **ESP32-S3** target in PlatformIO:
 
-- **Framework:** Arduino
-- **Platform:** `espressif32@6.11.0`
+- **Framework:** ESP-IDF 5.5.4
+- **Platform:** `pioarduino/platform-espressif32@55.3.38`
 - **Board env:** `esp32-s3-wroom-1-n16r8`
 - **Filesystem:** SPIFFS
 - **C++ standard:** GNU++17

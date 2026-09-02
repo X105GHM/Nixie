@@ -1,6 +1,6 @@
 #pragma once
-#include <Arduino.h>
+#include "esp_log.h"
 
 #ifndef EWM_LOG
-#define EWM_LOG(...) do { Serial.printf("[EWM] " __VA_ARGS__); Serial.printf("\n"); } while (0)
+#define EWM_LOG(...) ESP_LOGI("EWM", __VA_ARGS__)
 #endif

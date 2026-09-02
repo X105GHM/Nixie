@@ -5,15 +5,15 @@ using ewm::utils::json_escape;
 
 namespace
 {
-    static String q(const String& s) { return String("\"") + json_escape(s) + "\""; }
-    static String b(bool v) { return v ? "true" : "false"; }
+    static std::string q(const std::string& s) { return "\"" + json_escape(s) + "\""; }
+    static std::string b(bool v) { return v ? "true" : "false"; }
 }
 
 namespace ewm::portal
 {
-    String PortalUiConfig::toJson() const
+    std::string PortalUiConfig::toJson() const
     {
-        String j = "{";
+        std::string j = "{";
 
         j += "\"mdnsHost\":" + q(mdnsHost) + ",";
 
@@ -22,16 +22,16 @@ namespace ewm::portal
         j += "\"redirectUrl\":" + q(finish.redirectUrl) + ",";
         j += "\"closeTab\":" + b(finish.closeTab) + ",";
         j += "\"closeMode\":" + q(finish.closeMode) + ",";
-        j += "\"finishDelayMs\":" + String(finish.finishDelayMs) + ",";
+        j += "\"finishDelayMs\":" + std::to_string(finish.finishDelayMs) + ",";
         j += "\"countdownAutoFinish\":" + b(finish.countdownAutoFinish) + ",";
-        j += "\"countdownThresholdMs\":" + String(finish.countdownThresholdMs);
+        j += "\"countdownThresholdMs\":" + std::to_string(finish.countdownThresholdMs);
         j += "},";
 
         j += "\"timing\":{";
-        j += "\"pollMs\":" + String(timing.pollMs) + ",";
-        j += "\"connectTimeoutMs\":" + String(timing.connectTimeoutMs) + ",";
-        j += "\"switchToStaAfterFails\":" + String(timing.switchToStaAfterFails) + ",";
-        j += "\"giveUpAfterFails\":" + String(timing.giveUpAfterFails);
+        j += "\"pollMs\":" + std::to_string(timing.pollMs) + ",";
+        j += "\"connectTimeoutMs\":" + std::to_string(timing.connectTimeoutMs) + ",";
+        j += "\"switchToStaAfterFails\":" + std::to_string(timing.switchToStaAfterFails) + ",";
+        j += "\"giveUpAfterFails\":" + std::to_string(timing.giveUpAfterFails);
         j += "}";
 
         j += "}";

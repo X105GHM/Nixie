@@ -5,15 +5,20 @@ import zipfile
 import hashlib
 import json
 from datetime import datetime
+from pathlib import Path
 
 Import("env")  # type: ignore
 
 PROJECT_DIR = env.subst("$PROJECT_DIR")  # type: ignore
 BUILD_DIR = env.subst("$BUILD_DIR")      # type: ignore
-OUTPUT_DIR = os.path.join(PROJECT_DIR, "bin")
-VERSION_FILE = os.path.join(OUTPUT_DIR, "version.txt")
+PUBLIC_OUTPUT_DIR = os.path.join(PROJECT_DIR, "bin")
+LOCAL_SECRETS_FILE = os.path.join(PROJECT_DIR, "src", "Config", "LocalSecrets.hpp")
+OUTPUT_DIR = os.path.join(PROJECT_DIR, "private_bin") if os.path.exists(LOCAL_SECRETS_FILE) else PUBLIC_OUTPUT_DIR
+VERSION_FILE = os.path.join(PUBLIC_OUTPUT_DIR, "version.txt")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+if OUTPUT_DIR != PUBLIC_OUTPUT_DIR:
+    print("Lokale Secret-Konfiguration erkannt: Build-Artefakte werden nur nach private_bin/ geschrieben.")
 
 def sha256sum(filepath):
     h = hashlib.sha256()
@@ -114,4 +119,12 @@ def package_existing_build(source, target, env):  # type: ignore
 
     print("OTA-Paket-Build abgeschlossen")
 
-env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", package_existing_build)  # type: ignore
+firmware_image = env.File("$BUILD_DIR/${PROGNAME}.bin")  # type: ignore
+filesystem_image = env.DataToBin(  # type: ignore
+    str(Path("$BUILD_DIR") / "${ESP32_FS_IMAGE_NAME}"),
+    "$PROJECT_DATA_DIR",
+)
+env.NoCache(filesystem_image)  # type: ignore
+env.Depends(filesystem_image, firmware_image)  # type: ignore
+env.Depends(env.Alias("buildprog"), filesystem_image)  # type: ignore
+env.AddPostAction(filesystem_image, package_existing_build)  # type: ignore

@@ -1,10 +1,22 @@
 #include "OTA/OTA.hpp"
 
-#include <SPIFFS.h>
+#ifdef IPADDR_NONE
+#undef IPADDR_NONE
+#endif
+#ifdef INADDR_NONE
+#undef INADDR_NONE
+#endif
+#include "esp_spiffs.h"
 #include <cstring>
 #include <memory>
+#include <new>
 
 extern TaskHandle_t displayTaskHandle;
+
+namespace
+{
+constexpr size_t MAX_MANIFEST_SIZE = 4096;
+}
 
 OTAManager& OTAManager::instance() noexcept
 {
@@ -44,7 +56,7 @@ bool OTAManager::checkForUpdateAvailable(const std::string& baseUrl) noexcept
     }
 
     const std::string manifestVersionRaw = *verOpt;
-    const std::string runningVersionRaw  = Globals::SoftwareVersion;
+    const std::string runningVersionRaw = Globals::getTextConfig().softwareVersion;
 
     const std::string manifestVersion = normalizeVersion(manifestVersionRaw);
     const std::string runningVersion  = normalizeVersion(runningVersionRaw);
@@ -63,6 +75,12 @@ bool OTAManager::checkForUpdateAvailable(const std::string& baseUrl) noexcept
 
 bool OTAManager::startAsync(const std::string& baseUrl) noexcept
 {
+    if (!statusMutex_)
+    {
+        Logger::log(LoggerType::OTA, "OTA status mutex is unavailable");
+        return false;
+    }
+
     if (isRunning())
     {
         Logger::log(LoggerType::OTA, "OTA already running");
@@ -147,9 +165,9 @@ const char* OTAManager::stageToString_(Stage s) noexcept
     }
 }
 
-String OTAManager::escapeJson_(const std::string& s) noexcept
+std::string OTAManager::escapeJson_(const std::string& s) noexcept
 {
-    String out;
+    std::string out;
     out.reserve(s.size() + 8);
 
     for (char c : s)
@@ -184,11 +202,11 @@ int OTAManager::calcPercent_(size_t done, size_t total) noexcept
     return static_cast<int>((done * 100U) / total);
 }
 
-String OTAManager::getStatusJson() const noexcept
+std::string OTAManager::getStatusJson() const noexcept
 {
     Status s = getStatusCopy_();
 
-    String json;
+    std::string json;
     json.reserve(512);
 
     json += "{";
@@ -201,12 +219,12 @@ String OTAManager::getStatusJson() const noexcept
     json += "\"lastResult\":\"";     json += esp_err_to_name(s.lastResult); json += "\",";
     json += "\"currentVersion\":\""; json += escapeJson_(s.currentVersion); json += "\",";
     json += "\"targetVersion\":\"";  json += escapeJson_(s.targetVersion); json += "\",";
-    json += "\"appProgressPct\":";   json += String(s.appProgressPct); json += ",";
-    json += "\"appBytesDone\":";     json += String(static_cast<uint32_t>(s.appBytesDone)); json += ",";
-    json += "\"appBytesTotal\":";    json += String(static_cast<uint32_t>(s.appBytesTotal)); json += ",";
-    json += "\"spiffsProgressPct\":";json += String(s.spiffsProgressPct); json += ",";
-    json += "\"spiffsBytesDone\":";  json += String(static_cast<uint32_t>(s.spiffsBytesDone)); json += ",";
-    json += "\"spiffsBytesTotal\":"; json += String(static_cast<uint32_t>(s.spiffsBytesTotal));
+    json += "\"appProgressPct\":";   json += std::to_string(s.appProgressPct); json += ",";
+    json += "\"appBytesDone\":";     json += std::to_string(s.appBytesDone); json += ",";
+    json += "\"appBytesTotal\":";    json += std::to_string(s.appBytesTotal); json += ",";
+    json += "\"spiffsProgressPct\":";json += std::to_string(s.spiffsProgressPct); json += ",";
+    json += "\"spiffsBytesDone\":";  json += std::to_string(s.spiffsBytesDone); json += ",";
+    json += "\"spiffsBytesTotal\":"; json += std::to_string(s.spiffsBytesTotal);
     json += "}";
 
     return json;
@@ -340,14 +358,32 @@ void OTAManager::otaTask_() noexcept
     }
 
     Logger::log(LoggerType::OTA, "SPIFFS for OTA unmounting...");
-    SPIFFS.end();
+    const esp_err_t unmountResult = esp_vfs_spiffs_unregister(nullptr);
+    if (unmountResult != ESP_OK)
+    {
+        Logger::log(LoggerType::OTA, "SPIFFS unmount failed: %s", esp_err_to_name(unmountResult));
+        if (displayWasSuspended && displayTaskHandle != nullptr)
+        {
+            vTaskResume(displayTaskHandle);
+        }
+        setError_(unmountResult, "SPIFFS unmount failed");
+        displayEnabled = true;
+        otaTaskHandle_ = nullptr;
+        return;
+    }
 
     esp_err_t result = checkAndUpdate(pendingBaseUrl_);
 
     Logger::log(LoggerType::OTA, "SPIFFS remounting...");
-    if (!SPIFFS.begin(true))
+    esp_vfs_spiffs_conf_t spiffsConfig{};
+    spiffsConfig.base_path = "/spiffs";
+    spiffsConfig.partition_label = nullptr;
+    spiffsConfig.max_files = 5;
+    spiffsConfig.format_if_mount_failed = true;
+    const esp_err_t mountResult = esp_vfs_spiffs_register(&spiffsConfig);
+    if (mountResult != ESP_OK && mountResult != ESP_ERR_INVALID_STATE)
     {
-        Logger::log(LoggerType::OTA, "SPIFFS.begin(true) failed after OTA");
+        Logger::log(LoggerType::OTA, "esp_vfs_spiffs_register failed after OTA: %s", esp_err_to_name(mountResult));
 
         if (displayWasSuspended && displayTaskHandle != nullptr)
         {
@@ -446,6 +482,14 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
 
     while ((len = esp_http_client_read(client, buffer, 256)) > 0)
     {
+        if (body.size() + static_cast<size_t>(len) > MAX_MANIFEST_SIZE)
+        {
+            Logger::log(LoggerType::OTA, "Manifest exceeds size limit");
+            free(buffer);
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            return std::nullopt;
+        }
         body.append(buffer, len);
         total += len;
     }
@@ -460,7 +504,7 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
         return std::nullopt;
     }
 
-    Logger::log(LoggerType::OTA, "Manifest (%d Bytes):\n%s", total, body.c_str());
+    Logger::log(LoggerType::OTA, "Manifest received (%d bytes)", total);
 
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
@@ -695,7 +739,7 @@ esp_err_t OTAManager::performSPIFFSUpdate(const std::string &spiffsUrl) noexcept
     }
 
     constexpr size_t bufSize = 4096;
-    std::unique_ptr<uint8_t[]> buffer(new uint8_t[bufSize]);
+    std::unique_ptr<uint8_t[]> buffer(new (std::nothrow) uint8_t[bufSize]);
 
     if (!buffer)
     {

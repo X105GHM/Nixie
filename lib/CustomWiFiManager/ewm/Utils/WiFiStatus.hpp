@@ -1,20 +1,21 @@
 #pragma once
-#include <WiFi.h>
+
+#include "ewm/Types.hpp"
 
 namespace ewm::utils
 {
-    inline const char* wlStatusStr(wl_status_t st)
+    inline const char* stateName(State state)
     {
-        switch (st)
+        switch (state)
         {
-            case WL_IDLE_STATUS:      return "IDLE";
-            case WL_NO_SSID_AVAIL:    return "NO_SSID";
-            case WL_SCAN_COMPLETED:   return "SCAN_DONE";
-            case WL_CONNECTED:        return "CONNECTED";
-            case WL_CONNECT_FAILED:   return "CONNECT_FAILED";
-            case WL_CONNECTION_LOST:  return "CONNECTION_LOST";
-            case WL_DISCONNECTED:     return "DISCONNECTED";
-            default:                  return "UNKNOWN";
+            case State::Uninitialized: return "Uninitialized";
+            case State::Initialization: return "Initialization";
+            case State::Connecting: return "Connecting";
+            case State::Connected: return "Connected";
+            case State::Retry: return "Retry";
+            case State::Portal: return "Portal";
+            case State::Failed: return "Failed";
+            default: return "Unknown";
         }
     }
 }

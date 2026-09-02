@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <SPI.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "esp_task_wdt.h"
@@ -17,20 +16,18 @@
 #include <driver/gpio.h>
 
 /// Software-PWM 
-extern uint32_t PWM_PERIOD_US;
+extern std::atomic_uint32_t PWM_PERIOD_US;
 
 constexpr bool ADAPTIVE_BRIGHTNESS = true;
 
-extern bool displayEnabled;
-extern bool zipMaskingEnabled;
-extern bool tempMaskingEnabled;
-extern bool singleDigitACP;
+extern std::atomic_bool displayEnabled;
+extern std::atomic_bool zipMaskingEnabled;
+extern std::atomic_bool tempMaskingEnabled;
+extern std::atomic_bool singleDigitACP;
 extern std::atomic<bool> mode_running;
-extern uint8_t singleDigit; 
-extern int32_t digits;
-extern int32_t lastdigits;
-extern uint32_t brightness;   // 0..100
-extern const std::uint32_t symbolArray[10];
+extern std::atomic_uint8_t singleDigit;
+extern std::atomic_int32_t digits;
+extern std::atomic_uint32_t brightness;   // 0..100
 
 void displayDigitsTask(void* pvParameters) noexcept;
 void displayTime() noexcept;

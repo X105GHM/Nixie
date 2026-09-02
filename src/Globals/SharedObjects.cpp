@@ -2,10 +2,6 @@
 
 TaskHandle_t displayTaskHandle       = nullptr;
 TaskHandle_t clockTaskHandle         = nullptr;
-TaskHandle_t buttonTaskHandle        = nullptr;
-TaskHandle_t brownoutTaskHandle      = nullptr;
-TaskHandle_t httpTaskHandle          = nullptr;
-TaskHandle_t energyMonitorTaskHandle = nullptr;
 
 Memory::PersistentStorage   storage;
 SupplyWatch         supplyWatch;

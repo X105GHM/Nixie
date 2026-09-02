@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Arduino.h>
-#include "esp_adc_cal.h"
+#include "ADC/AdcService.hpp"
 #include "Temperature/Temperature.hpp"
 
 extern NtcThermistor temperatureSensor;
@@ -9,6 +8,17 @@ extern NtcThermistor temperatureSensor;
 class SupplyWatch
 {
 public:
+    struct Telemetry
+    {
+        float temperatureC{0.0f};
+        float voltage5V{0.0f};
+        float voltage12V{0.0f};
+        float voltage3V3{0.0f};
+        float voltage18V{0.0f};
+        float voltageUhss{0.0f};
+        float currentMa{0.0f};
+    };
+
     explicit SupplyWatch() noexcept;
 
     float read5V() const noexcept;
@@ -17,16 +27,9 @@ public:
     float read18V() const noexcept;
     float readUHSS() const noexcept;
     float readCurrent() const noexcept;
+    Telemetry readTelemetry() const noexcept;
 
 private:
-  
-    static constexpr int PIN_12V  = 1;
-    static constexpr int PIN_18V  = 2;
-    static constexpr int PIN_IGES = 4;
-    static constexpr int PIN_UHSS = 5;
-    static constexpr int PIN_5V   = 8;
-    static constexpr int PIN_3V3  = 9;
-
     static constexpr float R12_TOP    = 100000.0f, R12_BOT    = 10000.0f;
     static constexpr float R18_TOP    = 100000.0f, R18_BOT    = 10000.0f;
     static constexpr float R5_TOP     = 10000.0f,  R5_BOT     = 10000.0f;
@@ -50,23 +53,16 @@ private:
     static constexpr float C_18V   = 6.234f;
     static constexpr float C_UHSS  = 0.0f;
 
-    static constexpr uint32_t DEFAULT_VREF = 1100;
-    esp_adc_cal_characteristics_t cal5V;
-    esp_adc_cal_characteristics_t cal12V;
-    esp_adc_cal_characteristics_t cal3V3;
-    esp_adc_cal_characteristics_t cal18V;
-    esp_adc_cal_characteristics_t calUHSS;
-    esp_adc_cal_characteristics_t calI;
-
     static inline float mvToVolt(uint32_t mv) 
     {
         return static_cast<float>(mv) / 1000.0f;
     }
 
-    float readCompensated(int pin,
-                          const esp_adc_cal_characteristics_t &chars,
+    float readCompensated(AdcService::Input input,
+                          float temperatureC,
                           float rTop,
                           float rBot,
                           float driftMvPerC,
                           float intercept) const noexcept;
+    float readCurrent(float temperatureC) const noexcept;
 };

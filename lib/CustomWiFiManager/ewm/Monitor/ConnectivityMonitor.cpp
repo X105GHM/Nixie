@@ -1,20 +1,18 @@
 #include "ewm/Monitor/ConnectivityMonitor.hpp"
 #include "ewm/Log.hpp"
-#include <Arduino.h>
-#include <WiFi.h>
+#include "ewm/Utils/Time.hpp"
 
 namespace ewm
 {
     void ConnectivityMonitor::configure(bool enabled, uint32_t checkIntervalMs, uint32_t internetTimeoutMs)
     {
-        enabled_ = enabled;
+        enabled_.store(enabled, std::memory_order_release);
         checkIntervalMs_ = checkIntervalMs;
         internetTimeoutMs_ = internetTimeoutMs;
 
         if (enabled_)
         {
-            stopRequested_ = false;
-            startIfNeeded();
+            stopRequested_.store(false, std::memory_order_release);
         }
         else
         {
@@ -34,6 +32,11 @@ namespace ewm
         hasInternetFn_ = std::move(hasInternetFn);
     }
 
+    void ConnectivityMonitor::setConnectedFn(std::function<bool()> connectedFn)
+    {
+        connectedFn_ = std::move(connectedFn);
+    }
+
     void ConnectivityMonitor::setRoamFn(std::function<void()> roamFn)
     {
         roamFn_ = std::move(roamFn);
@@ -43,17 +46,21 @@ namespace ewm
     {
         if (!enabled_ || task_) return;
 
-        stopRequested_ = false;
-        BaseType_t ok = xTaskCreatePinnedToCore(taskThunk, "ewm_mon", 4096, this, 1, &task_, ARDUINO_RUNNING_CORE);
+        stopRequested_.store(false, std::memory_order_release);
+        TaskHandle_t task = nullptr;
+        BaseType_t ok = xTaskCreatePinnedToCore(taskThunk, "ewm_mon", 6144, this, 1, &task, 0);
         if (ok == pdPASS)
+        {
+            task_.store(task, std::memory_order_release);
             EWM_LOG("Monitor task started");
+        }
         else
-            task_ = nullptr;
+            task_.store(nullptr, std::memory_order_release);
     }
 
     void ConnectivityMonitor::stop()
     {
-        stopRequested_ = true;
+        stopRequested_.store(true, std::memory_order_release);
     }
 
     void ConnectivityMonitor::taskThunk(void* arg)
@@ -65,35 +72,36 @@ namespace ewm
     {
         for (;;)
         {
-            if (stopRequested_)
+            if (stopRequested_.load(std::memory_order_acquire))
                 break;
 
-            if (!enabled_)
+            if (!enabled_.load(std::memory_order_acquire))
             {
                 vTaskDelay(pdMS_TO_TICKS(250));
                 continue;
             }
 
-            bool ok = (WiFi.status() == WL_CONNECTED);
+            const bool stationConnected = connectedFn_ && connectedFn_();
+            bool ok = stationConnected;
 
-            if (ok && requireInternet_ && hasInternetFn_)
+            if (ok && requireInternet_.load(std::memory_order_acquire) && hasInternetFn_)
                 ok = hasInternetFn_(internetTimeoutMs_);
 
             if (!ok)
             {
-                if (noConnSince_ == 0) noConnSince_ = millis();
+                if (noConnSince_ == 0) noConnSince_ = ewm::utils::monotonicMillis();
 
-                if (WiFi.status() == WL_CONNECTED || requireInternet_)
+                if (stationConnected && requireInternet_.load(std::memory_order_acquire))
                 {
                     EWM_LOG("Monitor: not ok -> roam");
                     if (roamFn_) roamFn_();
                 }
 
-                if (onNoConn_ && (millis() - noConnSince_ >= noConnDelayMs_))
+                if (onNoConn_ && (ewm::utils::monotonicMillis() - noConnSince_ >= noConnDelayMs_))
                 {
                     EWM_LOG("Monitor: no connectivity too long -> callback");
                     onNoConn_();
-                    noConnSince_ = millis();
+                    noConnSince_ = ewm::utils::monotonicMillis();
                 }
             }
             else
@@ -105,8 +113,8 @@ namespace ewm
             vTaskDelay(pdMS_TO_TICKS(delayMs));
         }
         
-        task_ = nullptr;
-        stopRequested_ = false;
+        task_.store(nullptr, std::memory_order_release);
+        stopRequested_.store(false, std::memory_order_release);
         EWM_LOG("Monitor task stopped");
         vTaskDelete(nullptr);
     }

@@ -1,5 +1,6 @@
 #include "ewm/Storage/CredentialStorage.hpp"
 #include "ewm/Utils/Crc32.hpp"
+#include "nvs.h"
 
 namespace ewm
 {
@@ -8,32 +9,54 @@ namespace ewm
 
     bool CredentialStorage::saveToNamespace(const char* ns, const StorageHeader& hdr, const CredentialArray& data)
     {
-        Preferences p;
-        if (!p.begin(ns, false)) return false;
+        nvs_handle_t handle{};
+        esp_err_t err = nvs_open(ns, NVS_READWRITE, &handle);
+        if (err != ESP_OK)
+        {
+            return false;
+        }
 
-        bool ok = true;
-        ok &= (p.putBytes("hdr", &hdr, sizeof(hdr)) == sizeof(hdr));
-        ok &= (p.putBytes("data", data.data(), sizeof(Credential) * data.size()) == sizeof(Credential) * data.size());
-        p.end();
-        return ok;
+        err = nvs_set_blob(handle, "hdr", &hdr, sizeof(hdr));
+        if (err == ESP_OK)
+        {
+            err = nvs_set_blob(handle, "data", data.data(), sizeof(Credential) * data.size());
+        }
+        if (err == ESP_OK)
+        {
+            err = nvs_commit(handle);
+        }
+
+        nvs_close(handle);
+        return err == ESP_OK;
     }
 
     bool CredentialStorage::loadFromNamespace(const char* ns, StorageHeader& hdr, CredentialArray& data)
     {
-        Preferences p;
-        if (!p.begin(ns, true)) return false;
-
-        size_t gotH = p.getBytesLength("hdr");
-        size_t gotD = p.getBytesLength("data");
-        if (gotH != sizeof(StorageHeader) || gotD != sizeof(Credential) * data.size())
+        nvs_handle_t handle{};
+        esp_err_t err = nvs_open(ns, NVS_READONLY, &handle);
+        if (err != ESP_OK)
         {
-            p.end();
             return false;
         }
 
-        p.getBytes("hdr", &hdr, sizeof(hdr));
-        p.getBytes("data", data.data(), sizeof(Credential) * data.size());
-        p.end();
+        size_t gotH = 0;
+        size_t gotD = 0;
+        const esp_err_t headerSizeResult = nvs_get_blob(handle, "hdr", nullptr, &gotH);
+        const esp_err_t dataSizeResult = nvs_get_blob(handle, "data", nullptr, &gotD);
+        if (gotH != sizeof(StorageHeader) || gotD != sizeof(Credential) * data.size())
+        {
+            nvs_close(handle);
+            return false;
+        }
+
+        if (headerSizeResult != ESP_OK || dataSizeResult != ESP_OK ||
+            nvs_get_blob(handle, "hdr", &hdr, &gotH) != ESP_OK ||
+            nvs_get_blob(handle, "data", data.data(), &gotD) != ESP_OK)
+        {
+            nvs_close(handle);
+            return false;
+        }
+        nvs_close(handle);
 
         if (hdr.magic != MAGIC || hdr.version != 0x0001) return false;
         if (hdr.count > data.size()) return false;

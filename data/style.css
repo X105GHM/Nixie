@@ -1,8 +1,4 @@
-/* What a fucking mess...*/
-
-/* ================================================
-   Reset & Basis
-   ================================================ */
+/* Basis */
 * {
     margin: 0;
     padding: 0;
@@ -22,9 +18,7 @@ a {
     color: inherit;
 }
 
-/* ================================================
-     Banner
-     ================================================ */
+/* Kopfbereich */
 #banner {
     background-color: #0084ff;
     color: #fff;
@@ -45,11 +39,7 @@ a {
 #banner .update-banner-badge {
     pointer-events: none;
 }
-
-
-/* ================================================
-     Navigation
-     ================================================ */
+/* Navigation */
 nav {
     background-color: #333;
     color: #fff;
@@ -87,14 +77,13 @@ nav {
     border-radius: 4px;
 }
 
-/* Hamburger (mobil) */
+/* Mobiles Menü */
 .hamburger {
     display: none;
     font-size: 1.5rem;
     cursor: pointer;
 }
 
-/* Mobile-Menü (ausgeblendet) */
 .mobile-menu {
     display: none;
     flex-direction: column;
@@ -111,9 +100,7 @@ nav {
     background-color: #555;
 }
 
-/* ================================================
-     Hauptbereich & Tabs
-     ================================================ */
+/* Seiten und Tabs */
 main {
     padding: 1rem;
     margin-top: 1rem;
@@ -133,9 +120,7 @@ h2 {
     padding-bottom: 0.5rem;
 }
 
-/* -----------------------------------------------
-     Dashboard
-     ----------------------------------------------- */
+/* Dashboard */
 #general-info {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -143,7 +128,6 @@ h2 {
     margin-bottom: 2rem;
 }
 
-/* Card-Style */
 .card {
     background: #fff;
     padding: 0.75rem;
@@ -151,9 +135,7 @@ h2 {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* -----------------------------------------------
-     Graphen
-     ----------------------------------------------- */
+/* Diagramme */
 .graph-controls {
     display: flex;
     flex-wrap: wrap;
@@ -180,46 +162,41 @@ h2 {
     padding: 0.5rem;
 }
 
-/* ================================================
-   Log-Fenster
-   ================================================ */
+/* Netzwerklog */
 #networkLogContainer {
     background-color: #fff;
     border: 1px solid #ccc;
     border-radius: 4px;
     max-height: 300px;
     overflow-y: auto;
-    padding: .5rem;
+    padding: 0.5rem;
     margin-bottom: 1rem;
 }
 
 #networkLog {
     font-family: monospace;
-    font-size: .9rem;
+    font-size: 0.9rem;
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-/* ================================================
-     Log Input-Gruppe
-     ================================================ */
 .log-input-group {
     display: flex;
     flex-wrap: wrap;
-    gap: .5rem;
+    gap: 0.5rem;
     align-items: center;
-    margin-bottom: .5rem;
+    margin-bottom: 0.5rem;
 }
 
 .log-input-group input[type="text"] {
     flex: 1;
-    padding: .4rem;
+    padding: 0.4rem;
     border: 1px solid #ccc;
     border-radius: 4px;
 }
 
 .log-input-group button {
-    padding: .4rem .8rem;
+    padding: 0.4rem 0.8rem;
     border: 1px solid #888;
     background-color: #f0f0f0;
     border-radius: 4px;
@@ -230,9 +207,7 @@ h2 {
     background-color: #e0e0e0;
 }
 
-/* -----------------------------------------------
-   Einstellungen
-   ----------------------------------------------- */
+/* Einstellungen */
 .settings-group {
     margin-bottom: 1.5rem;
     background-color: #fff;
@@ -261,7 +236,7 @@ h2 {
     flex: none;
 }
 
-.device-setting>label:first-child {
+.device-setting > label:first-child {
     flex: none;
     margin-right: 1rem;
     white-space: nowrap;
@@ -283,9 +258,7 @@ h2 {
     border-color: #777;
 }
 
-/* -----------------------------------------------
-   Time-Boxes
-   ----------------------------------------------- */
+/* Zeitfenster */
 .time-limit-settings {
     display: none;
     align-items: center;
@@ -297,9 +270,7 @@ h2 {
     white-space: nowrap;
 }
 
-/* -----------------------------------------------
-   Helligkeits-Slider
-   ----------------------------------------------- */
+/* Helligkeit */
 .device-setting.brightness-slider-setting {
     display: flex;
     align-items: center;
@@ -307,7 +278,7 @@ h2 {
     margin-bottom: 0.75rem;
 }
 
-.device-setting.brightness-slider-setting>label:first-child {
+.device-setting.brightness-slider-setting > label:first-child {
     flex: none;
     margin-right: 1rem;
     white-space: nowrap;
@@ -340,17 +311,15 @@ h2 {
     width: 100px;
 }
 
-/* Hover/Focus für ZIP-Input */
+/* Standort und Zeitzone */
 #zipInput:hover,
 #zipInput:focus {
     border-color: #888;
     box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Button-Element für ZIP – gleiche Höhe wie Input */
 #applyZip {
     flex: none;
-    /* nicht dehnen */
     padding: 0.4rem 0.8rem;
     font-size: 1rem;
     border: 1px solid #4CAF50;
@@ -361,7 +330,6 @@ h2 {
     transition: background-color 0.2s, border-color 0.2s;
 }
 
-/* Hover/Active für ZIP-Button */
 #applyZip:hover {
     background-color: #45A049;
     border-color: #45A049;
@@ -372,7 +340,6 @@ h2 {
     border-color: #388E3C;
 }
 
-/* Standard-Styles für Timezone-Button */
 #applyTimezoneSelect {
     flex: none;
     padding: 0.4rem 0.8rem;
@@ -385,7 +352,6 @@ h2 {
     transition: background-color 0.2s, border-color 0.2s;
 }
 
-/* Hover/Active für Timezone-Button */
 #applyTimezoneSelect:hover {
     background-color: #45A049;
     border-color: #45A049;
@@ -395,11 +361,7 @@ h2 {
     background-color: #388E3C;
     border-color: #388E3C;
 }
-
-
-/* ================================================
-   Log-Config-Gruppe (vertikal)
-   ================================================ */
+/* Logstufen */
 .log-config-group {
     margin-top: 1rem;
     padding: 0.75rem;
@@ -427,7 +389,7 @@ h2 {
     justify-content: space-between;
 }
 
-.log-config-item>label:first-child {
+.log-config-item > label:first-child {
     flex: none;
     margin-right: 0.5rem;
     white-space: nowrap;
@@ -437,9 +399,7 @@ h2 {
     flex: none;
 }
 
-/* -----------------------------------------------
-   Firmware-Update
-   ----------------------------------------------- */
+/* Firmware */
 .device-setting.firmware-setting {
     margin-bottom: 1rem;
 }
@@ -485,9 +445,7 @@ h2 {
     border-color: #1569a5;
 }
 
-/* -----------------------------------------------
-     OTA-Update Button
-     ----------------------------------------------- */
+/* OTA-Schaltfläche */
 .device-setting.ota-setting {
     display: flex;
     align-items: center;
@@ -495,7 +453,7 @@ h2 {
     margin-bottom: 1.5rem;
 }
 
-.device-setting.ota-setting>label:first-child {
+.device-setting.ota-setting > label:first-child {
     flex: none;
     margin-right: 1rem;
     white-space: nowrap;
@@ -523,9 +481,7 @@ h2 {
     border-color: #8e0000;
 }
 
-/* -----------------------------------------------
-     Toggle-Switch (für alle Checkboxen)
-     ----------------------------------------------- */
+/* Schalter */
 .switch {
     position: relative;
     display: inline-block;
@@ -563,17 +519,62 @@ h2 {
     transition: 0.4s;
 }
 
-input:checked+.slider {
+input:checked + .slider {
     background-color: #2196F3;
 }
 
-input:checked+.slider:before {
+input:checked + .slider:before {
     transform: translateX(26px);
 }
 
-/* -----------------------------------------------
-     Dark Mode
-     ----------------------------------------------- */
+.switch.pending-sync .slider {
+    animation: pendingSyncPulse 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes pendingSyncPulse {
+    from {
+        box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.15);
+    }
+    to {
+        box-shadow: 0 0 0 4px rgba(33, 150, 243, 0.45);
+    }
+}
+
+/* Neustartdiagnose */
+.reset-diagnostics-panel {
+    margin-bottom: 24px;
+    padding: 16px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: rgba(127, 127, 127, 0.06);
+}
+
+.reset-diagnostics-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.reset-diagnostics-header h2,
+.reset-diagnostics-header p {
+    margin-top: 0;
+}
+
+#resetDiagnosticsOutput {
+    max-height: 420px;
+    overflow: auto;
+    padding: 12px;
+    border-radius: 6px;
+    background: #111;
+    color: #e8e8e8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+
+/* Dunkles Farbschema */
 body.dark {
     background-color: #121212;
     color: #e0e0e0;
@@ -597,7 +598,6 @@ body.dark main {
     background-color: #121212;
 }
 
-/* Boxen dunkel machen */
 body.dark .settings-group {
     background-color: #1e1e1e;
     border-color: #333;
@@ -675,7 +675,6 @@ body.dark input::placeholder {
     color: #aaa;
 }
 
-/* Anpassung im Dark Mode */
 body.dark #firmwareSelect {
     background-color: #1e1e1e;
     border-color: #444;
@@ -704,7 +703,6 @@ body.dark #applyFirmware:active {
     border-color: #173e6b;
 }
 
-/* Dark Mode–Anpassungen für ZIP-Eingabe und Button */
 body.dark #zipInput {
     background-color: #1e1e1e;
     border-color: #444;
@@ -741,7 +739,6 @@ body.dark #brightnessValue {
     color: #e0e0e0;
 }
 
-/* Dark Mode für die zusätzlichen Buttons */
 body.dark .device-setting button {
     background-color: #2a2a2a;
     border-color: #444;
@@ -752,46 +749,38 @@ body.dark .device-setting button:hover {
     background-color: #3a3a3a;
 }
 
-/* Dark Mode nur für #dashboard */
 body.dark #dashboard {
     background-color: #121212;
     color: #e0e0e0;
 }
 
-/* Überschriften im Dashboard */
 body.dark #dashboard h2 {
     border-color: #444;
     color: #e0e0e0;
 }
 
-/* Karten im Dashboard */
 body.dark #dashboard .card {
     background-color: #1e1e1e;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
     color: #e0e0e0;
 }
 
-/* Starke Labels in den Cards */
 body.dark #dashboard .card strong {
     color: #bbb;
 }
 
-/* Textwerte in den Cards */
 body.dark #dashboard .card span {
     color: #e0e0e0;
 }
 
-/* Grid-Hintergrund entfernen */
 body.dark #dashboard .grid {
     background: none;
 }
 
-/* Chart-Canvases dunkler */
 body.dark #dashboard canvas {
     background-color: #1e1e1e !important;
 }
 
-/* Dark Mode für Logger */
 body.dark #networkLogContainer {
     background-color: #1e1e1e;
     border-color: #444;
@@ -802,7 +791,6 @@ body.dark #networkLog {
     color: #e0e0e0;
 }
 
-/* Dark Mode Eingabe-Gruppe */
 body.dark .log-input-group input[type="text"] {
     background-color: #1e1e1e;
     color: #e0e0e0;
@@ -844,9 +832,7 @@ body.dark #applyTimezoneSelect:active {
     border-color: #1B5E20;
 }
 
-/* ================================================
-     Responsive
-     ================================================ */
+/* Mobil */
 @media (max-width: 767px) {
     .menu {
         display: none;
@@ -866,7 +852,7 @@ body.dark #applyTimezoneSelect:active {
     --nixie-btn-hover: #ddd;
 }
 
-/* === Dark-Mode Override für Nixie === */
+/* Röhrenfarben */
 body.dark {
     --nixie-bg: radial-gradient(circle at top, #222 0%, #000 80%);
     --nixie-border: #444;
@@ -876,9 +862,7 @@ body.dark {
     --nixie-btn-hover: #555;
 }
 
-/* ================================================
-     Container & Sichtbarkeit
-     ================================================ */
+/* Röhrenauswahl */
 .nixie-container {
     display: flex;
     flex-wrap: wrap;
@@ -891,9 +875,6 @@ body.dark {
     display: none;
 }
 
-/* ================================================
-     Nixie-Tube Styling
-     ================================================ */
 .nixie-tube {
     position: relative;
     width: 14%;
@@ -940,9 +921,7 @@ body.dark {
     margin-right: 0;
 }
 
-/* ================================================
-     Digit Styling
-     ================================================ */
+/* Ziffern */
 .digit {
     font-family: 'Digital-7 Mono', monospace;
     font-size: 2.5rem;
@@ -954,9 +933,7 @@ body.dark {
     user-select: none;
 }
 
-/* ================================================
-     Kathodenreinigungs-Button
-     ================================================ */
+/* Röhrenreinigung */
 .clean-button {
     margin-top: 30px;
     padding: 15px 30px;
@@ -996,10 +973,7 @@ body.dark {
     display: none !important;
 }
 
-/* ================================================
-     WiFi-Manager
-     ================================================ */
-
+/* WLAN */
 .wifi-group {
     margin-top: 30px;
 }
@@ -1051,7 +1025,7 @@ body.dark {
     cursor: grab;
     user-select: none;
     font-weight: 700;
-    opacity: .8;
+    opacity: 0.8;
 }
 
 .wifi-item .main {
@@ -1069,7 +1043,7 @@ body.dark {
 
 .wifi-item .meta {
     color: var(--muted, #9fb0d0);
-    font-size: .9em;
+    font-size: 0.9em;
 }
 
 .wifi-item .actions {
@@ -1078,8 +1052,8 @@ body.dark {
 }
 
 .wifi-item .del {
-    opacity: 0.0;
-    transition: opacity .15s;
+    opacity: 0;
+    transition: opacity 0.15s;
     cursor: pointer;
     border: 0;
     border-radius: 8px;
@@ -1091,19 +1065,16 @@ body.dark {
 }
 
 .wifi-item.dragging {
-    opacity: .6;
+    opacity: 0.6;
 }
 
 .wifi-hint {
     color: var(--muted, #9fb0d0);
     margin-top: 8px;
-    font-size: .92em;
+    font-size: 0.92em;
 }
 
-/* ================================================
-   Runtime Monitor (integrierter Stats-Monitor)
-   ================================================ */
-
+/* Laufzeitmonitor */
 #runtime-monitor {
     margin-top: 1.5rem;
     display: flex;
@@ -1290,7 +1261,7 @@ body.dark {
     filter: grayscale(0.35);
 }
 
-/* Dark Mode */
+/* Laufzeitmonitor dunkel */
 body.dark #runtime-monitor .runtime-card-header {
     background: #1e1e1e;
     border-bottom-color: #444;
@@ -1374,10 +1345,7 @@ body.dark #runtime-monitor .pie-leg-pct {
     }
 }
 
-/* ================================================
-   OTA-Pop-Up
-   ================================================ */
-
+/* OTA-Dialog */
 .ota-modal.hidden {
     display: none;
 }

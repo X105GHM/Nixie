@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include "Logger/Logger.hpp"
@@ -23,46 +24,48 @@ namespace Globals
         LOG_WIFI       = 1 << 8,  ///< Bit 8  → Logger::WiFiEnabled
     };
 
-    extern uint32_t logConfig;
+    extern std::atomic_uint32_t logConfig;
 
-    extern bool tickerEnabled;
+    extern std::atomic_bool tickerEnabled;
 
-    extern bool timeLimitEnabled;
+    extern std::atomic_bool timeLimitEnabled;
 
-    extern bool SilentModeEnabled;
+    extern std::atomic_bool SilentModeEnabled;
 
-    extern bool manualBrightnessEnabled;
+    extern std::atomic_bool manualBrightnessEnabled;
 
-    extern bool WeatherUpdateEnabled;
+    extern std::atomic_bool WeatherUpdateEnabled;
 
-    extern bool PWM_disabled;
+    extern std::atomic_bool PWM_disabled;
 
-    extern bool loadDetected;
-    
-    extern bool cricketSoundEnabled;
+    extern std::atomic_bool loadDetected;
 
-    extern bool updateAvailable; 
+    extern std::atomic_bool cricketSoundEnabled;
 
-    extern bool noACPatNight;
+    extern std::atomic_bool updateAvailable;
 
-    extern std::string zipCode;
+    extern std::atomic_bool noACPatNight;
 
-    extern std::string HardwareVersion;
+    struct TextConfigSnapshot
+    {
+        std::string zipCode;
+        std::string hardwareVersion;
+        std::string softwareVersion;
+        std::string timeLimitFrom;
+        std::string timeLimitTo;
+    };
 
-    extern std::string SoftwareVersion;
+    TextConfigSnapshot getTextConfig();
+    void setTextConfig(TextConfigSnapshot config);
 
-    extern std::string timeLimitFrom; 
+    extern std::atomic_uint8_t brightnessNightStartHour;
+    extern std::atomic_uint8_t brightnessNightEndHour;
+    extern std::atomic_uint8_t brightnessDimStartHour;
+    extern std::atomic_uint8_t brightnessDimEndHour;
 
-    extern std::string timeLimitTo;
-
-    extern uint8_t brightnessNightStartHour;
-    extern uint8_t brightnessNightEndHour;
-    extern uint8_t brightnessDimStartHour;
-    extern uint8_t brightnessDimEndHour;
-
-    extern uint8_t brightnessNightValue;
-    extern uint8_t brightnessDimValue;
-    extern uint8_t brightnessDayValue;
+    extern std::atomic_uint8_t brightnessNightValue;
+    extern std::atomic_uint8_t brightnessDimValue;
+    extern std::atomic_uint8_t brightnessDayValue;
 
     void applyLogConfig();
 
@@ -74,7 +77,7 @@ namespace Globals
         COUNT
     };
 
-    extern FirmwareTarget currentFirmwareTarget;
+    extern std::atomic<FirmwareTarget> currentFirmwareTarget;
 
     std::string getFirmwareUrl(FirmwareTarget target);
 
@@ -137,5 +140,5 @@ namespace Globals
         }
     }
 
-    extern TimeZone currentTimeZone;
+    extern std::atomic<TimeZone> currentTimeZone;
 }

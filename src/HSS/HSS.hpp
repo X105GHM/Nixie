@@ -1,12 +1,11 @@
 #pragma once
 
+#include <atomic>
 #include "Logger/Logger.hpp"
 #include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <functional>
-
-extern bool enable160V;
-extern bool enable190V;
-extern bool enableResistor;
 
 class HSS
 {
@@ -22,9 +21,9 @@ public:
 
     bool testLoad(const std::function<float()>& readVoltage, float thresholdV, uint32_t discrimMs, uint32_t maxWaitMs) const noexcept;
 
-    mutable bool enableResistor = false;
-    mutable bool enable190V = false;
-    mutable bool enable160V = false;
+    mutable std::atomic_bool enableResistor{false};
+    mutable std::atomic_bool enable190V{false};
+    mutable std::atomic_bool enable160V{false};
 
 private:
     static constexpr gpio_num_t PIN_160V = GPIO_NUM_15;

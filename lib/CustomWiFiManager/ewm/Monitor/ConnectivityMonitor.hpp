@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <functional>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -9,36 +10,38 @@ namespace ewm
     {
     public:
         void configure(bool enabled, uint32_t checkIntervalMs, uint32_t internetTimeoutMs);
-        void setRequireInternet(bool require) { requireInternet_ = require; }
+        void setRequireInternet(bool require) { requireInternet_.store(require, std::memory_order_release); }
 
         void setOnNoConnectivity(std::function<void()> cb, uint32_t delayMs);
 
         void setCheckFn(std::function<bool(uint32_t)> hasInternetFn);
+        void setConnectedFn(std::function<bool()> connectedFn);
         void setRoamFn(std::function<void()> roamFn);
 
         void startIfNeeded();
         void stop();
-        bool running() const { return task_ != nullptr; }
+        bool running() const { return task_.load(std::memory_order_acquire) != nullptr; }
 
     private:
         static void taskThunk(void* arg);
         void loop_();
 
     private:
-        volatile bool enabled_{false};
-        volatile bool requireInternet_{false};
-        volatile bool stopRequested_{false};
+        std::atomic_bool enabled_{false};
+        std::atomic_bool requireInternet_{false};
+        std::atomic_bool stopRequested_{false};
 
         uint32_t checkIntervalMs_{10000};
         uint32_t internetTimeoutMs_{15000};
 
         std::function<bool(uint32_t)> hasInternetFn_;
+        std::function<bool()> connectedFn_;
         std::function<void()> roamFn_;
 
         std::function<void()> onNoConn_;
-        uint32_t noConnSince_{0};
+        uint64_t noConnSince_{0};
         uint32_t noConnDelayMs_{300000};
 
-        TaskHandle_t task_{nullptr};
+        std::atomic<TaskHandle_t> task_{nullptr};
     };
 }

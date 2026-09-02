@@ -1,6 +1,20 @@
 #include "HTTP.hpp"
+#include "Config/Secrets.hpp"
+#include "Acoustics/Buzzer/Buzzer.hpp"
+#include "AlarmClock/AlarmClock.hpp"
+#include "Timer/Timer.hpp"
+#include "esp_system.h"
+#include "Diagnostics/ResetDiagnostics.hpp"
+#include "ewm/Utils/MiniJson.hpp"
+#include <algorithm>
+#include <cctype>
+#include <string_view>
 
 static constexpr LoggerType LOGTYPE = LoggerType::Webserver;
+
+extern Buzzer buzzer;
+extern AlarmClock alarmClock;
+extern Timer timer;
 
 static const std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$)");
 
@@ -13,22 +27,39 @@ static bool otaBusy() noexcept
     return OTAManager::instance().isRunning();
 }
 
-static void sendOtaBusy(WebServer& server) noexcept
+static void sendOtaBusy(NativeHttpServer& server) noexcept
 {
     server.sendHeader("Cache-Control", "no-store");
     server.send(503, "application/json", "{\"error\":\"OTA active\"}");
 }
 
-static bool isValidZipCode(const String& zip) noexcept
+static bool startUpdateCheckTask(std::string baseUrl) noexcept
 {
-    if (zip.length() == 0 || zip.length() > 10)
+    auto* taskUrl = new (std::nothrow) std::string(std::move(baseUrl));
+    if (!taskUrl) return false;
+
+    const BaseType_t created = xTaskCreatePinnedToCore([](void* context) 
+    {
+        std::unique_ptr<std::string> url(static_cast<std::string*>(context));
+        (void)OTAManager::instance().checkForUpdateAvailable(*url);
+        vTaskDelete(nullptr);
+    }, "UpdateCheck", 12288, taskUrl, 1, nullptr, 0);
+
+    if (created == pdPASS) return true;
+    delete taskUrl;
+    return false;
+}
+
+static bool isValidZipCode(std::string_view zip) noexcept
+{
+    if (zip.empty() || zip.length() > 10)
     {
         return false;
     }
 
     for (size_t i = 0; i < zip.length(); ++i)
     {
-        if (!isDigit(zip[i]))
+        if (zip[i] < '0' || zip[i] > '9')
         {
             return false;
         }
@@ -37,9 +68,9 @@ static bool isValidZipCode(const String& zip) noexcept
     return true;
 }
 
-static bool parseUInt32Strict(const String& input, uint32_t& out) noexcept
+static bool parseUInt32Strict(std::string_view input, uint32_t& out) noexcept
 {
-    if (input.length() == 0)
+    if (input.empty())
     {
         return false;
     }
@@ -66,15 +97,16 @@ static bool parseUInt32Strict(const String& input, uint32_t& out) noexcept
     return true;
 }
 
-static bool parseAlarmTime(const String& input, uint8_t& hour, uint8_t& minute) noexcept
+static bool parseAlarmTime(std::string_view input, uint8_t& hour, uint8_t& minute) noexcept
 {
     if (input.length() != 5 || input[2] != ':')
     {
         return false;
     }
 
-    if (!isDigit(input[0]) || !isDigit(input[1]) ||
-        !isDigit(input[3]) || !isDigit(input[4]))
+    const auto isAsciiDigit = [](char c) { return c >= '0' && c <= '9'; };
+    if (!isAsciiDigit(input[0]) || !isAsciiDigit(input[1]) ||
+        !isAsciiDigit(input[3]) || !isAsciiDigit(input[4]))
     {
         return false;
     }
@@ -91,55 +123,80 @@ static bool parseAlarmTime(const String& input, uint8_t& hour, uint8_t& minute) 
     minute = static_cast<uint8_t>(m);
     return true;
 }
+static long parseLongCompatible(const std::string& input) noexcept
+{
+    return std::strtol(input.c_str(), nullptr, 10);
+}
+
+static bool equalsIgnoreCase(std::string_view left, std::string_view right) noexcept
+{
+    if (left.size() != right.size()) return false;
+    for (size_t index = 0; index < left.size(); ++index)
+    {
+        const auto l = static_cast<unsigned char>(left[index]);
+        const auto r = static_cast<unsigned char>(right[index]);
+        if (std::tolower(l) != std::tolower(r)) return false;
+    }
+    return true;
+}
 
 constexpr int tzCount = sizeof(tzNames) / sizeof(tzNames[0]);
 
 HTTPHandler::HTTPHandler(int port) noexcept
-    : server_(port)
+    : server_(port), secureApi_(server_)
 {}
 
-String HTTPHandler::getContentType(const String &filename) noexcept 
+bool HTTPHandler::executeCommand(const std::function<void()>& action) noexcept
 {
-    if (filename.endsWith(".htm") || filename.endsWith(".html")) return "text/html";
-    if (filename.endsWith(".css"))   return "text/css";
-    if (filename.endsWith(".js"))    return "application/javascript";
-    if (filename.endsWith(".png"))   return "image/png";
-    if (filename.endsWith(".jpg"))   return "image/jpeg";
-    if (filename.endsWith(".ico"))   return "image/x-icon";
-    if (filename.endsWith(".pdf"))   return "application/pdf";
-    return "text/plain";
+    const auto result = commands_.run(action);
+    if (result == HttpCommandQueue::Result::Queued) return true;
+    sendCommandError(result);
+    return false;
 }
 
-bool HTTPHandler::handleFileRead(const String &path) noexcept
+bool HTTPHandler::enqueueCommand(std::function<void()> action) noexcept
 {
-    if (!server_.client() || !server_.client().connected()) return false;
+    const auto result = commands_.enqueue(std::move(action));
+    if (result == HttpCommandQueue::Result::Queued)
+    {
+        server_.sendHeader("X-Command-Status", "queued");
+        return true;
+    }
+    sendCommandError(result);
+    return false;
+}
 
-    String filePath = path;
-    if (filePath.endsWith("/")) filePath += "index.html";
-    if (!SPIFFS.exists(filePath)) return false;
-
-    File file = SPIFFS.open(filePath, "r");
-    if (!file) return false;
-
-    server_.sendHeader("Connection", "close");
-    String ct = getContentType(filePath);
-    server_.streamFile(file, ct);
-    file.close();
-    return true;
+void HTTPHandler::sendCommandError(HttpCommandQueue::Result result) noexcept
+{
+    Logger::log(LOGTYPE, "HTTP command rejected: %u", static_cast<unsigned>(result));
+    server_.sendHeader("Cache-Control", "no-store");
+    if (result == HttpCommandQueue::Result::Unsupported)
+    {
+        server_.send(501, "application/json", "{\"error\":\"unsupported command\"}");
+    }
+    else if (result == HttpCommandQueue::Result::QueueFull || result == HttpCommandQueue::Result::NotStarted)
+    {
+        server_.send(503, "application/json", "{\"error\":\"command queue unavailable\"}");
+    }
+    else
+    {
+        server_.send(500, "application/json", "{\"error\":\"internal command error\"}");
+    }
 }
 
 void HTTPHandler::begin() noexcept 
 {
-    if (!SPIFFS.begin(true)) 
+    if (!staticFiles_.mount())
     {
-        Logger::log(LOGTYPE, F("SPIFFS Mount failed"));
+        Logger::log(LOGTYPE, "SPIFFS Mount failed");
     } 
     else 
     {
-        Logger::log(LOGTYPE, F("SPIFFS ready"));
+        Logger::log(LOGTYPE, "SPIFFS ready");
     }
 
-    server_.onNotFound([this]() noexcept {
+    server_.onNotFound([this]() noexcept 
+    {
        
         if (otaBusy())
         {
@@ -162,65 +219,83 @@ void HTTPHandler::begin() noexcept
             return;
         }
 
-        if (!handleFileRead(server_.uri())) 
+        const std::string& requestUri = server_.uri();
+        if (!staticFiles_.serve(server_.nativeRequest(), requestUri))
         {
             server_.sendHeader("Connection", "close");
             server_.send(404, "text/plain", "404: File Not Found");
         }
     });
     
-    server_.on("/", HTTP_POST, [this]() noexcept {
-        server_.send(405, "text/plain", "Method Not Allowed");
-    });
-
-    server_.on("/set/OFF", HTTP_GET, [this]() noexcept {
-        displayEnabled = false;
-        Logger::log(LOGTYPE, F("Display disabled via HTTP"));
+    // Internal compatibility handlers. NativeHttpServer rejects direct external
+    // access to /set/* and /get/checkUpdate with 410. SecureApi performs strict
+    // validation before invoking these handlers in-process so the established
+    // command-queue-backed Fachlogik does not need to be rewritten here.
+    server_.on("/set/OFF", HTTP_GET, [this]() noexcept 
+    {
+        if (!enqueueCommand([]() { displayEnabled = false; Logger::log(LOGTYPE, "Display disabled via HTTP"); })) return;
         server_.send(200, "text/plain", "Display disabled");
     });
 
-    server_.on("/set/ON", HTTP_GET, [this]() noexcept {
-        displayEnabled = true;
-        Logger::log(LOGTYPE, F("Display enabled via HTTP"));
+    server_.on("/set/ON", HTTP_GET, [this]() noexcept 
+    {
+        if (!enqueueCommand([]() { displayEnabled = true; Logger::log(LOGTYPE, "Display enabled via HTTP"); })) return;
         server_.send(200, "text/plain", "Display enabled");
     });
 
-    server_.on("/set/reset", HTTP_GET, [this]() noexcept {
-        Logger::log(LOGTYPE, F("System reset requested via HTTP"));       
-        server_.send(200, "text/plain", "OK");
-        handleReset();
-    });
-
-    server_.on("/set/setOldValue", HTTP_GET, [this]() noexcept {
-        Logger::log(LOGTYPE, F("System apply loadGlobals requested via HTTP"));       
-        Memory::loadGlobals();
-        Globals::applyLogConfig();
+    server_.on("/set/reset", HTTP_GET, [this]() noexcept 
+    {
+        Logger::log(LOGTYPE, "System reset requested via HTTP");
+        const std::string requestedSource = server_.arg("source");
+        const std::string plannedReason = requestedSource == "ota" ? "ota" : "user_http";
+        if (!enqueueCommand([this, plannedReason]() { handleReset(plannedReason); })) return;
         server_.send(200, "text/plain", "OK");
     });
 
-    server_.on("/set/loadDetectedOverwrite", HTTP_GET, [this]() noexcept {     
-        Globals::loadDetected = !Globals::loadDetected;
-        Logger::log(LOGTYPE, "loadDetected set to %s via HTTP", Globals::loadDetected ? "true" : "false");
-        server_.send(200, "text/plain", String("loadDetected=") + (Globals::loadDetected ? "1" : "0"));
-    });
-
-    server_.on("/set/resetValue", HTTP_GET, [this]() noexcept {
-        Logger::log(LOGTYPE, F("Globals Values reset requested via HTTP"));       
-        Memory::StorageReset();
+    server_.on("/set/setOldValue", HTTP_GET, [this]() noexcept 
+    {
+        Logger::log(LOGTYPE, "System apply loadGlobals requested via HTTP");
+        if (!enqueueCommand([]() 
+        {
+            Memory::loadGlobals();
+            Globals::applyLogConfig();
+        })) return;
         server_.send(200, "text/plain", "OK");
     });
 
-    server_.on("/set/resetWiFi", HTTP_GET, [this]() noexcept {
-        wifiConnector.eraseCredentials();
-        Logger::log(LOGTYPE, F("WiFi Credentail erase requested via HTTP"));  
+    server_.on("/set/loadDetectedOverwrite", HTTP_GET, [this]() noexcept 
+    {     
+        bool loadDetected = false;
+        if (!executeCommand([&loadDetected]() {
+            Globals::loadDetected = !Globals::loadDetected;
+            loadDetected = Globals::loadDetected;
+            Logger::log(LOGTYPE, "loadDetected set to %s via HTTP", loadDetected ? "true" : "false");
+        })) return;
+        server_.send(200, "text/plain", std::string("loadDetected=") + (loadDetected ? "1" : "0"));
+    });
+
+    server_.on("/set/resetValue", HTTP_GET, [this]() noexcept 
+    {
+        Logger::log(LOGTYPE, "Globals Values reset requested via HTTP");
+        if (!enqueueCommand([]() { Memory::StorageReset(); })) return;
+        server_.send(200, "text/plain", "OK");
+    });
+
+    server_.on("/set/resetWiFi", HTTP_GET, [this]() noexcept 
+    {
+        if (!enqueueCommand([]() {
+            wifiConnector.eraseCredentials();
+            Logger::log(LOGTYPE, "WiFi Credentail erase requested via HTTP");
+        })) return;
         server_.send(200, "text/plain", "OK");     
     });
 
-    server_.on("/get/wifiSaved", HTTP_GET, [this]() noexcept {
+    server_.on("/get/wifiSaved", HTTP_GET, [this]() noexcept 
+    {
         auto list = wifiConnector.getSavedNetworks();
 
-        auto esc = [](const String& s)->String{
-            String r; r.reserve(s.length()+8);
+        auto esc = [](const std::string& s)->std::string{
+            std::string r; r.reserve(s.length()+8);
             for (size_t i=0;i<s.length();++i){
                 char c=s[i];
                 if (c=='\"') r += "\\\"";
@@ -231,13 +306,13 @@ void HTTPHandler::begin() noexcept
             return r;
         };
 
-        String out = "[";
+        std::string out = "[";
         for (size_t i=0;i<list.size();++i)
         {
             if(i) out += ",";
-            out += "{\"ssid\":\""; out += esc(String(list[i].ssid)); out += "\",";
-            out += "\"priority\":"; out += String(list[i].priority); out += ",";
-            out += "\"last_ok\":";  out += String(list[i].last_ok);
+            out += "{\"ssid\":\""; out += esc(list[i].ssid); out += "\",";
+            out += "\"priority\":"; out += std::to_string(list[i].priority); out += ",";
+            out += "\"last_ok\":";  out += std::to_string(list[i].last_ok);
             out += "}";
         }
         out += "]";
@@ -247,351 +322,367 @@ void HTTPHandler::begin() noexcept
         Logger::log(LOGTYPE, "HTTP /get/wifiSaved -> %u entries", (unsigned)list.size());
     });
 
-    server_.on("/set/wifiAdd", HTTP_GET, [this]() noexcept {
-        if (!server_.hasArg("ssid")) {
-            server_.send(400, "text/plain", "Missing 'ssid'");
-            Logger::log(LOGTYPE, "HTTP /set/wifiAdd missing ssid");
+    server_.on("/set/wifiAdd", HTTP_POST, [this]() noexcept 
+    {
+        if (!server_.hasArg("plain") || server_.arg("plain").length() > 1024) 
+        {
+            server_.send(400, "text/plain", "Invalid request body");
+            Logger::log(LOGTYPE, "HTTP /set/wifiAdd invalid body");
             return;
         }
-        String ssid = server_.arg("ssid");
-        String pwd  = server_.hasArg("pwd")  ? server_.arg("pwd")  : "";
-        int prio    = server_.hasArg("prio") ? server_.arg("prio").toInt() : 100;
-        prio = constrain(prio, 0, 254);
 
-        bool ok = wifiConnector.addOrUpdateNetwork(ssid, pwd, (uint8_t)prio);
-        Logger::log(LOGTYPE, ok ? "WiFi addOrUpdate OK: '%s' (prio %d)" : "WiFi addOrUpdate FAIL: '%s'", ssid.c_str(), prio);
+        const std::string& body = server_.body();
+        std::string ssid;
+        std::string password;
+        int prio = 100;
+        if (!ewm::utils::json_get_string(body, "ssid", ssid) ||
+            ssid.empty() || ssid.size() > 32 ||
+            (ewm::utils::json_get_string(body, "password", password) && password.size() > 64))
+        {
+            server_.send(400, "text/plain", "Invalid credentials");
+            Logger::log(LOGTYPE, "HTTP /set/wifiAdd invalid credentials");
+            return;
+        }
+        ewm::utils::json_get_int(body, "priority", prio);
+        prio = std::clamp(prio, 0, 254);
+
+        bool ok = false;
+        if (!executeCommand([&]() {
+            ok = wifiConnector.addOrUpdateNetwork(ssid, password, static_cast<uint8_t>(prio));
+        })) return;
+        std::fill(password.begin(), password.end(), '\0');
+        Logger::log(LOGTYPE, ok ? "WiFi addOrUpdate OK (prio %d)" : "WiFi addOrUpdate failed", prio);
 
         server_.send(ok ? 200 : 400, "text/plain", ok ? "OK" : "FAIL");
     });
 
-    server_.on("/set/wifiRemove", HTTP_GET, [this]() noexcept {
+    server_.on("/set/wifiRemove", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("ssid")) 
         {
             server_.send(400, "text/plain", "Missing 'ssid'");
             Logger::log(LOGTYPE, "HTTP /set/wifiRemove missing ssid");
             return;
         }
-        String ssid = server_.arg("ssid");
-        bool ok = wifiConnector.removeNetwork(ssid);
+        const std::string ssid = server_.arg("ssid");
+        bool ok = false;
+        if (!executeCommand([&]() { ok = wifiConnector.removeNetwork(ssid.c_str()); })) return;
 
-        Logger::log(LOGTYPE, ok ? "WiFi removed: '%s'" : "WiFi remove failed/not found: '%s'", ssid.c_str());
+        Logger::log(LOGTYPE, ok ? "WiFi entry removed" : "WiFi entry removal failed/not found");
         server_.send(ok ? 200 : 404, "text/plain", ok ? "OK" : "Not found");
     });
 
-    server_.on("/set/ACP", HTTP_GET, [this]() noexcept {
-
-        if (!displayEnabled && !Globals::loadDetected) 
+    server_.on("/set/ACP", HTTP_GET, [this]() noexcept 
+    {
+        enum class Result { Started, DisplayDisabled, ModeRunning };
+        Result result = Result::Started;
+        if (!executeCommand([this, &result]() 
         {
-            server_.send(400, "text/plain", "Display not enabled");
-            Logger::log(LOGTYPE, F("Error: Display not enabled"));
-            return;
-        }
-        else if (mode_running.load(std::memory_order_relaxed)) 
-        {
-            server_.send(400, "text/plain", "A mode is already running");
-            Logger::log(LOGTYPE, F("Error: Another mode is already running"));
-            return;
-        }
-        
-        Logger::log(LOGTYPE, "ACP started via HTTP");
-        digits = 0;
-
-        if (!runWithClockSuspended(clockTaskHandle, [this]()
-        {
-            auto check = [](esp_err_t e, const char* what) 
+            if (!displayEnabled && !Globals::loadDetected)
             {
-                if (e != ESP_OK) 
+                result = Result::DisplayDisabled;
+                Logger::log(LOGTYPE, "Error: Display not enabled");
+                return;
+            }
+            if (mode_running.load(std::memory_order_relaxed))
+            {
+                result = Result::ModeRunning;
+                Logger::log(LOGTYPE, "Error: Another mode is already running");
+                return;
+            }
+
+            Logger::log(LOGTYPE, "ACP started via HTTP");
+            digits = 0;
+            if (!runWithClockSuspended(clockTaskHandle, [this]()
+            {
+                auto check = [](esp_err_t e, const char* what)
                 {
-                    Logger::log(LOGTYPE, "%s failed (%d)", what, static_cast<int>(e));
-                    return false;
-                }
+                    if (e != ESP_OK)
+                    {
+                        Logger::log(LOGTYPE, "%s failed (%d)", what, static_cast<int>(e));
+                        return false;
+                    }
+                    return true;
+                };
 
-                return true;
-            };
+                Logger::log(LOGTYPE, "ACP task: enabling 190V + resistor reduction");
 
-            Logger::log(LOGTYPE, "ACP task: enabling 190V + resistor reduction");
+                if (!check(hssController.enable190(), "enable190")) return;
+                vTaskDelay(pdMS_TO_TICKS(10));
 
-            if (!check(hssController.enable190(), "enable190")) return;
-            vTaskDelay(pdMS_TO_TICKS(10));
+                if (!check(hssController.enableResistorReduction(), "enableResistorReduction")) return;
+                vTaskDelay(pdMS_TO_TICKS(10));
 
-            if (!check(hssController.enableResistorReduction(), "enableResistorReduction")) return;
-            vTaskDelay(pdMS_TO_TICKS(10));
+                ACP();
 
-            ACP();
+                Logger::log(LOGTYPE, "ACP task: disabling resistor reduction + 190V");
 
-            Logger::log(LOGTYPE, "ACP task: disabling resistor reduction + 190V");
+                if (!check(hssController.disableResistorReduction(), "disableResistorReduction")) return;
+                vTaskDelay(pdMS_TO_TICKS(10));
 
-            if (!check(hssController.disableResistorReduction(), "disableResistorReduction")) return;
-            vTaskDelay(pdMS_TO_TICKS(10));
+                if (!check(hssController.disable190(), "disable190")) return;
+                vTaskDelay(pdMS_TO_TICKS(10));
 
-            if (!check(hssController.disable190(), "disable190")) return;
-            vTaskDelay(pdMS_TO_TICKS(10));
+                Logger::log(LOGTYPE, "ACP task finished");
+            })) Logger::log(LOGTYPE, "Failed to start ACP task");
+        })) return;
 
-            Logger::log(LOGTYPE, "ACP task finished"); 
-        }))
-        {
-            Logger::log(LOGTYPE, "Failed to start ACP task");
-        }
-
+        if (result == Result::DisplayDisabled) server_.send(400, "text/plain", "Display not enabled");
+        else if (result == Result::ModeRunning) server_.send(400, "text/plain", "A mode is already running");
+        else
         server_.send(200, "text/plain", "ACP started");
     });
 
-    server_.on("/set/tempDisplay", HTTP_GET, [this]() noexcept {
+    server_.on("/set/tempDisplay", HTTP_GET, [this]() noexcept 
+    {
+        enum class Result { Started, DisplayDisabled, ModeRunning };
+        Result result = Result::Started;
+        if (!executeCommand([this, &result]() {
+            if (!displayEnabled && !Globals::loadDetected)
+            {
+                result = Result::DisplayDisabled;
+                Logger::log(LOGTYPE, "Error: Display not enabled");
+                return;
+            }
+            if (mode_running.load(std::memory_order_relaxed))
+            {
+                result = Result::ModeRunning;
+                Logger::log(LOGTYPE, "Error: Another mode is already running");
+                return;
+            }
+            Logger::log(LOGTYPE, "Temperature display requested via HTTP");
+            if (!runWithClockSuspended(clockTaskHandle, [this]()
+            {
+                mode_running.store(true, std::memory_order_relaxed);
+                zipMaskingEnabled = true;
+                const auto config = Globals::getTextConfig();
+                digits = config.zipCode.empty() ? 0 : std::stoi(config.zipCode) * 10;
+                vTaskDelay(pdMS_TO_TICKS(3000));
+                displayWeather();
+                tempMaskingEnabled = true;
+                zipMaskingEnabled = false;
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                tempMaskingEnabled = false;
+                mode_running.store(false, std::memory_order_relaxed);
+            })) Logger::log(LOGTYPE, "Failed to start weather display task");
+        })) return;
 
-        if (!displayEnabled && !Globals::loadDetected) 
-        {
-            server_.send(400, "text/plain", "Display not enabled");
-            Logger::log(LOGTYPE, F("Error: Display not enabled"));
-            return;
-        }
-        else if (mode_running.load(std::memory_order_relaxed)) 
-        {
-            server_.send(400, "text/plain", "A mode is already running");
-            Logger::log(LOGTYPE, F("Error: Another mode is already running"));
-            return;
-        }
-
-        Logger::log(LOGTYPE, F("Temperature display requested via HTTP"));
-
-        server_.send(200, "text/plain", "Temperature display started");
-
-        if (!runWithClockSuspended(clockTaskHandle, [this]() 
-        {
-            mode_running.store(true, std::memory_order_relaxed);
-
-            zipMaskingEnabled = true;
-            digits = Globals::zipCode.empty() ? 0 : std::stoi(Globals::zipCode) * 10;
-
-            vTaskDelay(pdMS_TO_TICKS(3000));
-
-            displayWeather();
-
-            tempMaskingEnabled = true;
-            zipMaskingEnabled = false;
-
-            vTaskDelay(pdMS_TO_TICKS(5000));
-
-            tempMaskingEnabled = false;
-            mode_running.store(false, std::memory_order_relaxed);
-        }))
-        {
-            Logger::log(LOGTYPE, "Failed to start weather display task");
-        }
+        if (result == Result::DisplayDisabled) server_.send(400, "text/plain", "Display not enabled");
+        else if (result == Result::ModeRunning) server_.send(400, "text/plain", "A mode is already running");
+        else server_.send(200, "text/plain", "Temperature display started");
     });
 
-    server_.on("/set/DATE", HTTP_GET, [this]() noexcept {
+    server_.on("/set/DATE", HTTP_GET, [this]() noexcept 
+    {
+        enum class Result { Started, DisplayDisabled, ModeRunning };
+        Result result = Result::Started;
+        if (!executeCommand([this, &result]() {
+            if (!displayEnabled && !Globals::loadDetected)
+            {
+                result = Result::DisplayDisabled;
+                Logger::log(LOGTYPE, "Error: Display not enabled");
+                return;
+            }
+            if (mode_running.load(std::memory_order_relaxed))
+            {
+                result = Result::ModeRunning;
+                Logger::log(LOGTYPE, "Error: Another mode is already running");
+                return;
+            }
+            Logger::log(LOGTYPE, "Date display requested via HTTP");
+            if (!runWithClockSuspended(clockTaskHandle, [this]()
+            {
+                mode_running.store(true, std::memory_order_relaxed);
+                displayDate();
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                mode_running.store(false, std::memory_order_relaxed);
+            })) Logger::log(LOGTYPE, "Failed to start date display task");
+        })) return;
 
-        if (!displayEnabled && !Globals::loadDetected) 
-        {
-            server_.send(400, "text/plain", "Display not enabled");
-            Logger::log(LOGTYPE, F("Error: Display not enabled"));
-            return;
-        }
-        else if (mode_running.load(std::memory_order_relaxed)) 
-        {
-            server_.send(400, "text/plain", "A mode is already running");
-            Logger::log(LOGTYPE, F("Error: Another mode is already running"));
-            return;
-        }
-
-        Logger::log(LOGTYPE, F("Date display requested via HTTP"));
-
-        server_.send(200, "text/plain", "Date display started");
-
-        if (!runWithClockSuspended(clockTaskHandle, [this]() 
-        {
-            mode_running.store(true, std::memory_order_relaxed);
-
-            displayDate();
-
-            vTaskDelay(pdMS_TO_TICKS(5000));
-
-            mode_running.store(false, std::memory_order_relaxed);
-        }))
-        {
-            Logger::log(LOGTYPE, "Failed to start date display task");
-        }
+        if (result == Result::DisplayDisabled) server_.send(400, "text/plain", "Display not enabled");
+        else if (result == Result::ModeRunning) server_.send(400, "text/plain", "A mode is already running");
+        else server_.send(200, "text/plain", "Date display started");
     });
 
-    server_.on("/set/CRICKET", HTTP_GET, [this]() noexcept {
+    server_.on("/set/CRICKET", HTTP_GET, [this]() noexcept 
+    {
+        Logger::log(LOGTYPE, "Cricket sound requested via HTTP");
 
-        Logger::log(LOGTYPE, F("Cricket sound requested via HTTP"));
-
-        buzzer.startCricketInTask();
+        if (!enqueueCommand([]() { buzzer.startCricketInTask(); })) return;
 
         server_.send(200, "text/plain", "Cricket sound started");
     });
 
-    server_.on("/set/ticker", HTTP_GET, [this]() noexcept {
-
-        if (!server_.hasArg("value")) {
+    server_.on("/set/ticker", HTTP_GET, [this]() noexcept 
+    {
+        if (!server_.hasArg("value")) 
+        {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/ticker missing parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/ticker missing parameter 'value'");
             return;
         }
-        String val = server_.arg("value");
-        Globals::tickerEnabled = (val != "0");
-        Logger::log(LOGTYPE, "tickerEnabled set to %s via HTTP", Globals::tickerEnabled ? "true" : "false");
-        server_.send(200, "text/plain", String("tickerEnabled=") + (Globals::tickerEnabled ? "1" : "0"));
+        const bool enabled = server_.arg("value") != "0";
+        if (!enqueueCommand([enabled]() {
+            Globals::tickerEnabled = enabled;
+            Logger::log(LOGTYPE, "tickerEnabled set to %s via HTTP", enabled ? "true" : "false");
+        })) return;
+        server_.send(200, "text/plain", std::string("tickerEnabled=") + (enabled ? "1" : "0"));
     });
 
     server_.on("/set/singleDigitControl", HTTP_GET, [this]() noexcept{
-
-        if (!displayEnabled && !Globals::loadDetected) 
+        const auto state = AppState::instance().snapshot();
+        if (!state.displayEnabled && !state.loadDetected)
         {
             server_.send(400, "text/plain", "Display not enabled");
-            Logger::log(LOGTYPE, F("Error: Display not enabled"));
+            Logger::log(LOGTYPE, "Error: Display not enabled");
             return;
         }
         else if (mode_running.load(std::memory_order_relaxed)) 
         {
             server_.send(400, "text/plain", "A mode is already running");
-            Logger::log(LOGTYPE, F("Error: Another mode is already running"));
+            Logger::log(LOGTYPE, "Error: Another mode is already running");
             return;
         }
 
-        bool handled = false;
-
-        if (server_.hasArg("value"))
+        const bool hasValue = server_.hasArg("value");
+        const bool hasDigit = server_.hasArg("digit");
+        if (!hasValue && !hasDigit)
         {
-            String v = server_.arg("value");
-            singleDigitACP = (v == "1");
-            Logger::log(LOGTYPE, "singleDigitACP set to %s via HTTP", singleDigitACP ? "true" : "false");
-
-            if(singleDigitACP)
-            {
-                (void)hssController.enable190();
-                (void)hssController.enableResistorReduction();
-            }
-            else
-            {
-                (void)hssController.disableResistorReduction();
-                (void)hssController.disable190();
-            }
-            handled = true;
+            server_.send(400, "text/plain", "Missing 'value' or 'digit'");
+            return;
         }
 
-        if (server_.hasArg("digit"))
+        const bool enabled = hasValue && server_.arg("value") == "1";
+        int digitValue = -1;
+        if (hasDigit)
         {
-            int d = server_.arg("digit").toInt();
-            if (d >= 0 && d < 60)
+            digitValue = static_cast<int>(parseLongCompatible(server_.arg("digit")));
+            if (digitValue < 0 || digitValue >= 60)
             {
-                singleDigit = static_cast<uint8_t>(d);
-                Logger::log(LOGTYPE, "singleDigit set to %d via HTTP", singleDigit);
-                handled = true;
-            }
-            else
-            {
-                server_.send(400, "text/plain", "Invalid 'digit' (must be 0–59)");
+                server_.send(400, "text/plain", "Invalid 'digit' (must be 0-59)");
                 return;
             }
         }
 
-        if (handled)
-        {
-            server_.send(200, "text/plain", "OK");
-        }
-        else
-        {
-            server_.send(400, "text/plain", "Missing 'value' or 'digit'");
-        } 
+        if (!enqueueCommand([hasValue, enabled, hasDigit, digitValue]() {
+            if (hasValue)
+            {
+                singleDigitACP = enabled;
+                Logger::log(LOGTYPE, "singleDigitACP set to %s via HTTP", enabled ? "true" : "false");
+                if (enabled)
+                {
+                    (void)hssController.enable190();
+                    (void)hssController.enableResistorReduction();
+                }
+                else
+                {
+                    (void)hssController.disableResistorReduction();
+                    (void)hssController.disable190();
+                }
+            }
+            if (hasDigit)
+            {
+                singleDigit = static_cast<uint8_t>(digitValue);
+                Logger::log(LOGTYPE, "singleDigit set to %d via HTTP", digitValue);
+            }
+        })) return;
+
+        server_.send(200, "text/plain", "OK");
     });
 
     server_.on("/set/NixiePWM", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("value")) {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/NixiePWM missing parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/NixiePWM missing parameter 'value'");
             return;
         }
-        String val = server_.arg("value");
-        Globals::PWM_disabled = (val != "0");
+        const bool disabled = server_.arg("value") != "0";
+        if (!enqueueCommand([disabled]() { Globals::PWM_disabled = disabled; })) return;
         Logger::log(LOGTYPE, "Nixie_PWM set to %s via HTTP", 
-                    Globals::PWM_disabled ? "true" : "false");
-        server_.send(200, "text/plain", String("NixiePWM=") + (Globals::PWM_disabled ? "1" : "0"));
+                    disabled ? "true" : "false");
+        server_.send(200, "text/plain", std::string("NixiePWM=") + (disabled ? "1" : "0"));
     });
 
     server_.on("/set/PWMPeriod", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("value")) 
         {
             server_.send(400, "text/plain", "Missing 'value' parameter (µs)");
-            Logger::log(LOGTYPE, F("HTTP /set/PWMPeriod fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/PWMPeriod fehlte Parameter 'value'");
             return;
         }
 
-        const String val = server_.arg("value");
-        const std::uint32_t newPeriod = val.toInt();
+        const std::string val = server_.arg("value");
+        const std::uint32_t newPeriod = static_cast<std::uint32_t>(parseLongCompatible(val));
 
         if (newPeriod == 0) 
         {
             server_.send(400, "text/plain", "Invalid value");
-            Logger::log(LOGTYPE, F("HTTP /set/PWMPeriod invalid value"));
+            Logger::log(LOGTYPE, "HTTP /set/PWMPeriod invalid value");
             return;
         }
 
-        PWM_PERIOD_US = newPeriod;
+        if (!enqueueCommand([newPeriod]() { PWM_PERIOD_US = newPeriod; })) return;
         Logger::log(LOGTYPE, "PWM_PERIOD_US set to %lu µs via HTTP", static_cast<unsigned long>(newPeriod));
 
-        server_.send(200, "text/plain", String("PWM_PERIOD_US=") + newPeriod);
+        server_.send(200, "text/plain", std::string("PWM_PERIOD_US=") + std::to_string(newPeriod));
     });
 
     server_.on("/set/timeLimit", HTTP_GET, [this]() noexcept{
         if (!server_.hasArg("value")) 
         {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/timeLimit missing parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/timeLimit missing parameter 'value'");
             return;
         }
 
-        Globals::timeLimitEnabled = (server_.arg("value") != "0");
+        const bool enabled = server_.arg("value") != "0";
+        const bool hasFrom = server_.hasArg("from");
+        const bool hasTo = server_.hasArg("to");
+        const std::string from = hasFrom ? server_.arg("from") : "";
+        const std::string to = hasTo ? server_.arg("to") : "";
 
-        if (server_.hasArg("from"))
+        if (hasFrom && !std::regex_match(from, timeRegex))
         {
-            std::string from = server_.arg("from").c_str();
-            if (std::regex_match(from, timeRegex))
-            {
-                Globals::timeLimitFrom = from;
-            }
-            else
-            {
-                server_.send(400, "text/plain", "Invalid 'from' time format (expected HH:MM:SS)");
-                Logger::log(LOGTYPE, "Invalid 'from' format: %s", from.c_str());
-                return;
-            }
+            Logger::log(LOGTYPE, "Invalid 'from' format: %s", from.c_str());
+            server_.send(400, "text/plain", "Invalid 'from' time format (expected HH:MM:SS)");
+            return;
+        }
+        if (hasTo && !std::regex_match(to, timeRegex))
+        {
+            Logger::log(LOGTYPE, "Invalid 'to' format: %s", to.c_str());
+            server_.send(400, "text/plain", "Invalid 'to' time format (expected HH:MM:SS)");
+            return;
         }
 
-        if (server_.hasArg("to"))
+        const auto state = AppState::instance().snapshot();
+        const std::string currentFrom = hasFrom ? from : state.timeLimitFrom;
+        const std::string currentTo = hasTo ? to : state.timeLimitTo;
+        if (!enqueueCommand([enabled, hasFrom, from, hasTo, to]() 
         {
-            std::string to = server_.arg("to").c_str();
-            if (std::regex_match(to, timeRegex))
-            {
-                Globals::timeLimitTo = to;
-            }
-            else
-            {
-                server_.send(400, "text/plain","Invalid 'to' time format (expected HH:MM:SS)");
-                Logger::log(LOGTYPE, "Invalid 'to' format: %s", to.c_str());
-                return;
-            }
-        }
+            Globals::timeLimitEnabled = enabled;
+            auto config = Globals::getTextConfig();
+            if (hasFrom) config.timeLimitFrom = from;
+            if (hasTo) config.timeLimitTo = to;
+            Globals::setTextConfig(config);
+            Logger::log(LOGTYPE, "timeLimitEnabled set to %s via HTTP", enabled ? "true" : "false");
+            Logger::log(LOGTYPE, "timeLimit active from %s to %s",
+                        config.timeLimitFrom.c_str(), config.timeLimitTo.c_str());
+        })) return;
 
-        Logger::log(LOGTYPE, "timeLimitEnabled set to %s via HTTP",Globals::timeLimitEnabled ? "true" : "false");
-
-        Logger::log(LOGTYPE, "timeLimit active from %s to %s",Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
-
-        server_.send(200, "text/plain",String("timeLimitEnabled=") + (Globals::timeLimitEnabled ? "1" : "0") +"\nfrom=" + Globals::timeLimitFrom.c_str() +"\nto=" + Globals::timeLimitTo.c_str());
+        server_.send(200, "text/plain", std::string("timeLimitEnabled=") + (enabled ? "1" : "0") + "\nfrom=" + currentFrom + "\nto=" + currentTo);
     });
 
     server_.on("/set/brightnessConfig", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("field") || !server_.hasArg("value"))
         {
             server_.send(400, "text/plain", "Missing 'field' or 'value' parameter");
-            Logger::log(LOGTYPE, F("HTTP /set/brightnessConfig fehlte 'field' oder 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/brightnessConfig fehlte 'field' oder 'value'");
             return;
         }
 
-        const String field = server_.arg("field");
-        const String val   = server_.arg("value");
-        const long parsedValue = val.toInt();
+        const std::string field = server_.arg("field");
+        const std::string val   = server_.arg("value");
+        const long parsedValue = parseLongCompatible(val);
 
         if (parsedValue < 0 || parsedValue > 255)
         {
@@ -610,7 +701,7 @@ void HTTPHandler::begin() noexcept
                 server_.send(400, "text/plain", "nightStart must be 0..23");
                 return;
             }
-            Globals::brightnessNightStartHour = newValue;
+            if (!enqueueCommand([newValue]() { Globals::brightnessNightStartHour = newValue; })) return;
         }
         else if (field == "nightEnd")
         {
@@ -619,7 +710,7 @@ void HTTPHandler::begin() noexcept
                 server_.send(400, "text/plain", "nightEnd must be 0..23");
                 return;
             }
-            Globals::brightnessNightEndHour = newValue;
+            if (!enqueueCommand([newValue]() { Globals::brightnessNightEndHour = newValue; })) return;
         }
         else if (field == "dimStart")
         {
@@ -628,7 +719,7 @@ void HTTPHandler::begin() noexcept
                 server_.send(400, "text/plain", "dimStart must be 0..23");
                 return;
             }
-            Globals::brightnessDimStartHour = newValue;
+            if (!enqueueCommand([newValue]() { Globals::brightnessDimStartHour = newValue; })) return;
         }
         else if (field == "dimEnd")
         {
@@ -637,19 +728,19 @@ void HTTPHandler::begin() noexcept
             server_.send(400, "text/plain", "dimEnd must be 0..23");
             return;
         }
-            Globals::brightnessDimEndHour = newValue;
+            if (!enqueueCommand([newValue]() { Globals::brightnessDimEndHour = newValue; })) return;
         }
         else if (field == "nightValue")
         {
-            Globals::brightnessNightValue = newValue;
+            if (!enqueueCommand([newValue]() { Globals::brightnessNightValue = newValue; })) return;
         }
         else if (field == "dimValue")
         {
-            Globals::brightnessDimValue = newValue;
+            if (!enqueueCommand([newValue]() { Globals::brightnessDimValue = newValue; })) return;
         }
         else if (field == "dayValue")
         {
-            Globals::brightnessDayValue = newValue;
+            if (!enqueueCommand([newValue]() { Globals::brightnessDayValue = newValue; })) return;
         }
         else
         {
@@ -658,116 +749,125 @@ void HTTPHandler::begin() noexcept
 
         if (!validField)
         {
-            server_.send(400, "text/plain",
-                     "Invalid field. Use: nightStart, nightEnd, dimStart, dimEnd, nightValue, dimValue, dayValue");
+            server_.send(400, "text/plain","Invalid field. Use: nightStart, nightEnd, dimStart, dimEnd, nightValue, dimValue, dayValue");
             Logger::log(LOGTYPE, "HTTP /set/brightnessConfig invalid field: %s", field.c_str());
             return;
         }
 
         Logger::log(LOGTYPE, "Brightness config updated: %s=%u", field.c_str(), static_cast<unsigned>(newValue));
-        server_.send(200, "text/plain", field + "=" + String(newValue));
+        server_.send(200, "text/plain", field + "=" + std::to_string(newValue));
     });
 
-    server_.on("/set/silentMode", HTTP_GET, [this]() noexcept{
+    server_.on("/set/silentMode", HTTP_GET, [this]() noexcept
+    {
         if (!server_.hasArg("value")) 
         {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/silentMode fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/silentMode fehlte Parameter 'value'");
             return;
         }
 
-        String val = server_.arg("value");
-        Globals::SilentModeEnabled = (val != "0");
+        const bool enabled = server_.arg("value") != "0";
+        if (!enqueueCommand([enabled]() {
+        Globals::SilentModeEnabled = enabled;
         Logger::log(LOGTYPE, "silentModeEnabled set to %s via HTTP",
-                    Globals::SilentModeEnabled ? "true" : "false");
+                    enabled ? "true" : "false");
 
-        gpio_config_t io_conf = {
+        gpio_config_t io_conf = 
+        {
             .pin_bit_mask = (1ULL << 40),
-            .mode = Globals::SilentModeEnabled ? GPIO_MODE_INPUT : GPIO_MODE_OUTPUT,
+            .mode = enabled ? GPIO_MODE_INPUT : GPIO_MODE_OUTPUT,
             .pull_up_en = GPIO_PULLUP_DISABLE,
-            .pull_down_en = Globals::SilentModeEnabled ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
+            .pull_down_en = enabled ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE,
             .intr_type = GPIO_INTR_DISABLE
         };
         gpio_config(&io_conf);
 
-        if (!Globals::SilentModeEnabled) 
+        if (!enabled)
         {
             gpio_set_level(GPIO_NUM_40, 0);
         }
+        })) return;
 
-        server_.send(200, "text/plain",
-                     String("SilentModeEnabled=") + (Globals::SilentModeEnabled ? "1" : "0")); 
+        server_.send(200, "text/plain", std::string("SilentModeEnabled=") + (enabled ? "1" : "0"));
     });
 
-    server_.on("/set/noACPatNight", HTTP_GET, [this]() noexcept {
+    server_.on("/set/noACPatNight", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("value"))
         {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/noACPatNight fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/noACPatNight fehlte Parameter 'value'");
             return;
         }
 
-        String val = server_.arg("value");
-        Globals::noACPatNight = (val != "0");
+        const bool enabled = server_.arg("value") != "0";
+        if (!enqueueCommand([enabled]() { Globals::noACPatNight = enabled; })) return;
 
-        Logger::log(LOGTYPE, "noACPatNight set to %s via HTTP", Globals::noACPatNight ? "true" : "false");
+        Logger::log(LOGTYPE, "noACPatNight set to %s via HTTP", enabled ? "true" : "false");
 
-        server_.send(200, "text/plain", String("noACPatNight=") + (Globals::noACPatNight ? "1" : "0"));
+        server_.send(200, "text/plain", std::string("noACPatNight=") + (enabled ? "1" : "0"));
     });
 
-    server_.on("/set/manualBrightness", HTTP_GET, [this]() noexcept {
-        if (server_.hasArg("value")) 
-        {
-            String v = server_.arg("value");
-            Globals::manualBrightnessEnabled = (v == "true");
-            Logger::log(LOGTYPE, "manualBrightnessEnabled=%s", Globals::manualBrightnessEnabled ? "true" : "false");
-        }
-        if (server_.hasArg("brightness")) 
-        {
-            String b = server_.arg("brightness");
-            long lv = strtol(b.c_str(), nullptr, 10);
-            if (lv < 0) lv = 0;
-            if (lv > 100) lv = 100;
-            brightness = static_cast<uint32_t>(lv);
-            Logger::log(LOGTYPE, "brightness=%u", brightness);
-        }
+    server_.on("/set/manualBrightness", HTTP_GET, [this]() noexcept 
+    {
+        const bool hasEnabled = server_.hasArg("value");
+        const bool enabled = hasEnabled && server_.arg("value") == "true";
+        const bool hasBrightness = server_.hasArg("brightness");
+        long parsedBrightness = hasBrightness ? strtol(server_.arg("brightness").c_str(), nullptr, 10) : 0;
+        if (parsedBrightness < 0) parsedBrightness = 0;
+        if (parsedBrightness > 100) parsedBrightness = 100;
+        if ((hasEnabled || hasBrightness) && !enqueueCommand([=]() {
+            if (hasEnabled)
+            {
+                Globals::manualBrightnessEnabled = enabled;
+                Logger::log(LOGTYPE, "manualBrightnessEnabled=%s", enabled ? "true" : "false");
+            }
+            if (hasBrightness)
+            {
+                brightness = static_cast<uint32_t>(parsedBrightness);
+                Logger::log(LOGTYPE, "brightness=%u", static_cast<unsigned>(parsedBrightness));
+            }
+        })) return;
         server_.send(200, "text/plain", "OK");
     });
 
-    server_.on("/set/weatherUpdate", HTTP_GET, [this]() noexcept {
+    server_.on("/set/weatherUpdate", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("value")) 
         {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/weatherUpdate fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/weatherUpdate fehlte Parameter 'value'");
             return;
         }
-        String val = server_.arg("value");
-        Globals::WeatherUpdateEnabled = (val != "0");
-        Logger::log(LOGTYPE, "WeatherUpdateEnabled set to %s via HTTP", Globals::WeatherUpdateEnabled ? "true" : "false");
-        server_.send(200, "text/plain", String("WeatherUpdateEnabled=") + (Globals::WeatherUpdateEnabled ? "1" : "0"));
+        const bool enabled = server_.arg("value") != "0";
+        if (!enqueueCommand([enabled]() { Globals::WeatherUpdateEnabled = enabled; })) return;
+        Logger::log(LOGTYPE, "WeatherUpdateEnabled set to %s via HTTP", enabled ? "true" : "false");
+        server_.send(200, "text/plain", std::string("WeatherUpdateEnabled=") + (enabled ? "1" : "0"));
     });
 
     server_.on("/set/randomCricket", HTTP_GET, [this]() noexcept {
         if (!server_.hasArg("value")) 
         {
             server_.send(400, "text/plain", "Missing 'value' (0 or 1)");
-            Logger::log(LOGTYPE, F("HTTP /set/randomCricket fehlte Parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/randomCricket fehlte Parameter 'value'");
             return;
         }
-        String val = server_.arg("value");
-        Globals::cricketSoundEnabled = (val != "0");
-        Logger::log(LOGTYPE, "cricketSoundEnabled set to %s via HTTP", Globals::cricketSoundEnabled ? "true" : "false");
-        server_.send(200, "text/plain", String("cricketSoundEnabled=") + (Globals::cricketSoundEnabled ? "1" : "0"));
+        const bool enabled = server_.arg("value") != "0";
+        if (!enqueueCommand([enabled]() { Globals::cricketSoundEnabled = enabled; })) return;
+        Logger::log(LOGTYPE, "cricketSoundEnabled set to %s via HTTP", enabled ? "true" : "false");
+        server_.send(200, "text/plain", std::string("cricketSoundEnabled=") + (enabled ? "1" : "0"));
     });
 
-    server_.on("/set/logConfig", HTTP_GET, [this]() noexcept {
+    server_.on("/set/logConfig", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("value")) 
         {
             server_.send(400, "text/plain", "Missing 'value' parameter");
-            Logger::log(LOGTYPE, F("HTTP /set/logConfig missing parameter 'value'"));
+            Logger::log(LOGTYPE, "HTTP /set/logConfig missing parameter 'value'");
             return;
         }
-        String val = server_.arg("value");
+        const std::string val = server_.arg("value");
         char* endptr = nullptr;
         unsigned long newConfig = strtoul(val.c_str(), &endptr, 10);
         if (endptr == val.c_str() || *endptr != '\0') 
@@ -776,37 +876,44 @@ void HTTPHandler::begin() noexcept
             Logger::log(LOGTYPE, "HTTP /set/logConfig invalid value: %s", val.c_str());
             return;
         }
-        Globals::logConfig = static_cast<uint32_t>(newConfig);
-        Globals::applyLogConfig();
+        const uint32_t config = static_cast<uint32_t>(newConfig);
+        if (!enqueueCommand([config]() {
+            Globals::logConfig = config;
+            Globals::applyLogConfig();
+        })) return;
 
-        String binStr;
+        std::string binStr;
         binStr.reserve(9);
         for (int i = 8; i >= 0; --i) 
         {
-            binStr += ((Globals::logConfig >> i) & 1) ? '1' : '0';
+            binStr += ((config >> i) & 1) ? '1' : '0';
         }
 
         Logger::log(LOGTYPE, "logConfig set to %s and applied", binStr.c_str());
-        server_.send(200, "text/plain", String("logConfig=") + binStr);
+        server_.send(200, "text/plain", std::string("logConfig=") + binStr);
     });
 
-    server_.on("/set/firmware", HTTP_GET, [this]() noexcept {
+    server_.on("/set/firmware", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("target")) 
         {
             server_.send(400, "text/plain", "Missing 'target' parameter");
             Logger::log(LOGTYPE, "HTTP /set/firmware fehlte Parameter 'target'");
             return;
         }
-        String arg = server_.arg("target");
+        const std::string arg = server_.arg("target");
         Globals::FirmwareTarget newTarget = Globals::FirmwareTarget::COUNT;
 
-        if (arg == "NixieV6_std") {
+        if (arg == "NixieV6_std") 
+        {
             newTarget = Globals::FirmwareTarget::NixieV6_std;
         }
-        else if (arg == "NixieV6_dev") {
+        else if (arg == "NixieV6_dev") 
+        {
             newTarget = Globals::FirmwareTarget::NixieV6_dev;
         }
-        else if (arg == "NixieV6_BOS") {
+        else if (arg == "NixieV6_BOS") 
+        {
             newTarget = Globals::FirmwareTarget::NixieV6_BOS;
         }
 
@@ -817,81 +924,94 @@ void HTTPHandler::begin() noexcept
             return;
         }
 
-            Globals::currentFirmwareTarget = newTarget;
+            if (!enqueueCommand([newTarget]() { Globals::currentFirmwareTarget = newTarget; })) return;
             Logger::log(LOGTYPE, "Firmware target set to %s", arg.c_str());
-            server_.send(200, "text/plain", String("firmwareTarget=") + arg);
+            server_.send(200, "text/plain", std::string("firmwareTarget=") + arg);
         });
 
-    server_.on("/set/ota", HTTP_GET, [this]() noexcept {
-        Globals::FirmwareTarget target = Globals::currentFirmwareTarget;
-        std::string baseUrl = Globals::getFirmwareUrl(target);
-        displayEnabled = false;
+    server_.on("/set/ota", HTTP_GET, [this]() noexcept 
+    {
+        enum class Result { Started, InvalidTarget, AlreadyRunning, StartFailed };
+        Result result = Result::InvalidTarget;
+        std::string statusJson;
+        if (!executeCommand([&]() {
+            const Globals::FirmwareTarget target = Globals::currentFirmwareTarget;
+            const std::string baseUrl = Globals::getFirmwareUrl(target);
+            displayEnabled = false;
+            if (baseUrl.empty())
+            {
+                Logger::log(LOGTYPE, "OTA failed: invalid firmware target");
+                result = Result::InvalidTarget;
+                return;
+            }
+            auto& ota = OTAManager::instance();
+            if (ota.isRunning())
+            {
+                Logger::log(LOGTYPE, "OTA start rejected: already running");
+                result = Result::AlreadyRunning;
+                return;
+            }
+            Logger::log(LOGTYPE, "Starting OTA async in folder: %s", baseUrl.c_str());
+            if (!ota.startAsync(baseUrl))
+            {
+                Logger::log(LOGTYPE, "OTA task could not be started");
+                result = Result::StartFailed;
+                return;
+            }
+            statusJson = ota.getStatusJson();
+            result = Result::Started;
+        })) return;
 
-        if (baseUrl.empty())
-        {
-            Logger::log(LOGTYPE, "OTA failed: invalid firmware target");
-            server_.sendHeader("Cache-Control", "no-store");
+        server_.sendHeader("Cache-Control", "no-store");
+        if (result == Result::InvalidTarget)
             server_.send(400, "application/json", "{\"started\":false,\"error\":\"Invalid firmware target\"}");
-            return;
-        }
-
-        auto& ota = OTAManager::instance();
-
-        if (ota.isRunning())
-        {
-            Logger::log(LOGTYPE, "OTA start rejected: already running");
-            server_.sendHeader("Cache-Control", "no-store");
+        else if (result == Result::AlreadyRunning)
             server_.send(409, "application/json", "{\"started\":false,\"error\":\"OTA already running\"}");
-            return;
-        }
-
-        Logger::log(LOGTYPE, "Starting OTA async in folder: %s", baseUrl.c_str());
-
-        if (!ota.startAsync(baseUrl))
-        {
-            Logger::log(LOGTYPE, "OTA task could not be started");
-            server_.sendHeader("Cache-Control", "no-store");
+        else if (result == Result::StartFailed)
             server_.send(500, "application/json", "{\"started\":false,\"error\":\"Could not start OTA task\"}");
-            return;
-        }
+        else server_.send(202, "application/json", statusJson.c_str());
+    });
 
+    server_.on("/get/otaStatus", HTTP_GET, [this]() noexcept 
+    {
         server_.sendHeader("Cache-Control", "no-store");
-        server_.send(202, "application/json", ota.getStatusJson());
+        const std::string statusJson = OTAManager::instance().getStatusJson();
+        server_.send(200, "application/json", statusJson.c_str());
     });
 
-    server_.on("/get/otaStatus", HTTP_GET, [this]() noexcept {
-        server_.sendHeader("Cache-Control", "no-store");
-        server_.send(200, "application/json", OTAManager::instance().getStatusJson());
+    server_.on("/set/otaResetStatus", HTTP_GET, [this]() noexcept 
+    {
+        bool running = false;
+        if (!executeCommand([&running]() {
+            auto& ota = OTAManager::instance();
+            running = ota.isRunning();
+            if (!running) ota.resetStatus();
+        })) return;
+        server_.send(running ? 409 : 200, "text/plain", running ? "OTA still running" : "OK");
     });
 
-    server_.on("/set/otaResetStatus", HTTP_GET, [this]() noexcept {
-        auto& ota = OTAManager::instance();
-
-        if (ota.isRunning())
-        {
-            server_.send(409, "text/plain", "OTA still running");
-            return;
-        }
-
-        ota.resetStatus();
-        server_.send(200, "text/plain", "OK");
+    server_.on("/get/checkUpdate", HTTP_GET, [this]() noexcept 
+    {
+        if (!enqueueCommand([]() {
+            const std::string baseUrl = Globals::getFirmwareUrl(Globals::currentFirmwareTarget);
+            if (!startUpdateCheckTask(baseUrl))
+            {
+                Logger::log(LOGTYPE, "Could not start update-check task");
+            }
+        })) return;
+        server_.send(202, "text/plain", "Update check queued");
     });
 
-    server_.on("/get/checkUpdate", HTTP_GET, [this]() noexcept {
-        const std::string baseUrl = Globals::getFirmwareUrl(Globals::currentFirmwareTarget);
-        (void)OTAManager::instance().checkForUpdateAvailable(baseUrl);
-        server_.send(200, "text/plain", "OK");
-    });
-
-    server_.on("/set/zip", HTTP_GET, [this]() noexcept {
+    server_.on("/set/zip", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("zip"))
         {
             server_.send(400, "text/plain", "Missing 'zip' parameter");
-            Logger::log(LOGTYPE, F("HTTP /set/zip missing parameter 'zip'"));
+            Logger::log(LOGTYPE, "HTTP /set/zip missing parameter 'zip'");
             return;
         }
 
-        String zipArg = server_.arg("zip");
+        const std::string zipArg = server_.arg("zip");
 
         if (!isValidZipCode(zipArg))
         {
@@ -900,25 +1020,31 @@ void HTTPHandler::begin() noexcept
             return;
         }
 
-        Globals::zipCode = std::string(zipArg.c_str());
+        if (!enqueueCommand([zip = zipArg]() 
+        {
+            auto config = Globals::getTextConfig();
+            config.zipCode = zip;
+            Globals::setTextConfig(std::move(config));
+        })) return;
         Logger::log(LOGTYPE, "ZIP-Code updated to %s", zipArg.c_str());
         server_.send(200, "text/plain", "ZIP-Code updated to " + zipArg);
     });
 
-    server_.on("/set/timezone", HTTP_GET, [this]() noexcept {
+    server_.on("/set/timezone", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("tz")) 
         {
             server_.send(400, "text/plain", "Missing 'tz' parameter");
-            Logger::log(LOGTYPE, F("HTTP /set/timezone missing parameter 'tz'"));
+            Logger::log(LOGTYPE, "HTTP /set/timezone missing parameter 'tz'");
             return;
         }   
 
-        String tzArg = server_.arg("tz");
+        const std::string tzArg = server_.arg("tz");
         Globals::TimeZone newTz = Globals::TimeZone::CET;
         bool ok = false;
 
-        int idx = tzArg.toInt();
-        if (tzArg == String(idx) && idx >= 0 && idx < tzCount) 
+        const int idx = static_cast<int>(parseLongCompatible(tzArg));
+        if (tzArg == std::to_string(idx) && idx >= 0 && idx < tzCount)
         {
             newTz = static_cast<Globals::TimeZone>(idx);
             ok = true;
@@ -927,7 +1053,7 @@ void HTTPHandler::begin() noexcept
         {  
             for (int i = 0; i < tzCount; ++i) 
             {
-                if (tzArg.equalsIgnoreCase(tzNames[i])) 
+                if (equalsIgnoreCase(tzArg, tzNames[i]))
                 {
                     newTz = static_cast<Globals::TimeZone>(i);
                     ok = true;
@@ -943,22 +1069,23 @@ void HTTPHandler::begin() noexcept
             return;
         }
 
-        Globals::currentTimeZone = newTz;
-
         const char* spec = Globals::getPosixTZ(newTz);
+        if (!enqueueCommand([newTz]() { Globals::currentTimeZone = newTz; })) return;
         Logger::log(LOGTYPE, "TimeZone set via HTTP (volatile): %d -> %s", static_cast<int>(newTz), spec);
 
-        server_.send(200, "application/json","{\n""  \"status\": \"ok\",\n""  \"CurrentTimeZoneIndex\": " + String(static_cast<int>(newTz)) + ",\n""  \"CurrentTimeZoneSpec\": \"" + String(spec) + "\"\n""}\n");
+        server_.send(200, "application/json", std::string("{\n  \"status\": \"ok\",\n  \"CurrentTimeZoneIndex\": ") +
+                     std::to_string(static_cast<int>(newTz)) + ",\n  \"CurrentTimeZoneSpec\": \"" + spec + "\"\n}\n");
     });
 
-    server_.on("/set/timer", HTTP_GET, [this]() noexcept {
+    server_.on("/set/timer", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("enabled"))
         {
             server_.send(400, "text/plain", "Missing 'enabled' parameter");
             return;
         }
 
-        const String enabledArg = server_.arg("enabled");
+        const std::string enabledArg = server_.arg("enabled");
         if (enabledArg != "0" && enabledArg != "1")
         {
             server_.send(400, "text/plain", "Invalid 'enabled' parameter");
@@ -982,25 +1109,26 @@ void HTTPHandler::begin() noexcept
                 return;
             }
 
-            timer.start(seconds, []() {buzzer.startAlarm(3);});
+            if (!enqueueCommand([seconds]() { timer.start(seconds, []() {buzzer.startAlarm(3);}); })) return;
 
             server_.send(200, "text/plain", "Timer started");
         }
         else
         {
-            timer.stop();
+            if (!enqueueCommand([]() { timer.stop(); })) return;
             server_.send(200, "text/plain", "Timer stopped");
         }
     });
 
-    server_.on("/set/alarm", HTTP_GET, [this]() noexcept {
+    server_.on("/set/alarm", HTTP_GET, [this]() noexcept 
+    {
         if (!server_.hasArg("enabled"))
         {
             server_.send(400, "text/plain", "Missing 'enabled' parameter");
             return;
         }
 
-        const String enabledArg = server_.arg("enabled");
+        const std::string enabledArg = server_.arg("enabled");
         if (enabledArg != "0" && enabledArg != "1")
         {
             server_.send(400, "text/plain", "Invalid 'enabled' parameter");
@@ -1025,36 +1153,39 @@ void HTTPHandler::begin() noexcept
                 return;
             }
 
-            alarmClock.setAlarm(hour, minute, []() {buzzer.startAlarm(5);});
+            if (!enqueueCommand([hour, minute]() { alarmClock.setAlarm(hour, minute, []() {buzzer.startAlarm(5);}); })) return;
 
             server_.send(200, "text/plain", "Alarm set");
         }
         else
         {
-            alarmClock.removeAlarm();
+            if (!enqueueCommand([]() { alarmClock.removeAlarm(); })) return;
             server_.send(200, "text/plain", "Alarm cleared");
         }
     });
 
-    server_.on("/get/brownout", HTTP_GET, [this]() noexcept {
+    server_.on("/get/brownout", HTTP_GET, [this]() noexcept 
+    {
         std::string json;
-        Memory::ReadBrownoutLog(json);
+        if (!executeCommand([&json]() { Memory::ReadBrownoutLog(json); })) return;
 
         if (json.empty()) {
             server_.send(200, "text/plain", "None.");
         }
         else 
         {
-            server_.send(200, "application/json", String(json.c_str()));
+            server_.send(200, "application/json", json);
         }
     });
 
-    server_.on("/set/brownout", HTTP_GET, [this]() noexcept {
-        Memory::BrownoutReset();
+    server_.on("/set/brownout", HTTP_GET, [this]() noexcept 
+    {
+        if (!enqueueCommand([]() { Memory::BrownoutReset(); })) return;
         server_.send(204, "text/plain", "");
     });
 
-    server_.on("/get/taskStats", HTTP_GET, [this]() noexcept {
+    server_.on("/get/taskStats", HTTP_GET, [this]() noexcept 
+    {
 
         if (otaBusy())
         {
@@ -1063,146 +1194,84 @@ void HTTPHandler::begin() noexcept
         }
 
         server_.sendHeader("Cache-Control", "no-store");
-        server_.send(200, "application/json", StatsMonitor::instance().getTaskStatsJson(12, true));
+        const std::string taskStats = StatsMonitor::instance().getTaskStatsJson(12, true);
+        server_.send(200, "application/json", taskStats.c_str());
     });
 
-    server_.on("/get/info", HTTP_GET, [this]() noexcept {
+    server_.on("/get/info", HTTP_GET, [this]() noexcept 
+    {
         if (otaBusy())
         {
             sendOtaBusy(server_);
             return;
         }
 
-        Logger::log(LOGTYPE, F("Info requested via HTTP"));
-        handleInfo();
+        const auto snapshot = AppState::instance().snapshot();
+        if (snapshot.infoJson.empty())
+        {
+            server_.send(503, "application/json", "{\"error\":\"telemetry unavailable\"}");
+            return;
+        }
+        server_.sendHeader("Cache-Control", "no-store");
+        server_.sendHeader("X-AppState-Revision", std::to_string(snapshot.revision).c_str());
+        server_.send(200, "application/json", snapshot.infoJson);
     });
 
-    server_.begin();
-    Logger::log(LOGTYPE, F("HTTP server started"));
-}
-
-void HTTPHandler::handleClient() noexcept 
-{
-    server_.handleClient();
-    vTaskDelay(1);
-}
-
-void HTTPHandler::handleReset() noexcept 
-{
-    Logger::log(LOGTYPE, F("Performing system reset..."));
-    Memory::saveGlobals();
-    ESP.restart();
-}
-
-void HTTPHandler::handleInfo() noexcept
-{
-    auto &sm = StatsMonitor::instance();
-    auto ssid            = wifiConnector.getWiFiSSID();
-    auto deviceIP      = wifiConnector.getIpAddress();
-    //auto password        = wifiConnector.getWiFiPass();
-    auto chipModel       = ESP.getChipModel();
-    auto freeHeap        = ESP.getFreeHeap();
-    auto chipId          = ESP.getEfuseMac();
-    auto flashSize       = ESP.getFlashChipSize();
-    auto flashSpeed      = ESP.getFlashChipSpeed();
-    auto sketchSize      = ESP.getSketchSize();
-    auto sketchFreeSpace = ESP.getFreeSketchSpace();
-    auto cpuFreq         = ESP.getCpuFreqMHz();
-    auto sdkVersion      = ESP.getSdkVersion();
-    auto voltage_12V     = supplyWatch.read12V();
-    auto voltage_5V      = supplyWatch.read5V();
-    auto voltage_3V3     = supplyWatch.read3V3();
-    auto voltage_18V     = supplyWatch.read18V();
-    auto voltage_UHSS    = supplyWatch.readUHSS();
-    auto current_mA      = supplyWatch.readCurrent();
-    auto power_W         = energyMonitor.getInstantPowerW();
-    auto energy_Wh       = energyMonitor.getTotalEnergyWh();
-    auto case_temp       = temperatureSensor.readTemperatureC();
-    auto ftName          = firmwareTargetToString(Globals::currentFirmwareTarget);
-    auto cfg             = Globals::logConfig;
-    auto pwmFreq         = 1e6 / PWM_PERIOD_US;
-    auto timerActive     = timer.isRunning();
-    auto timerPreset     = timer.getConfiguredSeconds();
-    auto alarmSet        = alarmClock.isAlarmConfigured();
-    AlarmTime at         = alarmClock.getAlarmTime();
-    char alarmTimeBuf[8];
-
-    snprintf(alarmTimeBuf, sizeof(alarmTimeBuf), "%02u:%02u", at.hour, at.minute);
-    String binStr;
-    binStr.reserve(9);
-    for (int i = 8; i >= 0; --i) 
+    server_.on("/events", HTTP_GET, [this]() noexcept 
     {
-        binStr += ((cfg >> i) & 1) ? '1' : '0';
+        const auto result = AppState::instance().attachSseClient(server_.nativeRequest());
+        if (result == AppState::SseAttachResult::Attached ||
+            result == AppState::SseAttachResult::ErrorResponseSent)
+        {
+            return;
+        }
+        if (result == AppState::SseAttachResult::AtCapacity ||
+            result == AppState::SseAttachResult::NotStarted)
+        {
+            server_.send(503, "application/json", "{\"error\":\"event stream unavailable\"}");
+            return;
+        }
+        server_.send(500, "application/json", "{\"error\":\"event stream setup failed\"}");
+    });
+
+    secureApi_.registerRoutes();
+
+    if (!commands_.start())
+    {
+        Logger::log(LOGTYPE, "HTTP command task start failed");
+        return;
     }
+    if (!AppState::instance().start())
+    {
+        Logger::log(LOGTYPE, "AppState telemetry task start failed");
+        return;
+    }
+    if (!server_.configureBasicAuth(NIXIE_HTTP_USERNAME, NIXIE_HTTP_PASSWORD))
+    {
+        Logger::log(LOGTYPE, "HTTP authentication configuration invalid; server not started");
+        return;
+    }
+    if (!server_.begin())
+    {
+        Logger::log(LOGTYPE, "Native HTTP server start failed");
+        return;
+    }
+    Logger::log(LOGTYPE, "Native HTTP server started (authentication %s)",
+                (NIXIE_HTTP_USERNAME[0] != '\0' && NIXIE_HTTP_PASSWORD[0] != '\0') ? "enabled" : "disabled");
+}
 
-    String jsonResponse;
-    jsonResponse.reserve(2000);
-    jsonResponse  = "{\n";
-    jsonResponse += "  \"Chip\": \""               + String(chipModel)             + "\",\n";
-    jsonResponse += "  \"SSID\": \""               + ssid                           + "\",\n";
-    jsonResponse += "  \"IP_Address\": \""         + deviceIP                       + "\",\n";
-    //jsonResponse += "  \"Password\": \""           + password                       + "\",\n";
-    jsonResponse += "  \"DisplayEnabled\": "      + String(displayEnabled)         + ",\n";
-    jsonResponse += "  \"Melody\": \""             + String("Nokia")                + "\",\n";
-    jsonResponse += "  \"FreeHeap\": "            + String(freeHeap)               + ",\n";
-    jsonResponse += "  \"CoreLoad0\": "            + String(sm.coreLoad0_)         + ",\n";
-    jsonResponse += "  \"CoreLoad1\": "            + String(sm.coreLoad1_)         + ",\n";
-    jsonResponse += "  \"TotalLoad\": "            + String(sm.totalLoad_)         + ",\n";
-    jsonResponse += "  \"ChipId\": \""             + String(chipId, HEX)            + "\",\n";
-    jsonResponse += "  \"FlashSize\": "           + String(flashSize)              + ",\n";
-    jsonResponse += "  \"FlashSpeed\": "          + String(flashSpeed)             + ",\n";
-    jsonResponse += "  \"SketchSize\": "          + String(sketchSize)             + ",\n";
-    jsonResponse += "  \"SketchFreeSpace\": "     + String(sketchFreeSpace)        + ",\n";
-    jsonResponse += "  \"CpuFrequencyMHz\": "     + String(cpuFreq)                + ",\n";
-    jsonResponse += "  \"SdkVersion\": \""         + String(sdkVersion)             + "\",\n";
-    jsonResponse += "  \"Autor\": \""              + String("X105GHM")              + "\",\n";
-    jsonResponse += "  \"Voltage_12V\": "         + String(voltage_12V, 2)         + ",\n";
-    jsonResponse += "  \"Voltage_5V\": "          + String(voltage_5V, 2)          + ",\n";
-    jsonResponse += "  \"Voltage_3V3\": "         + String(voltage_3V3, 2)         + ",\n";
-    jsonResponse += "  \"Voltage_18V\": "         + String(voltage_18V, 2)         + ",\n";
-    jsonResponse += "  \"Voltage_UHSS\": "        + String(voltage_UHSS, 2)        + ",\n";
-    jsonResponse += "  \"Current_mA\": "          + String(current_mA, 2)          + ",\n";
-    jsonResponse += "  \"Power_W\": "             + String(power_W, 2)             + ",\n";
-    jsonResponse += "  \"Energy_Wh\": \""          + String(energy_Wh, 2)           + "\",\n";
-    jsonResponse += "  \"HSS_Enabled\": "         + String(hssController.enable160V) + ",\n";
-    jsonResponse += "  \"HSS_190V\": "            + String(hssController.enable190V) + ",\n";
-    jsonResponse += "  \"HSS_Resistor\": "        + String(hssController.enableResistor) + ",\n";
-    jsonResponse += "  \"CaseTemperature_C\": "   + String(case_temp, 2)           + ",\n";
-    jsonResponse += "  \"Firmware_Target\": \""    + String(ftName)                 + "\",\n";
-    jsonResponse += "  \"Hardware_Version\": \""   + String(Globals::HardwareVersion.c_str()) + "\",\n";
-    jsonResponse += "  \"Software_Version\": \""   + String(Globals::SoftwareVersion.c_str()) + "\",\n";
-    jsonResponse += "  \"UpdateAvailable\": "          + String(Globals::updateAvailable)  + ",\n";
-    jsonResponse += "  \"zipCode\": \""            + String(Globals::zipCode.c_str()) + "\",\n";
-    jsonResponse += "  \"tickerEnabled\": "       + String(Globals::tickerEnabled) + ",\n";
-    jsonResponse += "  \"timeLimitEnabled\": "    + String(Globals::timeLimitEnabled) + ",\n";
-    jsonResponse += "  \"silentModeEnabled\": "   + String(Globals::SilentModeEnabled) + ",\n";
-    jsonResponse += "  \"noACPatNight\": "      + String(Globals::noACPatNight) + ",\n";
-    jsonResponse += "  \"manualBrightnessEnabled\": " + String(Globals::manualBrightnessEnabled) + ",\n";
-    jsonResponse += "  \"WeatherUpdateEnabled\": "    + String(Globals::WeatherUpdateEnabled) + ",\n";
-    jsonResponse += "  \"cricketSoundEnabled\": "    + String(Globals::cricketSoundEnabled) + ",\n";
-    jsonResponse += "  \"logConfigBinary\": \""    + binStr                         + "\",\n";
-    jsonResponse += "  \"loadDetected\": "        + String(Globals::loadDetected)  + ",\n";
-    jsonResponse += "  \"Brightness\": "          + String(brightness)             + ",\n";
-    jsonResponse += "  \"brightnessNightStartHour\": " + String(Globals::brightnessNightStartHour) + ",\n";
-    jsonResponse += "  \"brightnessNightEndHour\": "   + String(Globals::brightnessNightEndHour)   + ",\n";
-    jsonResponse += "  \"brightnessDimStartHour\": "   + String(Globals::brightnessDimStartHour)   + ",\n";
-    jsonResponse += "  \"brightnessDimEndHour\": "     + String(Globals::brightnessDimEndHour)     + ",\n";
-    jsonResponse += "  \"brightnessNightValue\": "     + String(Globals::brightnessNightValue)     + ",\n";
-    jsonResponse += "  \"brightnessDimValue\": "       + String(Globals::brightnessDimValue)       + ",\n";
-    jsonResponse += "  \"brightnessDayValue\": "       + String(Globals::brightnessDayValue)       + ",\n";
-    jsonResponse += "  \"timeLimitFrom\": \""   + String(Globals::timeLimitFrom.c_str()) + "\",\n";
-    jsonResponse += "  \"timeLimitTo\": \""     + String(Globals::timeLimitTo.c_str()) + "\",\n";
-    jsonResponse += "  \"SingleACP\": "         + String(singleDigitACP) + ",\n";
-    jsonResponse += "  \"NixiePWM\": "          + String(Globals::PWM_disabled)  + ",\n";
-    jsonResponse += "  \"PWM_Frequenzy\": "          + String(pwmFreq)  + ",\n";
-    jsonResponse += "  \"SingleDigits\": "       + String(singleDigit) + ",\n";
-    jsonResponse += "  \"CurrentTimeZone\": "       + String(static_cast<uint8_t>(Globals::currentTimeZone)) + ",\n";
-    jsonResponse += "  \"CurrentTimeZoneIndex\": " + String(static_cast<uint8_t>(Globals::currentTimeZone)) + ",\n";
-    jsonResponse += "  \"TimerActive\": "       + String(timerActive ? "true" : "false") + ",\n";
-    jsonResponse += "  \"TimerConfiguredSeconds\": " + String(timerPreset) + ",\n";
-    jsonResponse += "  \"AlarmActive\": "       + String(alarmSet ? "true" : "false") + ",\n";
-    jsonResponse += "  \"AlarmTime\": \""       + String(alarmTimeBuf) + "\"\n";
-    jsonResponse += "}";
-
-    server_.send(200, "application/json", jsonResponse);
+void HTTPHandler::handleReset(std::string plannedReason) noexcept 
+{
+    Logger::log(LOGTYPE, "Performing system reset...");
+    ResetDiagnostics::instance().markPlannedRestart(plannedReason);
+    Memory::saveGlobals();
+    const BaseType_t created = xTaskCreate([](void*) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        esp_restart();
+    }, "HTTPReset", 4096, nullptr, 3, nullptr);
+    if (created != pdPASS)
+    {
+        Logger::log(LOGTYPE, "Could not create delayed reset task; resetting immediately");
+        esp_restart();
+    }
 }

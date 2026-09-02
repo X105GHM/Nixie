@@ -2,10 +2,10 @@
 
 namespace ewm::utils
 {
-    String html_escape(const String& s)
+    std::string html_escape(const std::string& s)
     {
-        String r;
-        r.reserve(s.length());
+        std::string r;
+        r.reserve(s.size());
         for (char c : s)
         {
             switch (c)

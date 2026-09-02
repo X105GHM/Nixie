@@ -1,436 +1,419 @@
 #include "ewm/Portal/CaptivePortal.hpp"
+
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+
+#include "esp_system.h"
+#include "ewm/Log.hpp"
 #include "ewm/Portal/PortalPage.hpp"
-#include "ewm/Utils/WiFiLock.hpp"
-#include "ewm/Utils/WiFiStatus.hpp"
 #include "ewm/Utils/Html.hpp"
 #include "ewm/Utils/MiniJson.hpp"
-#include "ewm/Log.hpp"
-#include <WiFi.h>
-#include <esp_system.h>
+#include "ewm/Utils/Time.hpp"
+#include "lwip/inet.h"
+
+namespace
+{
+    constexpr size_t MAX_REQUEST_BODY = 2048;
+
+    void replaceAll(std::string& text, const std::string& marker, const std::string& replacement)
+    {
+        size_t position = 0;
+        while ((position = text.find(marker, position)) != std::string::npos)
+        {
+            text.replace(position, marker.size(), replacement);
+            position += replacement.size();
+        }
+    }
+
+    ewm::CaptivePortal* portalFrom(httpd_req_t* request)
+    {
+        if (!request) return nullptr;
+        if (request->user_ctx) return static_cast<ewm::CaptivePortal*>(request->user_ctx);
+        return static_cast<ewm::CaptivePortal*>(httpd_get_global_user_ctx(request->handle));
+    }
+}
 
 namespace ewm
 {
-    CaptivePortal::CaptivePortal(uint16_t port, SemaphoreHandle_t wifiMutex)
-        : port_(port), server_(port), wifiMutex_(wifiMutex) {}
+    CaptivePortal::CaptivePortal(uint16_t port, WiFiConnector& wifi)
+        : port_(port), wifi_(wifi)
+    {
+    }
 
-    void CaptivePortal::setAP(const String &ssid, const String &pass)
+    void CaptivePortal::setAP(const std::string& ssid, const std::string& pass)
     {
         apSsid_ = ssid;
         apPass_ = pass;
     }
 
-    void CaptivePortal::setUiConfigJson(const String& json)
+    void CaptivePortal::setUiConfigJson(const std::string& json)
     {
-        String t = json;
-        t.trim();
-        if (!t.startsWith("{") || !t.endsWith("}")) t = "{}";
-            uiCfgJson_ = t;
+        const size_t first = json.find_first_not_of(" \t\r\n");
+        const size_t last = json.find_last_not_of(" \t\r\n");
+        uiCfgJson_ = first != std::string::npos && json[first] == '{' && json[last] == '}' ? json.substr(first, last - first + 1) : "{}";
     }
 
-    void CaptivePortal::sendCommonHeaders_()
+    bool CaptivePortal::start(PortalHooks hooks)
     {
-        server_.sendHeader("Access-Control-Allow-Origin", "*");
-        server_.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-        server_.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-EWM-CSRF");
-        server_.sendHeader("Access-Control-Max-Age", "600");
-        server_.sendHeader("Cache-Control", "no-store");
-        server_.sendHeader("Connection", "close");
-    }
+        if (running()) return true;
+        hooks_ = std::move(hooks);
+        apGraceUntil_.store(0, std::memory_order_release);
+        generateCsrfToken();
 
-    void CaptivePortal::generateCsrfToken_()
-    {
-        char buf[17];
-        snprintf(buf, sizeof(buf), "%08lx%08lx",
-                 static_cast<unsigned long>(esp_random()),
-                 static_cast<unsigned long>(esp_random()));
-        csrfToken_ = buf;
-    }
-
-    bool CaptivePortal::isCsrfValid_()
-    {
-        return csrfToken_.length() > 0 && server_.header("X-EWM-CSRF") == csrfToken_;
-    }
-
-    void CaptivePortal::startAP_()
-    {
-        ewm::utils::WiFiLock lk(wifiMutex_);
-        WiFi.mode(WIFI_AP_STA);
-
-        WiFi.softAP(apSsid_.c_str(), (apPass_.length() == 0 ? nullptr : apPass_.c_str()));
-        delay(120);
-
-        dns_.start(53, "*", WiFi.softAPIP());
-    }
-
-    void CaptivePortal::stopAP_()
-    {
-        ewm::utils::WiFiLock lk(wifiMutex_);
-        dns_.stop();
-        WiFi.softAPdisconnect(false);
-        delay(80);
-        WiFi.mode(WIFI_STA);
-    }
-
-    void CaptivePortal::setupWeb_(PortalHooks &hooks)
-    {
-        static const char *headerKeys[] = {"X-EWM-CSRF"};
-        server_.collectHeaders(headerKeys, 1);
-
-        auto addCors = [this]()
+        if (!startAccessPoint() || !startWebServer())
         {
-            sendCommonHeaders_();
-        };
-
-        auto requireCsrf = [this, addCors]() -> bool
-        {
-            if (isCsrfValid_())
-                return true;
-
-            addCors();
-            server_.send(403, "text/plain", "CSRF token invalid.");
+            stop(true);
             return false;
-        };
-
-        auto handleOptions = [this, addCors]()
-        {
-            addCors();
-            server_.send(204, "text/plain", "");
-        };
-
-        auto serveProbeOk = [this, addCors]()
-        {
-            addCors();
-            server_.send(200, "text/html",
-                         "<!doctype html><meta charset='utf-8'>"
-                         "<meta http-equiv='refresh' content='0;url=/'/>"
-                         "<title>Captive Portal</title>"
-                         "<p>Weiter zur Konfigurationsseite…</p>");
-        };
-
-        auto handleRoot = [this, &hooks, addCors]()
-        {
-            String list;
-
-            for (auto &c : hooks.listCreds())
-            {
-                list += "<li class=\"cred\" draggable=\"true\" data-ssid=\"" + ewm::utils::html_escape(c.ssid) + "\">";
-                list += "<b>" + ewm::utils::html_escape(c.ssid) + "</b> <span class=\"pri\">Prio: " + String(c.priority) + "</span>";
-                list += "<span class=\"buttons\">"
-                        "<button class=\"con primary\">Verbinden</button>"
-                        "<button class=\"del danger\">Löschen</button>"
-                        "</span>";
-                list += "</li>";
-            }
-
-            uint8_t nextPrio = 0;
-            for (;;)
-            {
-                bool used = false;
-                for (auto &c : hooks.listCreds())
-                {
-                    if (c.priority == nextPrio)
-                    {
-                        used = true;
-                        break;
-                    }
-                }
-                if (!used)
-                    break;
-                nextPrio++;
-            }
-
-            String options = "<option value=\"\">(lade…)</option>";
-
-            String page = ewm::portal::kPortalPage;
-            page.replace("__EWM_PORTAL_CFG__", uiCfgJson_);
-            page.replace("__CSRF_TOKEN__", ewm::utils::json_escape(csrfToken_));
-            page.replace("__OPTIONS__", options);
-            page.replace("__LIST__", list);
-            page.replace("__DEFAULT_PRIO__", String(nextPrio));
-
-            addCors();
-            server_.sendHeader("Cache-Control", "no-store");
-            server_.sendHeader("Connection", "close");
-            server_.send(200, "text/html; charset=utf-8", page);
-        };
-
-        server_.on("/", HTTP_GET, handleRoot);
-        server_.on("/", HTTP_OPTIONS, handleOptions);
-
-        server_.on("/scan", HTTP_GET, [this, addCors]()
-        {
-            ewm::utils::WiFiLock lk(wifiMutex_);
-
-            WiFi.disconnect(false, false);
-            delay(80);
-
-            int n = WiFi.scanNetworks(false, true);
-            String json = "[";
-
-            for (int i = 0; i < n; ++i)
-            {
-                if (i) json += ',';
-                json += "{\"ssid\":\"" + ewm::utils::json_escape(WiFi.SSID(i)) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
-            }
-
-            json += "]";
-            WiFi.scanDelete();
-
-            addCors();
-            server_.sendHeader("Cache-Control", "no-store");
-            server_.sendHeader("Connection", "close");
-            server_.send(200, "application/json", json); 
-        });
-        
-        server_.on("/scan", HTTP_OPTIONS, handleOptions);
-
-        server_.on("/status", HTTP_GET, [this, &hooks, addCors]()
-        {
-            bool conn = false;
-            String ip = "";
-            int rssi = -127;
-
-            {
-                ewm::utils::WiFiLock lk(wifiMutex_);
-                conn = (WiFi.status() == WL_CONNECTED);
-                if (conn) 
-                {
-                    ip = WiFi.localIP().toString();
-                    rssi = WiFi.RSSI();
-                }
-            }
-
-            if (!conn) conn = hooks.isStaConnected();
-            if (ip.length() == 0 && conn) ip = hooks.staIp();
-            if ((rssi == -127 || rssi == 0) && conn) rssi = hooks.staRssi();
-
-            uint32_t apOffIn = 0;
-            if (conn && apGraceUntil_ > millis()) apOffIn = apGraceUntil_ - millis();
-
-            String json = "{";
-            json += "\"connected\":"; json += (conn ? "true":"false"); json += ",";
-            json += "\"ip\":\""; json += ip; json += "\",";
-            json += "\"rssi\":"; json += String(rssi); json += ",";
-            json += "\"ap_off_in\":"; json += String(apOffIn);
-            json += "}";
-
-            addCors();
-            server_.sendHeader("Cache-Control","no-store, no-cache, must-revalidate");
-            server_.sendHeader("Pragma","no-cache");
-            server_.sendHeader("Expires","0");
-            server_.sendHeader("Connection","close");
-            server_.send(200, "application/json", json); 
-        });
-
-        server_.on("/status", HTTP_OPTIONS, handleOptions);
-
-        server_.on("/add", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
-        {
-            if(!requireCsrf()) return;
-
-            String body = server_.arg("plain");
-            String ssid, pw;
-            int pr = 100;
-
-            if (!ewm::utils::json_get_string(body, "ssid", ssid))
-            {
-                addCors();
-                server_.send(400, "text/plain", "SSID fehlt.");
-                return;
-            }
-
-            ewm::utils::json_get_string(body, "password", pw);
-            ewm::utils::json_get_int(body, "priority", pr);
-            pr = constrain(pr, 0, 254);
-
-            addCors();
-            server_.sendHeader("Connection", "close");
-
-            if (hooks.addCred(ssid, pw, (uint8_t)pr))
-            server_.send(200, "text/plain", "Hinzugefügt/aktualisiert.");
-            else
-            server_.send(400, "text/plain", "Fehler (max. 10 oder ungültig)."); 
-        });
-
-        server_.on("/add", HTTP_OPTIONS, handleOptions);
-
-        server_.on("/del", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
-        {
-            if(!requireCsrf()) return;
-
-            String body = server_.arg("plain");
-            String ssid;
-
-            if (!ewm::utils::json_get_string(body, "ssid", ssid))
-            {
-                addCors();
-                server_.send(400, "text/plain", "SSID fehlt.");
-                return;
-            }
-
-            addCors();
-            server_.sendHeader("Connection", "close");
-
-            if (hooks.delCred(ssid))
-                server_.send(200, "text/plain", "Gelöscht.");
-            else
-                server_.send(404, "text/plain", "Nicht gefunden."); 
-        });
-
-        server_.on("/del", HTTP_OPTIONS, handleOptions);
-
-        server_.on("/reorder", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
-        {
-            if(!requireCsrf()) return;
-
-            String body = server_.arg("plain");
-            std::vector<String> order;
-
-            if (!ewm::utils::json_get_order_array(body, order))
-            {
-                addCors();
-                server_.send(400, "text/plain", "order[] fehlt/ungültig.");
-                return;
-            }
-
-            hooks.reorder(order);
-
-            addCors();
-            server_.sendHeader("Connection", "close");
-            server_.send(200, "text/plain", "Gespeichert."); 
-        });
-
-        server_.on("/reorder", HTTP_OPTIONS, handleOptions);
-
-        server_.on("/erase", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
-        {
-            if(!requireCsrf()) return;
-
-            hooks.eraseAll();
-            addCors();
-            server_.sendHeader("Connection", "close");
-            server_.send(200, "text/plain", "Alle Einträge gelöscht."); 
-        });
-
-        server_.on("/erase", HTTP_OPTIONS, handleOptions);
-
-        server_.on("/ap_off", HTTP_POST, [this, addCors, requireCsrf]()
-        {
-            if(!requireCsrf()) return;
-
-            apGraceUntil_ = millis();
-            running_ = false;
-            addCors();
-            server_.sendHeader("Connection", "close");
-            server_.send(200, "application/json", "{\"ok\":true}");
-        });
-
-        server_.on("/ap_off", HTTP_OPTIONS, handleOptions);
-
-        server_.on("/connect", HTTP_POST, [this, &hooks, addCors, requireCsrf]()
-        {
-            if(!requireCsrf()) return;
-
-            String body = server_.arg("plain");
-            String ssid, pw;
-            int pr = 100;
-
-            if (!ewm::utils::json_get_string(body, "ssid", ssid))
-            {
-                addCors();
-                server_.send(400, "text/plain", "SSID fehlt.");
-                return;
-            }
-
-            ewm::utils::json_get_string(body, "password", pw);
-            ewm::utils::json_get_int(body, "priority", pr);
-            pr = constrain(pr, 0, 254);
-
-            hooks.connectRequest(ssid, pw, (uint8_t)pr);
-
-            addCors();
-            server_.sendHeader("Connection", "close");
-            server_.send(202, "application/json", "{\"ok\":true,\"msg\":\"Verbinde...\"}"); 
-        });
-
-        server_.on("/connect", HTTP_OPTIONS, handleOptions);
-
-        // --- Captive portal endpoints
-        server_.on("/generate_204", HTTP_ANY, serveProbeOk);
-        server_.on("/gen_204", HTTP_ANY, serveProbeOk);
-        server_.on("/hotspot-detect.html", HTTP_ANY, serveProbeOk);
-        server_.on("/library/test/success.html", HTTP_ANY, serveProbeOk);
-        server_.on("/ncsi.txt", HTTP_ANY, serveProbeOk);
-        server_.on("/connecttest.txt", HTTP_ANY, serveProbeOk);
-        server_.on("/success.txt", HTTP_ANY, serveProbeOk);
-
-        server_.on("/favicon.ico", HTTP_ANY, [this, addCors]()
-        {
-            addCors();
-            server_.sendHeader("Connection", "close");
-            server_.send(204, "text/plain", ""); 
-        });
-
-        server_.onNotFound([this, addCors, handleRoot]()
-        {
-            EWM_LOG("HTTP notfound: method=%d uri=%s", (int)server_.method(), server_.uri().c_str());
-
-            if (server_.method() == HTTP_OPTIONS)
-            {
-                addCors();
-                server_.sendHeader("Connection", "close");
-                server_.send(204, "text/plain", "");
-                return;
-            }
-
-            handleRoot(); 
-        });
-
-        server_.begin();
+        }
+        running_.store(true, std::memory_order_release);
+        EWM_LOG("Captive portal started");
+        return true;
     }
 
-    void CaptivePortal::runBlocking(PortalHooks hooks)
+    void CaptivePortal::stop(bool stopAccessPoint)
     {
-        apGraceUntil_ = 0;
-
-        generateCsrfToken_();
-
-        startAP_();
-        setupWeb_(hooks);
-        running_ = true;
-
-        uint32_t lastLog = millis();
-
-        while (running_)
+        running_.store(false, std::memory_order_release);
+        if (server_)
         {
-            dns_.processNextRequest();
-            server_.handleClient();
-            delay(4);
-
-            if ((millis() - lastLog) > 2000)
-            {
-                lastLog = millis();
-                EWM_LOG("Portal loop: STA status=%s connected=%d",
-                        ewm::utils::wlStatusStr(WiFi.status()), hooks.isStaConnected());
-            }
-
-            if (hooks.isStaConnected())
-            {
-                if (apGraceUntil_ == 0)
-                {
-                    if (hooks.onStaConnected)
-                        hooks.onStaConnected();
-
-                    apGraceUntil_ = millis() + apGraceMs_;
-                    EWM_LOG("STA connected -> AP will stop in %ums", (unsigned)apGraceMs_);
-                }
-
-                if ((int32_t)(millis() - apGraceUntil_) >= 0)
-                    running_ = false;
-            }
+            httpd_stop(server_);
+            server_ = nullptr;
         }
-        stopAP_();
-        server_.stop();
-        EWM_LOG("Portal stopped");
+        dns_.stop();
+        if (stopAccessPoint)
+        {
+            wifi_.stopAccessPoint();
+        }
+        apGraceUntil_.store(0, std::memory_order_release);
+        EWM_LOG("Captive portal stopped");
+    }
+
+    void CaptivePortal::markStaConnected()
+    {
+        apGraceUntil_.store(
+            ewm::utils::monotonicMillis() + apGraceMs_,
+            std::memory_order_release);
+    }
+
+    void CaptivePortal::clearStaConnected()
+    {
+        apGraceUntil_.store(0, std::memory_order_release);
+    }
+
+    bool CaptivePortal::graceExpired() const noexcept
+    {
+        const uint64_t deadline = apGraceUntil_.load(std::memory_order_acquire);
+        return deadline != 0 && ewm::utils::monotonicMillis() >= deadline;
+    }
+
+    uint32_t CaptivePortal::apOffInMs() const noexcept
+    {
+        const uint64_t deadline = apGraceUntil_.load(std::memory_order_acquire);
+        const uint64_t now = ewm::utils::monotonicMillis();
+        return deadline > now ? static_cast<uint32_t>(deadline - now) : 0;
+    }
+
+    bool CaptivePortal::startAccessPoint()
+    {
+        if (!wifi_.startAccessPoint(apSsid_, apPass_))
+        {
+            return false;
+        }
+
+        const std::string address = wifi_.apIpAddress();
+        const uint32_t nativeAddress = inet_addr(address.c_str());
+        if (address.empty() || nativeAddress == INADDR_NONE || !dns_.start(nativeAddress))
+        {
+            EWM_LOG("Captive DNS start failed");
+            return false;
+        }
+        return true;
+    }
+
+    bool CaptivePortal::startWebServer()
+    {
+        httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+        config.server_port = port_;
+        config.stack_size = 12288;
+        config.max_uri_handlers = 32;
+        config.lru_purge_enable = true;
+        config.global_user_ctx = this;
+
+        if (httpd_start(&server_, &config) != ESP_OK)
+        {
+            server_ = nullptr;
+            return false;
+        }
+
+        bool ok = true;
+        ok &= registerUri("/", HTTP_GET, rootHandler);
+        ok &= registerUri("/scan", HTTP_GET, scanHandler);
+        ok &= registerUri("/status", HTTP_GET, statusHandler);
+        ok &= registerUri("/add", HTTP_POST, addHandler);
+        ok &= registerUri("/del", HTTP_POST, deleteHandler);
+        ok &= registerUri("/reorder", HTTP_POST, reorderHandler);
+        ok &= registerUri("/erase", HTTP_POST, eraseHandler);
+        ok &= registerUri("/connect", HTTP_POST, connectHandler);
+        ok &= registerUri("/ap_off", HTTP_POST, accessPointOffHandler);
+
+        static const char* optionUris[] = {
+            "/", "/scan", "/status", "/add", "/del", "/reorder", "/erase", "/connect", "/ap_off"
+        };
+        for (const char* uri : optionUris) ok &= registerUri(uri, HTTP_OPTIONS, optionsHandler);
+
+        static const char* probeUris[] = {
+            "/generate_204", "/gen_204", "/hotspot-detect.html", "/library/test/success.html",
+            "/ncsi.txt", "/connecttest.txt", "/success.txt"
+        };
+        for (const char* uri : probeUris) ok &= registerUri(uri, HTTP_GET, probeHandler);
+        ok &= registerUri("/favicon.ico", HTTP_GET, faviconHandler);
+        ok &= httpd_register_err_handler(server_, HTTPD_404_NOT_FOUND, notFoundHandler) == ESP_OK;
+        return ok;
+    }
+
+    bool CaptivePortal::registerUri(const char* uri, httpd_method_t method, esp_err_t (*handler)(httpd_req_t*))
+    {
+        httpd_uri_t definition{};
+        definition.uri = uri;
+        definition.method = method;
+        definition.handler = handler;
+        definition.user_ctx = this;
+        return httpd_register_uri_handler(server_, &definition) == ESP_OK;
+    }
+
+    void CaptivePortal::setCommonHeaders(httpd_req_t* request) const
+    {
+        // The portal is same-origin only. Wildcard CORS would allow another
+        // origin to read the page token and defeat the CSRF protection.
+        httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+        httpd_resp_set_hdr(request, "Connection", "close");
+    }
+
+    esp_err_t CaptivePortal::send(
+        httpd_req_t* request,
+        const char* status,
+        const char* type,
+        const std::string& body) const
+    {
+        setCommonHeaders(request);
+        httpd_resp_set_status(request, status);
+        httpd_resp_set_type(request, type);
+        return httpd_resp_send(request, body.data(), body.size());
+    }
+
+    bool CaptivePortal::csrfValid(httpd_req_t* request) const
+    {
+        const size_t length = httpd_req_get_hdr_value_len(request, "X-EWM-CSRF");
+        if (length == 0 || length != csrfToken_.size()) return false;
+        char value[40]{};
+        return length < sizeof(value) &&
+               httpd_req_get_hdr_value_str(request, "X-EWM-CSRF", value, sizeof(value)) == ESP_OK &&
+               csrfToken_ == value;
+    }
+
+    bool CaptivePortal::requireCsrf(httpd_req_t* request) const
+    {
+        if (csrfValid(request)) return true;
+        send(request, "403 Forbidden", "text/plain", "CSRF token invalid.");
+        return false;
+    }
+
+    bool CaptivePortal::readBody(httpd_req_t* request, std::string& body) const
+    {
+        if (static_cast<size_t>(request->content_len) > MAX_REQUEST_BODY)
+        {
+            return false;
+        }
+
+        body.assign(static_cast<size_t>(request->content_len), '\0');
+        size_t received = 0;
+        while (received < body.size())
+        {
+            const int result = httpd_req_recv(request, body.data() + received, body.size() - received);
+            if (result <= 0)
+            {
+                return false;
+            }
+            received += static_cast<size_t>(result);
+        }
+        return true;
+    }
+
+    void CaptivePortal::generateCsrfToken()
+    {
+        char buffer[17]{};
+        std::snprintf(
+            buffer,
+            sizeof(buffer),
+            "%08lx%08lx",
+            static_cast<unsigned long>(esp_random()),
+            static_cast<unsigned long>(esp_random()));
+        csrfToken_ = buffer;
+    }
+
+    esp_err_t CaptivePortal::rootHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal) return ESP_FAIL;
+
+        const auto credentials = portal->hooks_.listCreds ? portal->hooks_.listCreds() : std::vector<Credential>{};
+        std::string list;
+        for (const auto& credential : credentials)
+        {
+            const std::string ssid = credential.ssid;
+            list += "<li class=\"cred\" draggable=\"true\" data-ssid=\"" + ewm::utils::html_escape(ssid) + "\">";
+            list += "<b>" + ewm::utils::html_escape(ssid) + "</b> <span class=\"pri\">Prio: " + std::to_string(credential.priority) + "</span>";
+            list += "<span class=\"buttons\"><button class=\"con primary\">Verbinden</button>";
+            list += "<button class=\"del danger\">Löschen</button></span></li>";
+        }
+
+        uint8_t nextPriority = 0;
+        for (;;)
+        {
+            const bool used = std::any_of(credentials.begin(), credentials.end(), [nextPriority](const Credential& credential)
+            {
+                return credential.priority == nextPriority;
+            });
+            if (!used) break;
+            ++nextPriority;
+        }
+
+        std::string page = ewm::portal::kPortalPage;
+        replaceAll(page, "__EWM_PORTAL_CFG__", portal->uiCfgJson_);
+        replaceAll(page, "__CSRF_TOKEN__", ewm::utils::json_escape(portal->csrfToken_));
+        replaceAll(page, "__OPTIONS__", "<option value=\"\">(lade…)</option>");
+        replaceAll(page, "__LIST__", list);
+        replaceAll(page, "__DEFAULT_PRIO__", std::to_string(nextPriority));
+        return portal->send(request, "200 OK", "text/html; charset=utf-8", page);
+    }
+
+    esp_err_t CaptivePortal::scanHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal) return ESP_FAIL;
+        const auto networks = portal->hooks_.scanNetworks ? portal->hooks_.scanNetworks() : std::vector<ScanResult>{};
+        std::string json = "[";
+        for (size_t index = 0; index < networks.size(); ++index)
+        {
+            if (index) json += ',';
+            json += "{\"ssid\":\"" + ewm::utils::json_escape(networks[index].ssid) + "\",\"rssi\":" + std::to_string(networks[index].rssi) + "}";
+        }
+        json += ']';
+        return portal->send(request, "200 OK", "application/json", json);
+    }
+
+    esp_err_t CaptivePortal::statusHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal) return ESP_FAIL;
+        const bool connected = portal->hooks_.isStaConnected && portal->hooks_.isStaConnected();
+        const std::string ip = connected && portal->hooks_.staIp ? portal->hooks_.staIp() : std::string{};
+        const int rssi = connected && portal->hooks_.staRssi ? portal->hooks_.staRssi() : -127;
+        std::string json = "{\"connected\":";
+        json += connected ? "true" : "false";
+        json += ",\"ip\":\"" + ewm::utils::json_escape(ip) + "\",\"rssi\":" + std::to_string(rssi);
+        json += ",\"ap_off_in\":" + std::to_string(portal->apOffInMs()) + "}";
+        httpd_resp_set_hdr(request, "Pragma", "no-cache");
+        httpd_resp_set_hdr(request, "Expires", "0");
+        return portal->send(request, "200 OK", "application/json", json);
+    }
+
+    esp_err_t CaptivePortal::addHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal || !portal->requireCsrf(request)) return ESP_OK;
+        std::string body, ssid, password;
+        int priority = 100;
+        if (!portal->readBody(request, body) || !ewm::utils::json_get_string(body, "ssid", ssid))
+            return portal->send(request, "400 Bad Request", "text/plain", "SSID fehlt.");
+        ewm::utils::json_get_string(body, "password", password);
+        ewm::utils::json_get_int(body, "priority", priority);
+        priority = std::clamp(priority, 0, 254);
+        const bool ok = portal->hooks_.addCred && portal->hooks_.addCred(ssid, password, static_cast<uint8_t>(priority));
+        return portal->send(request, ok ? "200 OK" : "400 Bad Request", "text/plain", ok ? "Hinzugefügt/aktualisiert." : "Fehler (max. 10 oder ungültig).");
+    }
+
+    esp_err_t CaptivePortal::deleteHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal || !portal->requireCsrf(request)) return ESP_OK;
+        std::string body, ssid;
+        if (!portal->readBody(request, body) || !ewm::utils::json_get_string(body, "ssid", ssid))
+            return portal->send(request, "400 Bad Request", "text/plain", "SSID fehlt.");
+        const bool ok = portal->hooks_.delCred && portal->hooks_.delCred(ssid);
+        return portal->send(request, ok ? "200 OK" : "404 Not Found", "text/plain", ok ? "Gelöscht." : "Nicht gefunden.");
+    }
+
+    esp_err_t CaptivePortal::reorderHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal || !portal->requireCsrf(request)) return ESP_OK;
+        std::string body;
+        std::vector<std::string> order;
+        if (!portal->readBody(request, body) || !ewm::utils::json_get_order_array(body, order))
+            return portal->send(request, "400 Bad Request", "text/plain", "order[] fehlt/ungültig.");
+        if (portal->hooks_.reorder) portal->hooks_.reorder(order);
+        return portal->send(request, "200 OK", "text/plain", "Gespeichert.");
+    }
+
+    esp_err_t CaptivePortal::eraseHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal || !portal->requireCsrf(request)) return ESP_OK;
+        if (portal->hooks_.eraseAll) portal->hooks_.eraseAll();
+        return portal->send(request, "200 OK", "text/plain", "Alle Einträge gelöscht.");
+    }
+
+    esp_err_t CaptivePortal::connectHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal || !portal->requireCsrf(request)) return ESP_OK;
+        std::string body, ssid, password;
+        int priority = 100;
+        if (!portal->readBody(request, body) || !ewm::utils::json_get_string(body, "ssid", ssid))
+            return portal->send(request, "400 Bad Request", "text/plain", "SSID fehlt.");
+        ewm::utils::json_get_string(body, "password", password);
+        ewm::utils::json_get_int(body, "priority", priority);
+        priority = std::clamp(priority, 0, 254);
+        if (portal->hooks_.connectRequest) portal->hooks_.connectRequest(ssid, password, static_cast<uint8_t>(priority));
+        return portal->send(request, "202 Accepted", "application/json", "{\"ok\":true,\"msg\":\"Verbinde...\"}");
+    }
+
+    esp_err_t CaptivePortal::accessPointOffHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal || !portal->requireCsrf(request)) return ESP_OK;
+        if (portal->hooks_.onStopRequested) portal->hooks_.onStopRequested();
+        return portal->send(request, "200 OK", "application/json", "{\"ok\":true}");
+    }
+
+    esp_err_t CaptivePortal::optionsHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        return portal ? portal->send(request, "204 No Content", "text/plain", "") : ESP_FAIL;
+    }
+
+    esp_err_t CaptivePortal::probeHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        if (!portal) return ESP_FAIL;
+        return portal->send(
+            request,
+            "200 OK",
+            "text/html; charset=utf-8",
+            "<!doctype html><meta charset='utf-8'><meta http-equiv='refresh' content='0;url=/'/>"
+            "<title>Captive Portal</title><p>Weiter zur Konfigurationsseite…</p>");
+    }
+
+    esp_err_t CaptivePortal::faviconHandler(httpd_req_t* request)
+    {
+        auto* portal = portalFrom(request);
+        return portal ? portal->send(request, "204 No Content", "text/plain", "") : ESP_FAIL;
+    }
+
+    esp_err_t CaptivePortal::notFoundHandler(httpd_req_t* request, httpd_err_code_t)
+    {
+        if (request->method == HTTP_OPTIONS) return optionsHandler(request);
+        return rootHandler(request);
     }
 }

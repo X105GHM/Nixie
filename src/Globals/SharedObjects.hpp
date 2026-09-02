@@ -20,10 +20,6 @@
 
 extern TaskHandle_t displayTaskHandle;
 extern TaskHandle_t clockTaskHandle;
-extern TaskHandle_t buttonTaskHandle;
-extern TaskHandle_t brownoutTaskHandle;
-extern TaskHandle_t httpTaskHandle;
-extern TaskHandle_t energyMonitorTaskHandle;
 
 extern Memory::PersistentStorage storage;
 extern SupplyWatch       supplyWatch;

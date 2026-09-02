@@ -1,292 +1,440 @@
 #include "ewm/EasyWiFiManager.hpp"
+
+#include <cstring>
+
 #include "ewm/Log.hpp"
+#include "ewm/Utils/Time.hpp"
 #include "ewm/Utils/WiFiLock.hpp"
 #include "ewm/Utils/WiFiStatus.hpp"
-#include "ewm/Portal/PortalUiConfig.hpp"
-#include <WiFi.h>
 
 namespace ewm
 {
-    EasyWiFiManager &EasyWiFiManager::instance()
+    EasyWiFiManager& EasyWiFiManager::instance()
     {
-        static EasyWiFiManager inst;
-        return inst;
+        static EasyWiFiManager instance;
+        return instance;
     }
 
     EasyWiFiManager::EasyWiFiManager()
-        : wifiMutex_(xSemaphoreCreateRecursiveMutex()), 
+        : wifiMutex_(xSemaphoreCreateRecursiveMutex()),
+          credentialMutex_(xSemaphoreCreateRecursiveMutex()),
+          stateEvents_(xEventGroupCreate()),
           storage_("EWM1", "EWM1B"),
           wifi_(wifiMutex_),
-          portal_(80, wifiMutex_)
+          portal_(80, wifi_)
     {
-        // Monitor wiring
-        monitor_.setCheckFn([this](uint32_t t) { return wifi_.hasInternet(probeHost_, probePort_, t); });
-        monitor_.setRoamFn([this]() { roamTryAll_(); });
+        wifi_.setEventCallback([this]() { notifyStateTask(); });
+        monitor_.setConnectedFn([this]() { return wifi_.isConnected(); });
+        monitor_.setCheckFn([this](uint32_t timeoutMs)
+        {
+            return wifi_.hasInternet(probeHost_.c_str(), probePort_, timeoutMs);
+        });
+        monitor_.setRoamFn([this]() { requestRoam(); });
     }
 
-    void EasyWiFiManager::setHostname(const String &name) { hostname_ = name; }
+    void EasyWiFiManager::setHostname(const std::string& name)
+    {
+        hostname_ = name;
+    }
 
-    void EasyWiFiManager::setAPCredentials(const String &apSsid, const String &apPass)
+    void EasyWiFiManager::setAPCredentials(const std::string& apSsid, const std::string& apPass)
     {
         apSsid_ = apSsid;
         apPass_ = apPass;
         portal_.setAP(apSsid_, apPass_);
     }
 
-    void EasyWiFiManager::setInternetProbe(const char *host, uint16_t port)
+    void EasyWiFiManager::setInternetProbe(const char* host, uint16_t port)
     {
-        probeHost_ = host;
+        probeHost_ = host && host[0] != '\0' ? host : "1.1.1.1";
         probePort_ = port;
     }
 
     void EasyWiFiManager::setRequireInternetOnConnect(bool enabled)
     {
-        requireInternetOnConnect_ = enabled;
+        requireInternetOnConnect_.store(enabled, std::memory_order_release);
         monitor_.setRequireInternet(enabled);
     }
 
-    wl_status_t EasyWiFiManager::status() const { return wifi_.status(); }
-
-    void EasyWiFiManager::onConnect(ConnectCallback cb) { onConnectCb_ = std::move(cb); }
-
-    uint32_t EasyWiFiManager::nowSeconds_() const
+    void EasyWiFiManager::onConnect(ConnectCallback callback)
     {
-        time_t t = time(nullptr);
-        if (t < 1600000000)
-            return millis() / 1000;
-        return (uint32_t)t;
+        onConnectCallback_ = std::move(callback);
+    }
+
+    uint32_t EasyWiFiManager::nowSeconds() const
+    {
+        const time_t now = time(nullptr);
+        if (now < 1600000000)
+        {
+            return static_cast<uint32_t>(ewm::utils::monotonicMillis() / 1000U);
+        }
+        return static_cast<uint32_t>(now);
     }
 
     std::vector<Credential> EasyWiFiManager::listCredentials() const
     {
+        ewm::utils::WiFiLock lock(credentialMutex_);
         return store_.list();
     }
 
-    bool EasyWiFiManager::addCredential(const String &ssid, const String &password, uint8_t priority)
+    bool EasyWiFiManager::addCredential(const std::string& ssid, const std::string& password, uint8_t priority)
     {
+        ewm::utils::WiFiLock lock(credentialMutex_);
         return store_.addOrUpdate(storage_, ssid, password, priority);
     }
 
     bool EasyWiFiManager::eraseAll()
     {
+        ewm::utils::WiFiLock lock(credentialMutex_);
         return store_.eraseAll(storage_);
     }
 
-    bool EasyWiFiManager::removeCredential(const String &ssid)
+    bool EasyWiFiManager::removeCredential(const std::string& ssid)
     {
+        ewm::utils::WiFiLock lock(credentialMutex_);
         return store_.remove(storage_, ssid);
     }
 
     void EasyWiFiManager::setBackgroundAP(bool enabled)
     {
-        backgroundAP_ = enabled;
-        ensureAPState_();
+        backgroundAP_.store(enabled, std::memory_order_release);
+        notifyStateTask();
     }
 
-    void EasyWiFiManager::ensureAPState_()
+    void EasyWiFiManager::ensureAPState()
     {
-        ewm::utils::WiFiLock lk(wifiMutex_);
-
-        if (backgroundAP_)
+        if (portal_.running())
         {
-            if (WiFi.getMode() != WIFI_AP_STA)
-                WiFi.mode(WIFI_AP_STA);
+            return;
+        }
 
-            if (WiFi.softAPSSID() != apSsid_)
-                WiFi.softAP(apSsid_.c_str(), (apPass_.length() == 0 ? nullptr : apPass_.c_str()));
+        if (backgroundAP_.load(std::memory_order_acquire))
+        {
+            wifi_.startAccessPoint(apSsid_, apPass_);
         }
         else
         {
-            // Wenn kein Portal läuft: AP aus
-            WiFi.softAPdisconnect(false);
-            if (WiFi.getMode() == WIFI_AP_STA)
-                WiFi.mode(WIFI_STA);
+            wifi_.stopAccessPoint();
         }
     }
 
-    void EasyWiFiManager::portalConnectRequest_(const String &ssid, const String &pass, uint8_t prio)
+    void EasyWiFiManager::portalConnectRequest(
+        const std::string& ssid,
+        const std::string& pass,
+        uint8_t priority)
     {
+        std::string password = pass;
         bool exists = false;
-        String storedPass;
-
-        auto &hdr = store_.header();
-        auto &arr = store_.data();
-        for (size_t i = 0; i < hdr.count && i < arr.size(); ++i)
         {
-            if (ssid == arr[i].ssid)
+            ewm::utils::WiFiLock lock(credentialMutex_);
+            const auto credentials = store_.list();
+            for (const auto& credential : credentials)
             {
-                exists = true;
-                storedPass = String(arr[i].password);
-                break;
+                if (ssid == credential.ssid)
+                {
+                    exists = true;
+                    if (password.empty()) password = credential.password;
+                    break;
+                }
+            }
+
+            pendingSave_ = !exists || !pass.empty();
+            if (pendingSave_)
+            {
+                pendingSsid_ = ssid;
+                pendingPass_ = password;
+                pendingPriority_ = priority;
             }
         }
 
-        String usePass = pass;
-        if (usePass.length() == 0 && exists)
-            usePass = storedPass;
-
-        const bool shouldAutoSave = (!exists) || (pass.length() > 0);
-
-        pendingSave_ = shouldAutoSave;
-        if (pendingSave_)
+        if (!wifi_.beginConnectAsync(ssid, password))
         {
-            pendingSsid_ = ssid;
-            pendingPass_ = usePass;
-            pendingPrio_ = prio;
+            EWM_LOG("Portal connection request could not be started");
         }
-
-        wifi_.beginConnectAsync(ssid, usePass);
     }
 
-    void EasyWiFiManager::portalOnStaConnected_()
+    void EasyWiFiManager::portalOnStaConnected()
     {
-        if (pendingSave_)
         {
-            store_.addOrUpdate(storage_, pendingSsid_, pendingPass_, pendingPrio_);
-            pendingSave_ = false;
+            ewm::utils::WiFiLock lock(credentialMutex_);
+            if (pendingSave_)
+            {
+                store_.addOrUpdate(storage_, pendingSsid_, pendingPass_, pendingPriority_);
+                pendingSsid_.clear();
+                pendingPass_.clear();
+                pendingSave_ = false;
+            }
         }
 
-        // Callback/Info
-        if (onConnectCb_)
-            onConnectCb_(WiFi.localIP());
+        if (onConnectCallback_)
+        {
+            onConnectCallback_(wifi_.staIpAddress());
+        }
+    }
+
+    bool EasyWiFiManager::startPortal()
+    {
+        setState(State::Portal);
+        PortalHooks hooks;
+        hooks.listCreds = [this]() { return listCredentials(); };
+        hooks.addCred = [this](const std::string& ssid, const std::string& password, uint8_t priority)
+        {
+            return addCredential(ssid, password, priority);
+        };
+        hooks.delCred = [this](const std::string& ssid) { return removeCredential(ssid); };
+        hooks.reorder = [this](const std::vector<std::string>& order)
+        {
+            ewm::utils::WiFiLock lock(credentialMutex_);
+            store_.reorderBySsidList(storage_, order);
+        };
+        hooks.eraseAll = [this]() { eraseAll(); };
+        hooks.connectRequest = [this](const std::string& ssid, const std::string& password, uint8_t priority)
+        {
+            portalConnectRequest(ssid, password, priority);
+        };
+        hooks.onStopRequested = [this]()
+        {
+            portalStopRequested_.store(true, std::memory_order_release);
+            notifyStateTask();
+        };
+        hooks.scanNetworks = [this]() { return wifi_.scanNetworks(); };
+        hooks.isStaConnected = [this]() { return wifi_.isConnected(); };
+        hooks.staIp = [this]() { return wifi_.staIpAddress(); };
+        hooks.staRssi = [this]() { return wifi_.rssi(); };
+
+        portal_.setAP(apSsid_, apPass_);
+        portal_.setUiConfigJson(portalUiConfigJson_);
+        portalStopRequested_.store(false, std::memory_order_release);
+        return portal_.start(std::move(hooks));
+    }
+
+    void EasyWiFiManager::finishPortalConnection()
+    {
+        portalOnStaConnected();
+        portal_.markStaConnected();
+        xEventGroupSetBits(stateEvents_, CONNECTED_BIT);
+        EWM_LOG("Portal STA connected; grace period started");
+    }
+
+    void EasyWiFiManager::handleSuccessfulCredential(const Credential& used)
+    {
+        {
+            ewm::utils::WiFiLock lock(credentialMutex_);
+            auto& header = store_.header();
+            auto& credentials = store_.data();
+            for (size_t index = 0; index < header.count && index < credentials.size(); ++index)
+            {
+                if (std::strncmp(credentials[index].ssid, used.ssid, sizeof(used.ssid)) == 0)
+                {
+                    credentials[index].last_ok = nowSeconds();
+                    store_.save(storage_);
+                    break;
+                }
+            }
+        }
+
+        if (onConnectCallback_)
+        {
+            onConnectCallback_(wifi_.staIpAddress());
+        }
+    }
+
+    bool EasyWiFiManager::runConnectionCycle(bool retry)
+    {
+        setState(retry ? State::Retry : State::Connecting);
+        const auto credentials = listCredentials();
+        const bool connected = wifi_.tryConnectAll(
+            credentials,
+            connectTimeoutMs_,
+            betweenRetryMs_,
+            requireInternetOnConnect_.load(std::memory_order_acquire),
+            probeHost_.c_str(),
+            probePort_,
+            15000,
+            [this](const Credential& used) { handleSuccessfulCredential(used); });
+
+        if (!connected)
+        {
+            return false;
+        }
+
+        setState(State::Connected);
+        xEventGroupSetBits(stateEvents_, CONNECTED_BIT | APPLICATION_READY_BIT);
+        monitor_.startIfNeeded();
+        ensureAPState();
+        return true;
+    }
+
+    void EasyWiFiManager::begin(uint32_t connectTimeoutMs, uint32_t betweenRetryMs)
+    {
+        if (stateTask_ || state() != State::Uninitialized)
+        {
+            return;
+        }
+
+        connectTimeoutMs_ = connectTimeoutMs;
+        betweenRetryMs_ = betweenRetryMs;
+        setState(State::Initialization);
+
+        {
+            ewm::utils::WiFiLock lock(credentialMutex_);
+            store_.load(storage_);
+        }
+
+        if (!wifi_.initSta(hostname_))
+        {
+            setState(State::Failed);
+            return;
+        }
+
+        if (xTaskCreatePinnedToCore(stateTaskEntry, "ewm_state", 8192, this, 3, &stateTask_, 0) != pdPASS)
+        {
+            stateTask_ = nullptr;
+            setState(State::Failed);
+        }
     }
 
     void EasyWiFiManager::startConfigPortal()
     {
-        PortalHooks hooks;
-        hooks.listCreds = [this]()
-        { return store_.list(); };
-        hooks.addCred = [this](const String &s, const String &p, uint8_t pr)
-        { return store_.addOrUpdate(storage_, s, p, pr); };
-        hooks.delCred = [this](const String &s)
-        { return store_.remove(storage_, s); };
-        hooks.reorder = [this](const std::vector<String> &order)
-        { store_.reorderBySsidList(storage_, order); };
-        hooks.eraseAll = [this]()
-        { store_.eraseAll(storage_); };
-
-        hooks.connectRequest = [this](const String &s, const String &p, uint8_t pr)
-        { portalConnectRequest_(s, p, pr); };
-        hooks.onStaConnected = [this]()
-        { portalOnStaConnected_(); };
-
-        hooks.isStaConnected = []()
-        { return WiFi.status() == WL_CONNECTED; };
-        hooks.staIp = []()
-        { return WiFi.localIP().toString(); };
-        hooks.staRssi = []()
-        { return WiFi.RSSI(); };
-
-        portal_.setAP(apSsid_, apPass_);
-        portal_.setUiConfigJson(portalUiCfgJson_);
-        portal_.runBlocking(hooks);
+        forcePortalRequested_.store(true, std::memory_order_release);
+        notifyStateTask();
     }
 
-    void EasyWiFiManager::roamTryAll_()
+    void EasyWiFiManager::stateTaskEntry(void* arg)
     {
-        // kurz andere SSIDs probieren (kein Portal)
-        std::vector<Credential> creds = store_.list();
+        static_cast<EasyWiFiManager*>(arg)->stateLoop();
+    }
 
-        bool ok = wifi_.tryConnectAll(
-            creds,
-            8000,
-            500,
-            requireInternetOnConnect_,
-            probeHost_,
-            probePort_,
-            15000,
-            [this](const Credential &used)
+    void EasyWiFiManager::stateLoop()
+    {
+        bool portalConnectionHandled = false;
+
+        if (forcePortalRequested_.exchange(false, std::memory_order_acq_rel) || !runConnectionCycle(false))
+        {
+            if (!startPortal())
             {
-                // last_ok updaten im Store-Array
-                auto &hdr = store_.header();
-                auto &arr = store_.data();
-                for (size_t i = 0; i < hdr.count && i < arr.size(); ++i)
+                setState(State::Failed);
+            }
+        }
+
+        for (;;)
+        {
+            const TickType_t waitTicks = state() == State::Portal ? pdMS_TO_TICKS(200) : portMAX_DELAY;
+            ulTaskNotifyTake(pdTRUE, waitTicks);
+
+            if (state() == State::Portal)
+            {
+                if (portalConnectionHandled && !wifi_.isConnected())
                 {
-                    if (strncmp(arr[i].ssid, used.ssid, sizeof(used.ssid)) == 0)
-                    {
-                        arr[i].last_ok = nowSeconds_();
-                        store_.save(storage_);
-                        break;
-                    }
+                    portalConnectionHandled = false;
+                    portal_.clearStaConnected();
                 }
 
-                if (onConnectCb_)
-                    onConnectCb_(WiFi.localIP());
-            });
+                if (wifi_.isConnected() && !portalConnectionHandled)
+                {
+                    portalConnectionHandled = true;
+                    finishPortalConnection();
+                }
 
-        (void)ok;
-        ensureAPState_();
+                if (portalStopRequested_.load(std::memory_order_acquire) ||
+                    (portalConnectionHandled && portal_.graceExpired()))
+                {
+                    const bool connected = wifi_.isConnected();
+                    portal_.stop(!backgroundAP_.load(std::memory_order_acquire));
+                    portalStopRequested_.store(false, std::memory_order_release);
+                    portalConnectionHandled = false;
+
+                    if (connected)
+                    {
+                        setState(State::Connected);
+                        xEventGroupSetBits(stateEvents_, CONNECTED_BIT | APPLICATION_READY_BIT);
+                        monitor_.startIfNeeded();
+                        ensureAPState();
+                    }
+                    else
+                    {
+                        setState(State::Retry);
+                        retryRequested_.store(true, std::memory_order_release);
+                    }
+                }
+                continue;
+            }
+
+            if (forcePortalRequested_.exchange(false, std::memory_order_acq_rel))
+            {
+                if (!(xEventGroupGetBits(stateEvents_) & APPLICATION_READY_BIT))
+                {
+                    startPortal();
+                }
+                continue;
+            }
+
+            const bool lostConnection = state() == State::Connected && !wifi_.isConnected();
+            const bool retry = retryRequested_.exchange(false, std::memory_order_acq_rel) || lostConnection;
+            if (retry)
+            {
+                xEventGroupClearBits(stateEvents_, CONNECTED_BIT);
+                if (!runConnectionCycle(true))
+                {
+                    setState(State::Retry);
+                    ewm::utils::delayMilliseconds(10000);
+                    retryRequested_.store(true, std::memory_order_release);
+                    notifyStateTask();
+                }
+            }
+
+            ensureAPState();
+        }
+    }
+
+    void EasyWiFiManager::setState(State newState)
+    {
+        const State previous = state_.exchange(newState, std::memory_order_acq_rel);
+        if (previous != newState)
+        {
+            EWM_LOG("State: %s -> %s", ewm::utils::stateName(previous), ewm::utils::stateName(newState));
+        }
+    }
+
+    void EasyWiFiManager::notifyStateTask()
+    {
+        if (stateTask_) xTaskNotifyGive(stateTask_);
+    }
+
+    void EasyWiFiManager::requestRoam()
+    {
+        retryRequested_.store(true, std::memory_order_release);
+        notifyStateTask();
+    }
+
+    bool EasyWiFiManager::waitForConnected(TickType_t timeoutTicks) const
+    {
+        return (xEventGroupWaitBits(stateEvents_, CONNECTED_BIT, pdFALSE, pdTRUE, timeoutTicks) & CONNECTED_BIT) != 0;
+    }
+
+    bool EasyWiFiManager::waitForApplicationNetworkReady(TickType_t timeoutTicks) const
+    {
+        return (xEventGroupWaitBits(stateEvents_, APPLICATION_READY_BIT, pdFALSE, pdTRUE, timeoutTicks) & APPLICATION_READY_BIT) != 0;
     }
 
     void EasyWiFiManager::setConnectivityMonitor(bool enabled, uint32_t checkIntervalMs, uint32_t internetTimeoutMs)
     {
         monitor_.configure(enabled, checkIntervalMs, internetTimeoutMs);
-        monitor_.startIfNeeded();
+        if (wifi_.isConnected()) monitor_.startIfNeeded();
     }
 
-    void EasyWiFiManager::onNoConnectivity(std::function<void()> cb, uint32_t delayMs)
+    void EasyWiFiManager::onNoConnectivity(std::function<void()> callback, uint32_t delayMs)
     {
-        monitor_.setOnNoConnectivity(std::move(cb), delayMs);
+        monitor_.setOnNoConnectivity(std::move(callback), delayMs);
     }
 
-    void ewm::EasyWiFiManager::setPortalUiConfig(const portal::PortalUiConfig& cfg)
+    void EasyWiFiManager::setPortalUiConfig(const portal::PortalUiConfig& config)
     {
-        portalUiCfgJson_ = cfg.toJson();
+        portalUiConfigJson_ = config.toJson();
     }
 
-    void ewm::EasyWiFiManager::setPortalUiConfigJson(const String& json)
+    void EasyWiFiManager::setPortalUiConfigJson(const std::string& json)
     {
-        portalUiCfgJson_ = json.length() ? json : "{}";
-    }
-
-    void EasyWiFiManager::begin(uint32_t connectTimeoutMs, uint32_t betweenRetryMs)
-    {
-        EWM_LOG("begin(): start");
-
-        store_.load(storage_);
-
-        for (auto &c : store_.list())
-            EWM_LOG("  ssid='%s' prio=%u last_ok=%u", c.ssid, (unsigned)c.priority, (unsigned)c.last_ok);
-
-        wifi_.initSta(hostname_);
-
-        bool connected = wifi_.tryConnectAll(
-            store_.list(),
-            connectTimeoutMs,
-            betweenRetryMs,
-            requireInternetOnConnect_,
-            probeHost_,
-            probePort_,
-            15000,
-            [this](const Credential &used)
-            {
-                auto &hdr = store_.header();
-                auto &arr = store_.data();
-                for (size_t i = 0; i < hdr.count && i < arr.size(); ++i)
-                {
-                    if (strncmp(arr[i].ssid, used.ssid, sizeof(used.ssid)) == 0)
-                    {
-                        arr[i].last_ok = nowSeconds_();
-                        store_.save(storage_);
-                        break;
-                    }
-                }
-
-                if (onConnectCb_)
-                    onConnectCb_(WiFi.localIP());
-            });
-
-        EWM_LOG("tryConnectAll() => %s", connected ? "CONNECTED" : "FAILED");
-
-        if (!connected)
-        {
-            EWM_LOG("No known network worked -> starting config portal (AP='%s')", apSsid_.c_str());
-            startConfigPortal();
-        }
-
-        ensureAPState_();
-        monitor_.startIfNeeded();
-
-        EWM_LOG("begin(): end");
+        portalUiConfigJson_ = json.empty() ? "{}" : json;
     }
 }

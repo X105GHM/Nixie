@@ -1,4 +1,5 @@
 #include "ClockControl.hpp"
+#include "Config/Secrets.hpp"
 
 ClockControl::ClockControl(NTPClient &ntp, HSS &hss) noexcept
     : ntpClient(ntp),
@@ -22,7 +23,7 @@ void ClockControl::timeCycle() noexcept
     {
         if (!ntpClient.getTime(timeInfo))
         {
-            Logger::log(LoggerType::TIME, F("Fehler: Zeit nicht verfügbar"));
+            Logger::log(LoggerType::TIME, "Fehler: Zeit nicht verfügbar");
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
@@ -31,6 +32,7 @@ void ClockControl::timeCycle() noexcept
         if (nowTime != prevTime)
         {
             prevTime = nowTime;
+            const auto textConfig = Globals::getTextConfig();
 
             static int currentHour = -1;
             static int cricketTriggerMinute1 = -1;
@@ -86,8 +88,8 @@ void ClockControl::timeCycle() noexcept
                 timeInfo.tm_min == cricketTriggerMinute2) && timeInfo.tm_sec == 0 && timeInfo.tm_min != lastCricketMinute)
             {
                 lastCricketMinute = timeInfo.tm_min;
-                Logger::log(LoggerType::TIME, F("Cricket chirping triggered"));
-                buzzer.playCricketSound();
+                Logger::log(LoggerType::TIME, "Cricket chirping triggered");
+                buzzer.startCricketInTask();
             }
 
             if (Globals::timeLimitEnabled)
@@ -98,7 +100,8 @@ void ClockControl::timeCycle() noexcept
 
                 if (!ntpClient.isWithinTimeLimit(timeInfo))
                 {
-                    Logger::log(LoggerType::TIME, "Time outside allowed range (%s - %s)", Globals::timeLimitFrom.c_str(), Globals::timeLimitTo.c_str());
+                    Logger::log(LoggerType::TIME, "Time outside allowed range (%s - %s)",
+                                textConfig.timeLimitFrom.c_str(), textConfig.timeLimitTo.c_str());
                     vTaskDelay(pdMS_TO_TICKS(200));
                     inTime = false;
                     continue;
@@ -142,14 +145,14 @@ void ClockControl::timeCycle() noexcept
 
             if (timeInfo.tm_min % 10 == 9 && timeInfo.tm_sec >= 50 && timeInfo.tm_sec < 55 && displayEnabled && Globals::loadDetected)
             {
-                Logger::log(LoggerType::TIME, F("Displaying Date"));
+                Logger::log(LoggerType::TIME, "Displaying Date");
                 displayDate();
                 vTaskDelay(pdMS_TO_TICKS(5000));
             }
             else if (((timeInfo.tm_min == 57 && timeInfo.tm_sec == 15) || (timeInfo.tm_min == 27 && timeInfo.tm_sec == 15)) && 
                         displayEnabled && Globals::loadDetected && !(Globals::noACPatNight && isNightTime))
             {
-                Logger::log(LoggerType::TIME, F("Running ACP"));
+                Logger::log(LoggerType::TIME, "Running ACP");
                 digits = 0;
                 (void)hssCtrl.enable190();
                 vTaskDelay(pdMS_TO_TICKS(10));
@@ -166,7 +169,7 @@ void ClockControl::timeCycle() noexcept
                 WeatherClient weather(std::string(OPENWEATHER_API_KEY));
 
                 zipMaskingEnabled = true;
-                digits = Globals::zipCode.empty() ? 0 : std::stoi(Globals::zipCode)*10;
+                digits = textConfig.zipCode.empty() ? 0 : std::stoi(textConfig.zipCode) * 10;
                 vTaskDelay(pdMS_TO_TICKS(4000));
                 displayWeather();
                 tempMaskingEnabled = true;

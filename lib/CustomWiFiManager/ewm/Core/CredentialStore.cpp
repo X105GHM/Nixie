@@ -1,4 +1,5 @@
 #include "ewm/Core/CredentialStore.hpp"
+#include <algorithm>
 #include <cstring>
 
 namespace ewm
@@ -42,16 +43,16 @@ namespace ewm
         return v;
     }
 
-    bool CredentialStore::addOrUpdate(CredentialStorage &storage, const String &ssid, const String &password, uint8_t priority)
+    bool CredentialStore::addOrUpdate(CredentialStorage &storage, const std::string &ssid, const std::string &password, uint8_t priority)
     {
-        if (ssid.length() == 0 || ssid.length() > 32 || password.length() > 64)
+        if (ssid.empty() || ssid.length() > 32 || password.length() > 64)
             return false;
 
         for (size_t i = 0; i < hdr_.count && i < creds_.size(); ++i)
         {
             if (ssid == creds_[i].ssid)
             {
-                if (password.length() > 0)
+                if (!password.empty())
                 {
                     strncpy(creds_[i].password, password.c_str(), sizeof(creds_[i].password) - 1);
                     creds_[i].password[sizeof(creds_[i].password) - 1] = '\0';
@@ -86,7 +87,7 @@ namespace ewm
         return save(storage);
     }
 
-    bool CredentialStore::remove(CredentialStorage &storage, const String &ssid)
+    bool CredentialStore::remove(CredentialStorage &storage, const std::string &ssid)
     {
         for (size_t i = 0; i < hdr_.count && i < creds_.size(); ++i)
         {
@@ -114,7 +115,7 @@ namespace ewm
         return false;
     }
 
-    void CredentialStore::reorderBySsidList(CredentialStorage &storage, const std::vector<String> &order)
+    void CredentialStore::reorderBySsidList(CredentialStorage &storage, const std::vector<std::string> &order)
     {
         uint8_t p = 0;
         for (const auto &ss : order)

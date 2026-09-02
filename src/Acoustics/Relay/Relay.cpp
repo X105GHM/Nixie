@@ -4,7 +4,7 @@
 Relay::Relay() noexcept
     : state_(false)  
 {
-    gpio_pad_select_gpio(RELAY_PIN);
+    gpio_reset_pin(RELAY_PIN);
     gpio_set_direction(RELAY_PIN, GPIO_MODE_OUTPUT);
     setLevel(state_);
 }

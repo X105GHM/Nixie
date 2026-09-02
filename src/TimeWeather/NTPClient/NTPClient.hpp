@@ -1,8 +1,7 @@
 #pragma once
 
-#include <Arduino.h>
-#include <WiFi.h>
-#include <time.h>
+#include <ctime>
+#include <cstdint>
 #include <string>
 
 #include "Globals/Globals.hpp"

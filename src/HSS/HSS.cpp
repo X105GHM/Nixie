@@ -23,7 +23,7 @@ HSS::HSS() noexcept
     gpio_set_level(PIN_REDUCE, 0);
     gpio_set_level(PIN_HSS_LED, 0);
 
-    Logger::log(logType, F("GPIOs for HSS initialized (15, 7, 19, 42 = outputs, all LOW)"));
+    Logger::log(logType, "GPIOs for HSS initialized (15, 7, 19, 42 = outputs, all LOW)");
 }
 
 esp_err_t HSS::enable160() const noexcept
@@ -35,7 +35,7 @@ esp_err_t HSS::enable160() const noexcept
     err = gpio_set_level(PIN_HSS_LED, 1);
     if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO42 HIGH (%d)", err), err;
 
-    Logger::log(logType, F("160V enabled (GPIO15 = HIGH)"));
+    Logger::log(logType, "160V enabled (GPIO15 = HIGH)");
     return ESP_OK;
 }
 
@@ -48,7 +48,7 @@ esp_err_t HSS::disable160() const noexcept
     err = gpio_set_level(PIN_HSS_LED, 0);
     if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO42 LOW (%d)", err), err;
 
-    Logger::log(logType, F("160V disabled (GPIO15 = LOW)"));
+    Logger::log(logType, "160V disabled (GPIO15 = LOW)");
     return ESP_OK;
 }
 
@@ -58,7 +58,7 @@ esp_err_t HSS::enable190() const noexcept
     esp_err_t err = gpio_set_level(PIN_190V, 1);
     if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO7 HIGH (%d)", err), err;
 
-    Logger::log(logType, F("190V boost enabled (GPIO7 = HIGH)"));
+    Logger::log(logType, "190V boost enabled (GPIO7 = HIGH)");
     return ESP_OK;
 }
 
@@ -68,7 +68,7 @@ esp_err_t HSS::disable190() const noexcept
     esp_err_t err = gpio_set_level(PIN_190V, 0);
     if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO7 LOW (%d)", err), err;
 
-    Logger::log(logType, F("190V boost disabled (GPIO7 = LOW)"));
+    Logger::log(logType, "190V boost disabled (GPIO7 = LOW)");
     return ESP_OK;
 }
 
@@ -78,7 +78,7 @@ esp_err_t HSS::enableResistorReduction() const noexcept
     esp_err_t err = gpio_set_level(PIN_REDUCE, 1);
     if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO19 HIGH (%d)", err), err;
 
-    Logger::log(logType, F("Resistors reduced (GPIO19 = HIGH)"));
+    Logger::log(logType, "Resistors reduced (GPIO19 = HIGH)");
     return ESP_OK;
 }
 
@@ -88,17 +88,17 @@ esp_err_t HSS::disableResistorReduction() const noexcept
     esp_err_t err = gpio_set_level(PIN_REDUCE, 0);
     if (err != ESP_OK) return Logger::log(logType, "Failed to set GPIO19 LOW (%d)", err), err;
 
-    Logger::log(logType, F("Resistors restored (GPIO19 = LOW)"));
+    Logger::log(logType, "Resistors restored (GPIO19 = LOW)");
     return ESP_OK;
 }
 
 bool HSS::testLoad(const std::function<float()> &readVoltage, float thresholdV, uint32_t discriminationMs, uint32_t maxWaitMs) const noexcept
 {
-    Logger::log(logType, F("testLoad: charge to 160V, then measure discharge"));
+    Logger::log(logType, "testLoad: charge to 160V, then measure discharge");
 
     if (enable160() != ESP_OK)
     {
-        Logger::log(logType, F("testLoad aborted: failed to enable 160V"));
+        Logger::log(logType, "testLoad aborted: failed to enable 160V");
         return false;
     }
 

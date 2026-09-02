@@ -1,7 +1,5 @@
 #pragma once
 
-#include <Arduino.h>
-
 #include "esp_err.h"
 #include "esp_http_client.h"
 #include "esp_ota_ops.h"
@@ -64,7 +62,7 @@ public:
     bool startAsync(const std::string& baseUrl) noexcept;
     bool isRunning() const noexcept;
 
-    String getStatusJson() const noexcept;
+    std::string getStatusJson() const noexcept;
     void resetStatus() noexcept;
 
     esp_err_t checkAndUpdate(const std::string &baseUrl) noexcept;
@@ -91,7 +89,7 @@ private:
     Status getStatusCopy_() const noexcept;
 
     static const char* stageToString_(Stage s) noexcept;
-    static String escapeJson_(const std::string& s) noexcept;
+    static std::string escapeJson_(const std::string& s) noexcept;
     static int calcPercent_(size_t done, size_t total) noexcept;
 
 private:

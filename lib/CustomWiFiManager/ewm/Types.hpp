@@ -1,6 +1,7 @@
 #pragma once
-#include <Arduino.h>
 #include <array>
+#include <cstdint>
+#include <string>
 
 namespace ewm
 {
@@ -23,4 +24,24 @@ namespace ewm
     };
 
     using CredentialArray = std::array<Credential, 10>;
+
+    struct ScanResult
+    {
+        std::string ssid;
+        int rssi = -127;
+    };
+
+    enum class State : uint8_t
+    {
+        Uninitialized,
+        Initialization,
+        Connecting,
+        Connected,
+        Retry,
+        Portal,
+        Failed
+    };
+
+    static_assert(sizeof(StorageHeader) == 12, "Credential header layout must remain NVS-compatible");
+    static_assert(sizeof(Credential) == 104, "Credential layout must remain NVS-compatible");
 }

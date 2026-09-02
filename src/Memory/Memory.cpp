@@ -2,6 +2,8 @@
 #include "Logger/Logger.hpp"
 #include "Globals/Globals.hpp"
 
+#include <utility>
+
 namespace Memory
 {
     static PersistentStorage storage;
@@ -10,7 +12,8 @@ namespace Memory
     {
         esp_err_t err = nvs_flash_init();
         if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-            nvs_flash_erase();
+            err = nvs_flash_erase();
+            if (err != ESP_OK) return err;
             err = nvs_flash_init();
         }
         if (err != ESP_OK) {
@@ -34,7 +37,8 @@ namespace Memory
         size_t len = 0;
         if ((err = nvs_get_str(handle, KEY_STRING, nullptr, &len)) == ESP_OK) {
             std::string buf(len, '\0');
-            nvs_get_str(handle, KEY_STRING, buf.data(), &len);
+            err = nvs_get_str(handle, KEY_STRING, buf.data(), &len);
+            if (err != ESP_OK) { nvs_close(handle); return err; }
             stringValue_ = buf;
         }
 
@@ -48,18 +52,21 @@ namespace Memory
         esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
         if (err != ESP_OK) return err;
 
-        nvs_set_i32(handle, KEY_INT, intValue_);
-        nvs_set_i32(handle, KEY_FLOAT, static_cast<int32_t>(floatValue_ * 10000));
+        err = nvs_set_i32(handle, KEY_INT, intValue_);
+        if (err != ESP_OK) { nvs_close(handle); return err; }
+        err = nvs_set_i32(handle, KEY_FLOAT, static_cast<int32_t>(floatValue_ * 10000));
+        if (err != ESP_OK) { nvs_close(handle); return err; }
 
+        const auto textConfig = Globals::getTextConfig();
         std::string packed =
-            Globals::zipCode                                                    + "|" +
-            Globals::HardwareVersion                                            + "|" +
-            std::to_string(static_cast<int>(Globals::currentFirmwareTarget))    + "|" +
-            Globals::timeLimitFrom                                              + "|" +
-            Globals::timeLimitTo                                                + "|" +
-            std::to_string(brightness)                                          + "|" +
-            std::to_string(PWM_PERIOD_US)                                       + "|" +
-            std::to_string(static_cast<int>(Globals::currentTimeZone))          + "|" +
+            textConfig.zipCode                                                  + "|" +
+            textConfig.hardwareVersion                                          + "|" +
+            std::to_string(static_cast<int>(Globals::currentFirmwareTarget.load())) + "|" +
+            textConfig.timeLimitFrom                                            + "|" +
+            textConfig.timeLimitTo                                              + "|" +
+            std::to_string(brightness.load())                                   + "|" +
+            std::to_string(PWM_PERIOD_US.load())                                + "|" +
+            std::to_string(static_cast<int>(Globals::currentTimeZone.load()))   + "|" +
             std::to_string(Globals::brightnessNightStartHour)                   + "|" +
             std::to_string(Globals::brightnessNightEndHour)                     + "|" +
             std::to_string(Globals::brightnessDimStartHour)                     + "|" +
@@ -68,10 +75,10 @@ namespace Memory
             std::to_string(Globals::brightnessDimValue)                         + "|" +
             std::to_string(Globals::brightnessDayValue);
 
-        nvs_set_str(handle, KEY_STRING, packed.c_str());
-        nvs_commit(handle);
+        err = nvs_set_str(handle, KEY_STRING, packed.c_str());
+        if (err == ESP_OK) err = nvs_commit(handle);
         nvs_close(handle);
-        return ESP_OK;
+        return err;
     }
 
     esp_err_t PersistentStorage::saveEventLog(const std::string &json) noexcept
@@ -99,7 +106,8 @@ namespace Memory
         if ((err = nvs_get_str(handle, KEY_LAST_EVENT, nullptr, &len)) == ESP_OK) 
         {
             std::string buf(len, '\0');
-            nvs_get_str(handle, KEY_LAST_EVENT, buf.data(), &len);
+            err = nvs_get_str(handle, KEY_LAST_EVENT, buf.data(), &len);
+            if (err != ESP_OK) { nvs_close(handle); return err; }
             outJson = buf;
         }
         nvs_close(handle);
@@ -159,10 +167,12 @@ namespace Memory
         Globals::PWM_disabled            = false;
         Globals::noACPatNight            = false;
 
-        Globals::zipCode                 = "88457";
+        auto textConfig = Globals::getTextConfig();
+        textConfig.zipCode               = "88457";
         Globals::currentFirmwareTarget   = Globals::FirmwareTarget::NixieV6_std;
-        Globals::timeLimitFrom           = "06:00:00";
-        Globals::timeLimitTo             = "00:00:00";
+        textConfig.timeLimitFrom         = "06:00:00";
+        textConfig.timeLimitTo           = "00:00:00";
+        Globals::setTextConfig(std::move(textConfig));
 
         Globals::brightnessNightStartHour = 22;
         Globals::brightnessNightEndHour   = 6;
@@ -198,15 +208,16 @@ namespace Memory
 
         storage.setFloatValue(static_cast<float>(Globals::logConfig));
 
+        const auto textConfig = Globals::getTextConfig();
         std::string packed =
-            Globals::zipCode                                                    + "|" +
-            Globals::HardwareVersion                                            + "|" +
-            std::to_string(static_cast<int>(Globals::currentFirmwareTarget))    + "|" +
-            Globals::timeLimitFrom                                              + "|" +
-            Globals::timeLimitTo                                                + "|" +
-            std::to_string(brightness)                                          + "|" +
-            std::to_string(PWM_PERIOD_US)                                       + "|" +
-            std::to_string(static_cast<int>(Globals::currentTimeZone))          + "|" +
+            textConfig.zipCode                                                  + "|" +
+            textConfig.hardwareVersion                                          + "|" +
+            std::to_string(static_cast<int>(Globals::currentFirmwareTarget.load())) + "|" +
+            textConfig.timeLimitFrom                                            + "|" +
+            textConfig.timeLimitTo                                              + "|" +
+            std::to_string(brightness.load())                                   + "|" +
+            std::to_string(PWM_PERIOD_US.load())                                + "|" +
+            std::to_string(static_cast<int>(Globals::currentTimeZone.load()))   + "|" +
             std::to_string(Globals::brightnessNightStartHour)                   + "|" +
             std::to_string(Globals::brightnessNightEndHour)                     + "|" +
             std::to_string(Globals::brightnessDimStartHour)                     + "|" +
@@ -256,11 +267,13 @@ namespace Memory
 
         if (pos.size() >= 7)
         {
-            Globals::zipCode               = packed.substr(0, pos[0]);
-            Globals::HardwareVersion       = packed.substr(pos[0] + 1, pos[1] - pos[0] - 1);
+            auto textConfig = Globals::getTextConfig();
+            textConfig.zipCode             = packed.substr(0, pos[0]);
+            textConfig.hardwareVersion     = packed.substr(pos[0] + 1, pos[1] - pos[0] - 1);
             Globals::currentFirmwareTarget = static_cast<Globals::FirmwareTarget>(std::stoi(packed.substr(pos[1] + 1, pos[2] - pos[1] - 1)));
-            Globals::timeLimitFrom         = packed.substr(pos[2] + 1, pos[3] - pos[2] - 1);
-            Globals::timeLimitTo           = packed.substr(pos[3] + 1, pos[4] - pos[3] - 1);
+            textConfig.timeLimitFrom       = packed.substr(pos[2] + 1, pos[3] - pos[2] - 1);
+            textConfig.timeLimitTo         = packed.substr(pos[3] + 1, pos[4] - pos[3] - 1);
+            Globals::setTextConfig(std::move(textConfig));
             brightness                     = std::stoi(packed.substr(pos[4] + 1, pos[5] - pos[4] - 1));
             PWM_PERIOD_US                  = std::stoul(packed.substr(pos[5] + 1, pos[6] - pos[5] - 1));
             Globals::currentTimeZone       = static_cast<Globals::TimeZone>(std::stoi(packed.substr(pos[6] + 1, (pos.size() >= 8 ? pos[7] : packed.size()) - pos[6] - 1)));

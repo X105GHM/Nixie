@@ -1,236 +1,236 @@
 #include "ewm/Utils/MiniJson.hpp"
 
+#include <cstdint>
+
 namespace
 {
-    static void json_skip_ws(const String &b, int &i)
+    void jsonSkipWhitespace(const std::string &body, size_t &position)
     {
-        while (i < (int)b.length())
+        while (position < body.size())
         {
-            char c = b[i];
-            if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+            const char c = body[position];
+            if (c != ' ' && c != '\t' && c != '\r' && c != '\n')
             {
-                ++i;
-                continue;
+                break;
             }
-            break;
+            ++position;
         }
     }
 
-    static bool json_read_string(const String &b, int &i, String &out)
+    bool jsonReadString(const std::string &body, size_t &position, std::string &out)
     {
-        if (i >= (int)b.length() || b[i] != '"')
-            return false;
-        ++i;
-        out = "";
-
-        while (i < (int)b.length())
+        if (position >= body.size() || body[position] != '"')
         {
-            char c = b[i++];
+            return false;
+        }
+
+        ++position;
+        out.clear();
+        while (position < body.size())
+        {
+            const char c = body[position++];
             if (c == '"')
-                return true;
-            if (c == '\\')
             {
-                if (i >= (int)b.length())
-                    return false;
-                char e = b[i++];
-                switch (e)
-                {
-                case '"':
-                    out += '"';
-                    break;
-                case '\\':
-                    out += '\\';
-                    break;
-                case '/':
-                    out += '/';
-                    break;
-                case 'b':
-                    out += '\b';
-                    break;
-                case 'f':
-                    out += '\f';
-                    break;
-                case 'n':
-                    out += '\n';
-                    break;
-                case 'r':
-                    out += '\r';
-                    break;
-                case 't':
-                    out += '\t';
-                    break;
+                return true;
+            }
+            if (c != '\\')
+            {
+                out += c;
+                continue;
+            }
+
+            if (position >= body.size())
+            {
+                return false;
+            }
+
+            const char escaped = body[position++];
+            switch (escaped)
+            {
+                case '"': out += '"'; break;
+                case '\\': out += '\\'; break;
+                case '/': out += '/'; break;
+                case 'b': out += '\b'; break;
+                case 'f': out += '\f'; break;
+                case 'n': out += '\n'; break;
+                case 'r': out += '\r'; break;
+                case 't': out += '\t'; break;
                 case 'u':
                 {
-                    if (i + 4 > (int)b.length())
-                        return false;
-                    uint16_t v = 0;
-                    for (int k = 0; k < 4; k++)
+                    if (position + 4 > body.size())
                     {
-                        char h = b[i++];
-                        v <<= 4;
-                        if (h >= '0' && h <= '9')
-                            v |= (h - '0');
-                        else if (h >= 'a' && h <= 'f')
-                            v |= (h - 'a' + 10);
-                        else if (h >= 'A' && h <= 'F')
-                            v |= (h - 'A' + 10);
-                        else
-                            return false;
+                        return false;
                     }
-                    out += (v <= 0x7F) ? (char)v : '?';
+
+                    uint16_t value = 0;
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        const char hex = body[position++];
+                        value <<= 4;
+                        if (hex >= '0' && hex <= '9') value |= static_cast<uint16_t>(hex - '0');
+                        else if (hex >= 'a' && hex <= 'f') value |= static_cast<uint16_t>(hex - 'a' + 10);
+                        else if (hex >= 'A' && hex <= 'F') value |= static_cast<uint16_t>(hex - 'A' + 10);
+                        else return false;
+                    }
+                    out += value <= 0x7f ? static_cast<char>(value) : '?';
                     break;
                 }
                 default:
                     return false;
-                }
             }
-            else
-                out += c;
         }
         return false;
+    }
+
+    bool findValue(const std::string &body, const char *key, size_t &position)
+    {
+        if (!key)
+        {
+            return false;
+        }
+
+        const std::string quotedKey = "\"" + std::string(key) + "\"";
+        position = body.find(quotedKey);
+        if (position == std::string::npos)
+        {
+            return false;
+        }
+
+        position = body.find(':', position + quotedKey.size());
+        if (position == std::string::npos)
+        {
+            return false;
+        }
+
+        ++position;
+        jsonSkipWhitespace(body, position);
+        return true;
     }
 }
 
 namespace ewm::utils
 {
-    bool json_get_string(const String &b, const char *key, String &out)
+    bool json_get_string(const std::string &body, const char *key, std::string &out)
     {
-        String k = String('"') + key + '"';
-        int p = b.indexOf(k);
-        if (p < 0)
-            return false;
-        p = b.indexOf(':', p + k.length());
-        if (p < 0)
-            return false;
-        ++p;
-        json_skip_ws(b, p);
-        return json_read_string(b, p, out);
+        size_t position = 0;
+        return findValue(body, key, position) && jsonReadString(body, position, out);
     }
 
-    bool json_get_int(const String &b, const char *key, int &out)
+    bool json_get_int(const std::string &body, const char *key, int &out)
     {
-        String k = String('"') + key + '"';
-        int p = b.indexOf(k);
-        if (p < 0)
-            return false;
-        p = b.indexOf(':', p + k.length());
-        if (p < 0)
-            return false;
-        ++p;
-        json_skip_ws(b, p);
-
-        bool neg = false;
-        if (p < (int)b.length() && b[p] == '-')
+        size_t position = 0;
+        if (!findValue(body, key, position))
         {
-            neg = true;
-            ++p;
+            return false;
         }
 
-        long v = 0;
-        bool any = false;
-        while (p < (int)b.length())
+        bool negative = false;
+        if (position < body.size() && body[position] == '-')
         {
-            char c = b[p];
-            if (c < '0' || c > '9')
-                break;
+            negative = true;
+            ++position;
+        }
+
+        long value = 0;
+        bool any = false;
+        while (position < body.size() && body[position] >= '0' && body[position] <= '9')
+        {
             any = true;
-            v = v * 10 + (c - '0');
-            ++p;
+            value = value * 10 + (body[position++] - '0');
         }
         if (!any)
+        {
             return false;
+        }
 
-        out = neg ? -(int)v : (int)v;
+        out = static_cast<int>(negative ? -value : value);
         return true;
     }
 
-    bool json_get_order_array(const String &b, std::vector<String> &order)
+    bool json_get_order_array(const std::string &body, std::vector<std::string> &order)
     {
         order.clear();
-        int p = b.indexOf("\"order\"");
-        if (p < 0)
-            return false;
-        p = b.indexOf('[', p);
-        if (p < 0)
-            return false;
-        ++p;
-
-        while (p < (int)b.length())
+        size_t position = body.find("\"order\"");
+        if (position == std::string::npos)
         {
-            json_skip_ws(b, p);
-            if (p < (int)b.length() && b[p] == ']')
-                return true;
+            return false;
+        }
 
-            String s;
-            if (!json_read_string(b, p, s))
-                return false;
-            order.push_back(s);
+        position = body.find('[', position);
+        if (position == std::string::npos)
+        {
+            return false;
+        }
+        ++position;
 
-            json_skip_ws(b, p);
-            if (p < (int)b.length() && b[p] == ',')
+        while (position < body.size())
+        {
+            jsonSkipWhitespace(body, position);
+            if (position < body.size() && body[position] == ']')
             {
-                ++p;
+                return true;
+            }
+
+            std::string entry;
+            if (!jsonReadString(body, position, entry))
+            {
+                return false;
+            }
+            order.push_back(std::move(entry));
+
+            jsonSkipWhitespace(body, position);
+            if (position < body.size() && body[position] == ',')
+            {
+                ++position;
                 continue;
             }
-            if (p < (int)b.length() && b[p] == ']')
+            if (position < body.size() && body[position] == ']')
+            {
                 return true;
+            }
+            return false;
         }
         return false;
     }
 
-    String json_escape(const String &in)
+    std::string json_escape(const std::string &input)
     {
-        String out;
-        out.reserve(in.length() + 8);
+        std::string output;
+        output.reserve(input.size() + 8);
 
-        auto hex = [](uint8_t v) -> char
+        auto hex = [](uint8_t value) -> char
         {
-            v &= 0x0F;
-            return (v < 10) ? char('0' + v) : char('A' + (v - 10));
+            value &= 0x0f;
+            return value < 10 ? static_cast<char>('0' + value) : static_cast<char>('A' + value - 10);
         };
 
-        for (int i = 0; i < (int)in.length(); ++i)
+        for (const char c : input)
         {
-            const char c = in[i];
             switch (c)
             {
-            case '\"':
-                out += "\\\"";
-                break;
-            case '\\':
-                out += "\\\\";
-                break;
-            case '\b':
-                out += "\\b";
-                break;
-            case '\f':
-                out += "\\f";
-                break;
-            case '\n':
-                out += "\\n";
-                break;
-            case '\r':
-                out += "\\r";
-                break;
-            case '\t':
-                out += "\\t";
-                break;
-            default:
-            {
-                const uint8_t u = (uint8_t)c;
-                if (u < 0x20)
+                case '"': output += "\\\""; break;
+                case '\\': output += "\\\\"; break;
+                case '\b': output += "\\b"; break;
+                case '\f': output += "\\f"; break;
+                case '\n': output += "\\n"; break;
+                case '\r': output += "\\r"; break;
+                case '\t': output += "\\t"; break;
+                default:
                 {
-                    out += "\\u00";
-                    out += hex(u >> 4);
-                    out += hex(u);
+                    const auto value = static_cast<uint8_t>(c);
+                    if (value < 0x20)
+                    {
+                        output += "\\u00";
+                        output += hex(value >> 4);
+                        output += hex(value);
+                    }
+                    else
+                    {
+                        output += c;
+                    }
                 }
-                else
-                {
-                    out += c;
-                }
-            }
             }
         }
-        return out;
+        return output;
     }
 }

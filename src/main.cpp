@@ -1,6 +1,9 @@
-#include <WiFi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "esp_system.h"
+#include <new>
 
 #include "Logger/Logger.hpp"
 #include "WiFiConnector/WiFiConnector.hpp"
@@ -18,8 +21,28 @@
 #include "OTA/OTA.hpp"
 #include "Globals/SharedObjects.hpp"
 #include "StatsMonitor/StatsMonitor.hpp"
+#include "Diagnostics/ResetDiagnostics.hpp"
 
 static constexpr LoggerType LOGTYPE = LoggerType::GENERAL;
+static constexpr uint32_t TIME_SYNC_TASK_STACK_BYTES = 6144;
+static constexpr uint32_t CLOCK_TASK_STACK_BYTES = 8192;
+static constexpr uint32_t BUTTON_TASK_STACK_BYTES = 6144;
+static constexpr uint32_t BROWNOUT_STARTER_TASK_STACK_BYTES = 6144;
+static constexpr uint32_t HTTP_START_TASK_STACK_BYTES = 16384;
+static constexpr uint32_t STATS_TASK_STACK_BYTES = 8192;
+static constexpr uint32_t DISPLAY_TASK_STACK_BYTES = 8192;
+
+static bool createPinnedTask(TaskFunction_t task, const char* name, uint32_t stackDepth, void* parameter, UBaseType_t priority, TaskHandle_t* handle, BaseType_t core)
+{
+    const BaseType_t result = xTaskCreatePinnedToCore(
+        task, name, stackDepth, parameter, priority, handle, core);
+    if (result != pdPASS)
+    {
+        Logger::log(LOGTYPE, "Failed to create task %s", name);
+        return false;
+    }
+    return true;
+}
 
 static void initTime() 
 {
@@ -39,19 +62,33 @@ static void buttonTask(void *pvParameters)
     }
 }
 
-static void httpTask(void *pvParameters) 
+static void httpStartTask(void *pvParameters)
 {
+    wifiConnector.waitUntilApplicationNetworkReady();
     httpHandler.begin();
-    for (;;) 
-    {
-        httpHandler.handleClient();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+    Logger::log(
+        LOGTYPE,
+        "HTTPStart initialization returned, minimum free stack=%u bytes",
+        static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+    vTaskDelete(nullptr);
+}
+
+static void timeSyncTask(void *pvParameters)
+{
+    wifiConnector.waitUntilConnected();
+    initTime();
+    vTaskDelete(nullptr);
 }
 
 static void brownoutStarter(void *pvParameters) 
 {
-    brownoutInstance = new Brownout(supplyWatch, hssController, storage, 1000);
+    brownoutInstance = new (std::nothrow) Brownout(supplyWatch, hssController, storage, 1000);
+    if (!brownoutInstance)
+    {
+        Logger::log(LOGTYPE, "Brownout service allocation failed");
+        vTaskDelete(nullptr);
+        return;
+    }
     brownoutInstance->start();
     vTaskDelete(nullptr);
 }
@@ -68,19 +105,18 @@ static void statsTask(void *pvParameters)
     }
 }
 
-void setup() 
+extern "C" void app_main(void)
 {
-    Serial.begin(115200);
-    esp_log_level_set("*", ESP_LOG_ERROR); // ESP Logging unterdrücken
 
-    Logger::begin(Serial);
-    Logger::log(LOGTYPE, F("System start"));
+    esp_log_level_set("*", ESP_LOG_ERROR); // Suppress verbose ESP-IDF component logs.
 
-    psramInit();
+    Logger::begin();
+    Logger::log(LOGTYPE, "System start");
+    Logger::log(LOGTYPE, "ESP-IDF: %s", esp_get_idf_version());
 
-    if (psramFound())
+    const size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    if (psramTotal > 0)
     {
-        const size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
         const size_t psramFree  = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
 
         Logger::log(LOGTYPE, "PSRAM OK: total=%u bytes, free=%u bytes", static_cast<unsigned>(psramTotal), static_cast<unsigned>(psramFree));
@@ -101,52 +137,52 @@ void setup()
         Globals::applyLogConfig();
     }
 
-    WiFi.mode(WIFI_STA);
-    wifiConnector.connect();
+    ResetDiagnostics::instance().initialize();
 
-    initTime();
+    wifiConnector.connect();
+    ntpClient.applyTimeZone(Globals::getPosixTZ(Globals::currentTimeZone));
+    createPinnedTask(timeSyncTask, "TimeSync", TIME_SYNC_TASK_STACK_BYTES, nullptr, 1, nullptr, 0);
 
     displayEnabled = true;
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    xTaskCreatePinnedToCore(ClockControl::clockTask, "ClockTask", 4096, &clockControl, 2, &clockTaskHandle, 0);
-    Logger::log(LOGTYPE, F("ClockTask started"));
+    if (createPinnedTask(ClockControl::clockTask, "ClockTask", CLOCK_TASK_STACK_BYTES, &clockControl, 2, &clockTaskHandle, 0))
+        Logger::log(LOGTYPE, "ClockTask started");
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    xTaskCreatePinnedToCore(buttonTask, "ButtonTask", 4096, nullptr, 0, &buttonTaskHandle, 0);
-    Logger::log(LOGTYPE, F("ButtonTask started"));
+    if (createPinnedTask(buttonTask, "ButtonTask", BUTTON_TASK_STACK_BYTES, nullptr, 0, nullptr, 0))
+        Logger::log(LOGTYPE, "ButtonTask started");
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    xTaskCreatePinnedToCore(brownoutStarter, "BrownoutStarter", 2048, nullptr, 4, &brownoutTaskHandle, 0);
-    Logger::log(LOGTYPE, F("BrownoutStarter Task started"));
+    if (createPinnedTask(brownoutStarter, "BrownoutStarter", BROWNOUT_STARTER_TASK_STACK_BYTES, nullptr, 4, nullptr, 0))
+        Logger::log(LOGTYPE, "BrownoutStarter Task started");
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    xTaskCreatePinnedToCore(httpTask, "HTTPTask", 16384, nullptr, 1, &httpTaskHandle, 0);
-    Logger::log(LOGTYPE, F("HTTPTask started"));
+    if (createPinnedTask(
+            httpStartTask, "HTTPStart", HTTP_START_TASK_STACK_BYTES, nullptr, 1, nullptr, 0))
+        Logger::log(LOGTYPE, "HTTP start task created");
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    xTaskCreatePinnedToCore(statsTask, "StatsTask", 6144, nullptr, 1, nullptr, 0);
-    Logger::log(LOGTYPE, F("StatsTask started"));
+    if (createPinnedTask(statsTask, "StatsTask", STATS_TASK_STACK_BYTES, nullptr, 1, nullptr, 0))
+        Logger::log(LOGTYPE, "StatsTask started");
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    xTaskCreatePinnedToCore(displayDigitsTask, "DisplayDigits", 4096, nullptr, 20, &displayTaskHandle, 1);
-    Logger::log(LOGTYPE, F("DisplayDigits Task started"));
+    if (createPinnedTask(displayDigitsTask, "DisplayDigits", DISPLAY_TASK_STACK_BYTES, nullptr, 20, &displayTaskHandle, 1))
+        Logger::log(LOGTYPE, "DisplayDigits Task started");
 
     // Loadcheck
     {
         auto readVoltage = [](){ return supplyWatch.readUHSS(); };
         bool hasLoad = hssController.testLoad(readVoltage, 130.0f /*Threshold in Volt*/, 35 /*35 ms → schneller Abfall = Last*/, 80 /*80 ms → maximal warten*/);
         Globals::loadDetected = hasLoad;
-        Logger::log(LoggerType::HSS, hasLoad ? F("LoadTest: Load detected") : F("LoadTest: No load detected"));
+        Logger::log(LoggerType::HSS, hasLoad ? "LoadTest: Load detected" : "LoadTest: No load detected");
     }
 
-    vTaskDelete(NULL);
+    vTaskDelete(nullptr);
 }
-
-void loop() {}

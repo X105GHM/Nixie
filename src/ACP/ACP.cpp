@@ -1,14 +1,14 @@
 #include "ACP.hpp"
 
-bool runningACP1 = false;
-bool runningACP2 = false;
-bool ACP_enabled = false;
+std::atomic_bool runningACP1{false};
+std::atomic_bool runningACP2{false};
+std::atomic_bool ACP_enabled{false};
 
 void ACP() noexcept
 {
     mode_running.store(true, std::memory_order_relaxed);
     ACP_enabled = true;
-    uint8_t lastBrightness = brightness;
+    const uint8_t lastBrightness = static_cast<uint8_t>(brightness.load(std::memory_order_relaxed));
     brightness = 100;
 
     for (uint8_t number = 0; number <= 9; number++)

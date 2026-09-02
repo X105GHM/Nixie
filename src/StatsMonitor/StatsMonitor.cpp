@@ -1,4 +1,46 @@
 #include "StatsMonitor.hpp"
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+
+namespace
+{
+    class SemaphoreGuard
+    {
+    public:
+        explicit SemaphoreGuard(SemaphoreHandle_t mutex) noexcept : mutex_(mutex)
+        {
+            locked_ = mutex_ && xSemaphoreTake(mutex_, portMAX_DELAY) == pdTRUE;
+        }
+
+        ~SemaphoreGuard()
+        {
+            if (locked_) xSemaphoreGive(mutex_);
+        }
+
+        explicit operator bool() const noexcept { return locked_; }
+
+    private:
+        SemaphoreHandle_t mutex_{nullptr};
+        bool locked_{false};
+    };
+
+    void appendFormatted(std::string &target, const char *format, ...) noexcept
+    {
+        char buffer[128];
+        va_list args;
+        va_start(args, format);
+        const int length = std::vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+
+        if (length > 0)
+        {
+            target.append(buffer, static_cast<size_t>(std::min(length, static_cast<int>(sizeof(buffer) - 1))));
+        }
+    }
+}
+
+StatsMonitor::StatsMonitor() : mutex_(xSemaphoreCreateMutexStatic(&mutexStorage_)){}
 
 StatsMonitor &StatsMonitor::instance()
 {
@@ -16,17 +58,28 @@ float StatsMonitor::getTotalLoad() const
     return cpu_load_get_total();
 }
 
+StatsMonitor::LoadSnapshot StatsMonitor::getLoadSnapshot() const noexcept
+{
+    SemaphoreGuard guard(mutex_);
+    if (!guard) return {};
+    return {coreLoad0_, coreLoad1_, totalLoad_};
+}
+
 void StatsMonitor::update()
 {
-    coreLoad0_ = cpu_load_get_core(0);
-    coreLoad1_ = cpu_load_get_core(1);
-    totalLoad_ = 0.5f * (coreLoad0_ + coreLoad1_);
+    const float core0 = cpu_load_get_core(0);
+    const float core1 = cpu_load_get_core(1);
+    SemaphoreGuard guard(mutex_);
+    if (!guard) return;
+    coreLoad0_ = core0;
+    coreLoad1_ = core1;
+    totalLoad_ = 0.5f * (core0 + core1);
 }
 
 void StatsMonitor::logLoad()
 {
-    auto &sm = instance();
-    Logger::log(LoggerType::GENERAL, "Core0: %.1f%%  Core1: %.1f%%  Total: %.1f%%", sm.coreLoad0_, sm.coreLoad1_, sm.totalLoad_);
+    const auto load = instance().getLoadSnapshot();
+    Logger::log(LoggerType::GENERAL, "Core0: %.1f%%  Core1: %.1f%%  Total: %.1f%%", load.core0, load.core1, load.total);
 }
 
 uint32_t StatsMonitor::diffU32_(uint32_t now, uint32_t prev)
@@ -87,7 +140,7 @@ void StatsMonitor::refreshBaseline_(const std::vector<TaskStatus_t>& snap, uint3
     prevSampleUs_ = nowUs;
 }
 
-String StatsMonitor::buildIsoTimestampUtc_() const
+std::string StatsMonitor::buildIsoTimestampUtc_() const
 {
     time_t now = 0;
     time(&now);
@@ -97,11 +150,14 @@ String StatsMonitor::buildIsoTimestampUtc_() const
 
     char buf[32];
     strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmUtc);
-    return String(buf);
+    return buf;
 }
 
 void StatsMonitor::sampleTaskTimes(uint32_t window_ms, bool skipIdle)
 {
+    SemaphoreGuard guard(mutex_);
+    if (!guard) return;
+
     const int64_t nowUs = esp_timer_get_time();
 
     if (prevSampleUs_ != 0 && (nowUs - prevSampleUs_) < (int64_t)window_ms * 1000)
@@ -133,7 +189,9 @@ void StatsMonitor::sampleTaskTimes(uint32_t window_ms, bool skipIdle)
         return;
     }
 
-    update();
+    coreLoad0_ = cpu_load_get_core(0);
+    coreLoad1_ = cpu_load_get_core(1);
+    totalLoad_ = 0.5f * (coreLoad0_ + coreLoad1_);
 
     std::vector<TaskRow> rows;
     rows.reserve(snap.size());
@@ -143,7 +201,7 @@ void StatsMonitor::sampleTaskTimes(uint32_t window_ms, bool skipIdle)
     for (const auto& t : snap)
     {
         TaskRow row;
-        row.name = t.pcTaskName ? String(t.pcTaskName) : String("?");
+        row.name = t.pcTaskName ? t.pcTaskName : "?";
         row.core = (int)t.xCoreID;
         row.state = stateChar_(t.eCurrentState);
         row.priority = t.uxCurrentPriority;
@@ -185,18 +243,21 @@ void StatsMonitor::sampleTaskTimes(uint32_t window_ms, bool skipIdle)
     refreshBaseline_(snap, totalRunTime, nowUs);
 }
 
-String StatsMonitor::getTaskStatsJson(uint32_t top_n, bool skipIdle) const
+std::string StatsMonitor::getTaskStatsJson(uint32_t top_n, bool skipIdle) const
 {
-    String json;
+    SemaphoreGuard guard(mutex_);
+    if (!guard) return "{\"error\":\"stats unavailable\"}";
+
+    std::string json;
     json.reserve(4096);
 
     json += "{\n";
     json += "  \"timestamp\": \"" + buildIsoTimestampUtc_() + "\",\n";
-    json += "  \"window_ms\": " + String(lastWindowMs_) + ",\n";
+    appendFormatted(json, "  \"window_ms\": %u,\n", static_cast<unsigned>(lastWindowMs_));
     json += "  \"cpu\": {\n";
-    json += "    \"total_load_pct\": " + String(totalLoad_, 2) + ",\n";
-    json += "    \"core0_load_pct\": " + String(coreLoad0_, 2) + ",\n";
-    json += "    \"core1_load_pct\": " + String(coreLoad1_, 2) + "\n";
+    appendFormatted(json, "    \"total_load_pct\": %.2f,\n", totalLoad_);
+    appendFormatted(json, "    \"core0_load_pct\": %.2f,\n", coreLoad0_);
+    appendFormatted(json, "    \"core1_load_pct\": %.2f\n", coreLoad1_);
     json += "  },\n";
     json += "  \"tasks\": [\n";
 
@@ -211,13 +272,13 @@ String StatsMonitor::getTaskStatsJson(uint32_t top_n, bool skipIdle) const
 
         json += "    {\n";
         json += "      \"name\": \"" + r.name + "\",\n";
-        json += "      \"core\": " + String(r.core) + ",\n";
-        json += "      \"state\": \"" + String(r.state) + "\",\n";
-        json += "      \"priority\": " + String((uint32_t)r.priority) + ",\n";
-        json += "      \"stack_hwm_words\": " + String(r.stackHwm) + ",\n";
-        json += "      \"runtime_delta_us\": " + String(r.runtimeDeltaUs) + ",\n";
-        json += "      \"pct_total\": " + String(r.pctTotal, 2) + ",\n";
-        json += "      \"pct_core\": " + String(r.pctCore, 2) + "\n";
+        appendFormatted(json, "      \"core\": %d,\n", r.core);
+        appendFormatted(json, "      \"state\": \"%c\",\n", r.state);
+        appendFormatted(json, "      \"priority\": %u,\n", static_cast<unsigned>(r.priority));
+        appendFormatted(json, "      \"stack_hwm_words\": %u,\n", static_cast<unsigned>(r.stackHwm));
+        appendFormatted(json, "      \"runtime_delta_us\": %u,\n", static_cast<unsigned>(r.runtimeDeltaUs));
+        appendFormatted(json, "      \"pct_total\": %.2f,\n", r.pctTotal);
+        appendFormatted(json, "      \"pct_core\": %.2f\n", r.pctCore);
         json += "    }";
 
         ++written;

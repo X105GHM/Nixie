@@ -167,8 +167,10 @@
             <div class="graph-controls">
                 <label for="timeRange">Zeitraum:</label>
                 <select id="timeRange">
+                    <option value="10m">Letzte 10 Minuten</option>
                     <option value="1h">Letzte 1 Stunde</option>
                     <option value="6h">Letzte 6 Stunden</option>
+                    <option value="12h">Letzte 12 Stunden</option>
                     <option value="24h">Letzte 24 Stunden</option>
                     <option value="7d">Letzte 7 Tage</option>
                 </select>
@@ -564,6 +566,17 @@
         </section>
 
         <section id="info" class="tab-content">
+            <div class="reset-diagnostics-panel">
+                <div class="reset-diagnostics-header">
+                    <div>
+                        <h2>Neustart-Diagnose</h2>
+                        <p>Letzte Bootvorgänge, Resetursachen und Zustand unmittelbar vor dem Neustart.</p>
+                    </div>
+                    <button id="resetDiagnosticsRefresh" type="button">Aktualisieren</button>
+                </div>
+                <pre id="resetDiagnosticsOutput">Diagnosedaten werden geladen …</pre>
+            </div>
+
             <h2>Bedienungsanleitung – Nixie Clock V6 (PDF)</h2>
             <p>Die vollständige Bedienungsanleitung kann direkt im Browser angezeigt oder heruntergeladen werden:</p>
 

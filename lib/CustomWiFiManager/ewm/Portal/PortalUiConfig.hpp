@@ -1,15 +1,15 @@
 #pragma once
-#include <Arduino.h>
 #include <stdint.h>
+#include <string>
 
 namespace ewm::portal
 {
     struct PortalUiFinish
     {
         bool redirect{false};
-        String redirectUrl{};
+        std::string redirectUrl{};
         bool closeTab{false};
-        String closeMode{"blank"};
+        std::string closeMode{"blank"};
         uint32_t finishDelayMs{250};
         bool countdownAutoFinish{false};
         uint32_t countdownThresholdMs{1200};
@@ -25,9 +25,9 @@ namespace ewm::portal
 
     struct PortalUiConfig
     {
-        String mdnsHost{};
+        std::string mdnsHost{};
         PortalUiFinish finish{};
         PortalUiTiming timing{};
-        String toJson() const;
+        std::string toJson() const;
     };
 }

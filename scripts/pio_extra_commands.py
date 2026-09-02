@@ -15,7 +15,7 @@ env_package_ota = env.AddCustomTarget(   # type: ignore
     name        = 'package_ota',
     dependencies= [],
     actions     = [f"{python_exe} {ota_packager_script}"],
-    title       = '📦 Baue OTA-Paket'
+    title       = 'Baue OTA-Paket'
 )
 AlwaysBuild(env_package_ota)
 
@@ -28,23 +28,26 @@ def build_bins(source, target, env):
     progname = env.subst("$PROGNAME")
     firmware_src = os.path.join(build_dir, f"{progname}.bin")
     spiffs_src = os.path.join(build_dir, "spiffs.bin")
-    out_dir = os.path.join(project_dir, "bin")
+    local_secrets = os.path.join(project_dir, "src", "Config", "LocalSecrets.hpp")
+    out_dir = os.path.join(project_dir, "private_bin" if os.path.exists(local_secrets) else "bin")
     os.makedirs(out_dir, exist_ok=True)
+    if os.path.exists(local_secrets):
+        print("Lokale Secret-Konfiguration erkannt: Build-Artefakte werden nur nach private_bin/ geschrieben.")
     # Prüfen, ob Dateien existieren
     if not os.path.exists(firmware_src):
-        print(f"❌ {firmware_src} nicht gefunden")
+        print(f"FEHLER: {firmware_src} nicht gefunden")
         return
     if not os.path.exists(spiffs_src):
-        print(f"❌ {spiffs_src} nicht gefunden")
+        print(f"FEHLER: {spiffs_src} nicht gefunden")
         return
     shutil.copy(firmware_src, os.path.join(out_dir, "firmware.bin"))
     shutil.copy(spiffs_src, os.path.join(out_dir, "spiffs.bin"))
-    print(f"🔧 Kopiert firmware.bin und spiffs.bin nach {out_dir}")
+    print(f"Kopiert firmware.bin und spiffs.bin nach {out_dir}")
 
 env_build_bins = env.AddCustomTarget(   # type: ignore
     name        = 'build_bins',
     dependencies= [alias_buildprog, alias_buildfs],
     actions     = [build_bins],
-    title       = '🔧 Erzeuge beide BINs und kopiere sie nach bin/'
+    title       = 'Erzeuge beide BINs und kopiere sie nach bin/'
 )
 AlwaysBuild(env_build_bins)
