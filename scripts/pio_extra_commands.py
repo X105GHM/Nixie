@@ -1,53 +1,14 @@
-import sys
-import os
-import shutil
-from SCons.Script import AlwaysBuild  # type: ignore
-
 Import("env")  # type: ignore
 
-global python_exe
-python_exe = sys.executable
-scripts_dir = os.path.join(env['PROJECT_DIR'], 'scripts')   # type: ignore
-version_script       = os.path.join(scripts_dir, 'get_software_version.py')
-ota_packager_script = os.path.join(scripts_dir, 'ota_packager.py')
-
-env_package_ota = env.AddCustomTarget(   # type: ignore
-    name        = 'package_ota',
-    dependencies= [],
-    actions     = [f"{python_exe} {ota_packager_script}"],
-    title       = 'Baue OTA-Paket'
-)
-AlwaysBuild(env_package_ota)
-
-alias_buildprog = env.Alias("buildprog")   # type: ignore
-alias_buildfs   = env.Alias("buildfs")   # type: ignore
-
-def build_bins(source, target, env):
-    project_dir = env['PROJECT_DIR']
-    build_dir = env.subst("$BUILD_DIR")
-    progname = env.subst("$PROGNAME")
-    firmware_src = os.path.join(build_dir, f"{progname}.bin")
-    spiffs_src = os.path.join(build_dir, "spiffs.bin")
-    local_secrets = os.path.join(project_dir, "src", "Config", "LocalSecrets.hpp")
-    out_dir = os.path.join(project_dir, "private_bin" if os.path.exists(local_secrets) else "bin")
-    os.makedirs(out_dir, exist_ok=True)
-    if os.path.exists(local_secrets):
-        print("Lokale Secret-Konfiguration erkannt: Build-Artefakte werden nur nach private_bin/ geschrieben.")
-    # Prüfen, ob Dateien existieren
-    if not os.path.exists(firmware_src):
-        print(f"FEHLER: {firmware_src} nicht gefunden")
-        return
-    if not os.path.exists(spiffs_src):
-        print(f"FEHLER: {spiffs_src} nicht gefunden")
-        return
-    shutil.copy(firmware_src, os.path.join(out_dir, "firmware.bin"))
-    shutil.copy(spiffs_src, os.path.join(out_dir, "spiffs.bin"))
-    print(f"Kopiert firmware.bin und spiffs.bin nach {out_dir}")
-
-env_build_bins = env.AddCustomTarget(   # type: ignore
-    name        = 'build_bins',
-    dependencies= [alias_buildprog, alias_buildfs],
-    actions     = [build_bins],
-    title       = 'Erzeuge beide BINs und kopiere sie nach bin/'
-)
-AlwaysBuild(env_build_bins)
+# ota_packager.py attaches packaging to the filesystem build, which depends on
+# the firmware. Both targets use that same build graph and publish to bin/.
+for name, title in (
+    ("package_ota", "Baue Firmware, SPIFFS und OTA-Paket nach bin/"),
+    ("build_bins", "Erzeuge beide BINs und OTA-Manifest nach bin/"),
+):
+    env.AddCustomTarget(  # type: ignore
+        name=name,
+        dependencies=[env.Alias("buildprog")],  # type: ignore
+        actions=[],
+        title=title,
+    )

@@ -815,26 +815,12 @@ esp_err_t OTAManager::checkAndUpdate(const std::string &baseUrl) noexcept
         return ESP_FAIL;
     }
 
-    const esp_partition_t* running = esp_ota_get_running_partition();
-    esp_app_desc_t desc{};
-
-    const char* runningVersion = "";
-    if (esp_ota_get_partition_description(running, &desc) == ESP_OK)
-    {
-        runningVersion = desc.version;
-    }
-    else
-    {
-        Logger::log(LoggerType::OTA, "Could not read running partition description");
-    }
-
-    setVersions_(runningVersion, verOpt->c_str());
-
-    bool firmwareNeedsUpdate = true;
-    if (*verOpt == runningVersion)
-    {
-        firmwareNeedsUpdate = false;
-    }
+    // Use the same source and normalization as the availability check. A
+    // different channel may intentionally offer an older version.
+    const std::string runningVersion = Globals::getTextConfig().softwareVersion;
+    setVersions_(runningVersion.c_str(), verOpt->c_str());
+    const bool firmwareNeedsUpdate =
+        normalizeVersion(*verOpt) != normalizeVersion(runningVersion);
 
     if (firmwareNeedsUpdate)
     {

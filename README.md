@@ -73,6 +73,29 @@ These photos show the assembled **Nixie V6** clock hardware.
   - timestamped OTA ZIP package (`ota_package_YYYYMMDD_HHMM.zip`)
 - Software version injection during build via PlatformIO extra script
 
+### V6.7 ESP-IDF Release / GitHub OTA
+
+`bin/version.txt` is the release version (starting with `Nixie_V.6.7.0`).
+Set it explicitly before a new release; builds do not increment it. The same
+value is compiled into the UI and the ESP-IDF application descriptor, and the
+packager checks it before writing `manifest.json`.
+
+Run `pio run` (or `pio run -t package_ota` / `pio run -t build_bins`) to build the
+firmware and SPIFFS and generate the complete OTA package in `bin/`. Firmware
+deliberately includes the OpenWeather API key from `src/Config/LocalSecrets.hpp`
+when configured; that source file remains ignored by Git.
+
+Publish `bin/firmware.bin`, `bin/spiffs.bin`, `bin/manifest.json` and
+`bin/version.txt` together in the GitHub branch selected on the clock:
+`V.6` for `NixieV6_std`, or `V.6_dev` for `NixieV6_dev`. The updater reads these
+raw branch files, not GitHub Release attachments or the ZIP. Both binaries are
+needed because the IDF firmware uses the updated SPIFFS web interface.
+
+The V6.6.x updater detects V6.7.0 as a different version. Update checks continue
+to allow switching to a different version in another channel, including an older
+one. The partition layout is unchanged from the last Arduino build. Validate the
+first migration on a V6.6.x clock with its existing bootloader before wider rollout.
+
 ## Firmware Architecture (High-Level)
 
 The firmware is organized into modules and services (for example: clock control, digits, Wi-Fi, HTTP, OTA, temperature, memory, brownout handling, and supply monitoring).

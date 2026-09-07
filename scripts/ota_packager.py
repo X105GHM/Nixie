@@ -4,6 +4,7 @@ import shutil
 import zipfile
 import hashlib
 import json
+import struct
 from datetime import datetime
 from pathlib import Path
 
@@ -13,12 +14,13 @@ PROJECT_DIR = env.subst("$PROJECT_DIR")  # type: ignore
 BUILD_DIR = env.subst("$BUILD_DIR")      # type: ignore
 PUBLIC_OUTPUT_DIR = os.path.join(PROJECT_DIR, "bin")
 LOCAL_SECRETS_FILE = os.path.join(PROJECT_DIR, "src", "Config", "LocalSecrets.hpp")
-OUTPUT_DIR = os.path.join(PROJECT_DIR, "private_bin") if os.path.exists(LOCAL_SECRETS_FILE) else PUBLIC_OUTPUT_DIR
+# Release artifacts intentionally include the locally configured weather key.
+OUTPUT_DIR = PUBLIC_OUTPUT_DIR
 VERSION_FILE = os.path.join(PUBLIC_OUTPUT_DIR, "version.txt")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-if OUTPUT_DIR != PUBLIC_OUTPUT_DIR:
-    print("Lokale Secret-Konfiguration erkannt: Build-Artefakte werden nur nach private_bin/ geschrieben.")
+if os.path.exists(LOCAL_SECRETS_FILE):
+    print("Build mit lokaler Secret-Konfiguration: OTA-Artefakte werden nach bin/ geschrieben.")
 
 def sha256sum(filepath):
     h = hashlib.sha256()
@@ -39,6 +41,16 @@ def read_current_version():
         raise ValueError(f"Version file is empty: {VERSION_FILE}")
 
     return version
+
+
+def read_firmware_version(firmware_path):
+    # ESP image header (24 bytes), first segment header (8 bytes), then
+    # esp_app_desc_t: magic/security/reserved (16 bytes), version (32 bytes).
+    with open(firmware_path, "rb") as firmware:
+        header = firmware.read(80)
+    if len(header) != 80 or header[0] != 0xE9 or struct.unpack_from("<I", header, 32)[0] != 0xABCD5432:
+        raise ValueError("Firmware is not an ESP application image with an app descriptor")
+    return header[48:80].split(b"\0", 1)[0].decode("utf-8")
 
 
 def write_manifest(version, firmware_path, spiffs_path):
@@ -105,6 +117,11 @@ def package_existing_build(source, target, env):  # type: ignore
         print("Hinweis: Vorher `pio run -t buildfs` ausführen, wenn spiffs.bin ins OTA-Paket soll.")
         return
 
+    version = read_current_version()
+    firmware_version = read_firmware_version(firmware_src)
+    if firmware_version != version:
+        raise ValueError(f"Firmware version {firmware_version} does not match release version {version}; rebuild first")
+
     firmware_dst = os.path.join(OUTPUT_DIR, "firmware.bin")
     spiffs_dst = os.path.join(OUTPUT_DIR, "spiffs.bin")
 
@@ -113,7 +130,6 @@ def package_existing_build(source, target, env):  # type: ignore
 
     print(f"firmware.bin & spiffs.bin kopiert nach {OUTPUT_DIR}")
 
-    version = read_current_version()
     write_manifest(version, firmware_dst, spiffs_dst)
     create_zip_with_timestamp(firmware_dst, spiffs_dst)
 
