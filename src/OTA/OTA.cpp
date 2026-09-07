@@ -7,6 +7,7 @@
 #undef INADDR_NONE
 #endif
 #include "esp_spiffs.h"
+#include "esp_heap_caps.h"
 #include <cstring>
 #include <memory>
 #include <new>
@@ -16,6 +17,31 @@ extern TaskHandle_t displayTaskHandle;
 namespace
 {
 constexpr size_t MAX_MANIFEST_SIZE = 4096;
+
+class DisplayPause
+{
+public:
+    DisplayPause() noexcept
+        : wasEnabled_(displayEnabled.exchange(false)), task_(displayTaskHandle)
+    {
+        if (task_)
+        {
+            Logger::log(LoggerType::OTA, "Suspending DisplayDigits task for OTA");
+            vTaskSuspend(task_);
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+    }
+
+    ~DisplayPause()
+    {
+        if (task_) vTaskResume(task_);
+        displayEnabled = wasEnabled_;
+    }
+
+private:
+    bool wasEnabled_;
+    TaskHandle_t task_;
+};
 }
 
 OTAManager& OTAManager::instance() noexcept
@@ -26,7 +52,7 @@ OTAManager& OTAManager::instance() noexcept
 
 OTAManager::OTAManager() noexcept
 {
-    statusMutex_ = xSemaphoreCreateMutex();
+    statusMutex_ = xSemaphoreCreateMutexStatic(&statusMutexStorage_);
     resetStatus();
 }
 
@@ -81,57 +107,56 @@ bool OTAManager::startAsync(const std::string& baseUrl) noexcept
         return false;
     }
 
-    if (isRunning())
+    // Claim the worker through the end of cleanup, even after a terminal
+    // status has been published. Concurrent requests cannot reuse its stack.
+    if (workerBusy_.exchange(true))
     {
         Logger::log(LoggerType::OTA, "OTA already running");
         return false;
     }
 
-    pendingBaseUrl_ = baseUrl;
-    resetStatus();
-
-    if (xSemaphoreTake(statusMutex_, pdMS_TO_TICKS(100)) == pdTRUE)
+    if (xSemaphoreTake(statusMutex_, pdMS_TO_TICKS(100)) != pdTRUE)
     {
-        status_.running = true;
-        status_.stage = Stage::Manifest;
-        status_.message = "OTA started";
-        status_.lastResult = ESP_OK;
-        xSemaphoreGive(statusMutex_);
-    }
-
-    BaseType_t ok = xTaskCreatePinnedToCore(
-        otaTaskEntry_,
-        "ota_task",
-        18432,
-        this,
-        3,
-        &otaTaskHandle_,
-        1
-    );
-
-    if (ok != pdPASS)
-    {
-        otaTaskHandle_ = nullptr;
-        setError_(ESP_FAIL, "Could not create OTA task");
+        workerBusy_ = false;
         return false;
     }
 
+    pendingBaseUrl_ = baseUrl;
+    status_ = Status{};
+    status_.running = true;
+    status_.stage = Stage::Manifest;
+    status_.message = "OTA started";
+    xSemaphoreGive(statusMutex_);
+
+    if (!otaTaskHandle_)
+    {
+        otaTaskHandle_ = xTaskCreateStaticPinnedToCore(
+            otaTaskEntry_, "ota_task", OTA_TASK_STACK_BYTES, this, 3,
+            otaTaskStack_, &otaTaskStorage_, 1);
+        if (!otaTaskHandle_)
+        {
+            setError_(ESP_FAIL, "Could not initialize reserved OTA task");
+            workerBusy_ = false;
+            return false;
+        }
+    }
+
+    xTaskNotifyGive(otaTaskHandle_);
     return true;
 }
 
 bool OTAManager::isRunning() const noexcept
 {
-    Status s = getStatusCopy_();
-    return s.running;
+    return workerBusy_.load();
 }
 
 void OTAManager::resetStatus() noexcept
 {
-    if (!statusMutex_) return;
+    if (!statusMutex_ || isRunning()) return;
 
     if (xSemaphoreTake(statusMutex_, pdMS_TO_TICKS(100)) == pdTRUE)
     {
-        status_ = Status{};
+        if (!isRunning()) status_ = Status{};
         xSemaphoreGive(statusMutex_);
     }
 }
@@ -205,6 +230,7 @@ int OTAManager::calcPercent_(size_t done, size_t total) noexcept
 std::string OTAManager::getStatusJson() const noexcept
 {
     Status s = getStatusCopy_();
+    s.running = isRunning();
 
     std::string json;
     json.reserve(512);
@@ -224,7 +250,12 @@ std::string OTAManager::getStatusJson() const noexcept
     json += "\"appBytesTotal\":";    json += std::to_string(s.appBytesTotal); json += ",";
     json += "\"spiffsProgressPct\":";json += std::to_string(s.spiffsProgressPct); json += ",";
     json += "\"spiffsBytesDone\":";  json += std::to_string(s.spiffsBytesDone); json += ",";
-    json += "\"spiffsBytesTotal\":"; json += std::to_string(s.spiffsBytesTotal);
+    json += "\"spiffsBytesTotal\":"; json += std::to_string(s.spiffsBytesTotal); json += ",";
+    const uint32_t internalCaps = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    json += "\"freeInternalHeap\":" + std::to_string(heap_caps_get_free_size(internalCaps)) + ",";
+    json += "\"largestInternalBlock\":" + std::to_string(heap_caps_get_largest_free_block(internalCaps)) + ",";
+    json += "\"otaStackBytes\":" + std::to_string(OTA_TASK_STACK_BYTES) + ",";
+    json += "\"otaStackMinimumFreeBytes\":" + std::to_string(stackMinimumFreeBytes_.load());
     json += "}";
 
     return json;
@@ -338,37 +369,25 @@ void OTAManager::markSpiffsUpdated_() noexcept
 void OTAManager::otaTaskEntry_(void* arg) noexcept
 {
     auto* self = static_cast<OTAManager*>(arg);
-    if (self)
+    for (;;)
     {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         self->otaTask_();
+        self->stackMinimumFreeBytes_ = uxTaskGetStackHighWaterMark(nullptr);
+        self->workerBusy_ = false;
     }
-    vTaskDelete(nullptr);
 }
 
 void OTAManager::otaTask_() noexcept
 {
-    bool displayWasSuspended = false;
-
-    if (displayTaskHandle != nullptr)
-    {
-        Logger::log(LoggerType::OTA, "Suspending DisplayDigits task for OTA");
-        vTaskSuspend(displayTaskHandle);
-        displayWasSuspended = true;
-        vTaskDelay(pdMS_TO_TICKS(20));
-    }
+    const DisplayPause displayPause;
 
     Logger::log(LoggerType::OTA, "SPIFFS for OTA unmounting...");
     const esp_err_t unmountResult = esp_vfs_spiffs_unregister(nullptr);
     if (unmountResult != ESP_OK)
     {
         Logger::log(LoggerType::OTA, "SPIFFS unmount failed: %s", esp_err_to_name(unmountResult));
-        if (displayWasSuspended && displayTaskHandle != nullptr)
-        {
-            vTaskResume(displayTaskHandle);
-        }
         setError_(unmountResult, "SPIFFS unmount failed");
-        displayEnabled = true;
-        otaTaskHandle_ = nullptr;
         return;
     }
 
@@ -385,26 +404,11 @@ void OTAManager::otaTask_() noexcept
     {
         Logger::log(LoggerType::OTA, "esp_vfs_spiffs_register failed after OTA: %s", esp_err_to_name(mountResult));
 
-        if (displayWasSuspended && displayTaskHandle != nullptr)
-        {
-            Logger::log(LoggerType::OTA, "Resuming DisplayDigits task after OTA failure");
-            vTaskResume(displayTaskHandle);
-        }
-
         setError_(ESP_FAIL, "SPIFFS remount failed");
-        otaTaskHandle_ = nullptr;
-        displayEnabled = true;
         return;
     }
 
     Logger::log(LoggerType::OTA, "SPIFFS remounted");
-
-    if (displayWasSuspended && displayTaskHandle != nullptr)
-    {
-        Logger::log(LoggerType::OTA, "Resuming DisplayDigits task after OTA");
-        vTaskResume(displayTaskHandle);
-        displayEnabled = true;
-    }
 
     if (result == ESP_OK)
     {
@@ -424,8 +428,6 @@ void OTAManager::otaTask_() noexcept
         setError_(result, "OTA failed");
     }
 
-    displayEnabled = true;
-    otaTaskHandle_ = nullptr;
 }
 
 std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &manifestUrl) noexcept

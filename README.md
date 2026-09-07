@@ -96,6 +96,14 @@ to allow switching to a different version in another channel, including an older
 one. The partition layout is unchanged from the last Arduino build. Validate the
 first migration on a V6.6.x clock with its existing bootloader before wider rollout.
 
+V6.7.1 reserves the OTA worker's 18 KB stack and task control block in internal
+RAM. The worker waits for notifications between updates, so starting OTA does
+not require a large contiguous heap allocation. The previous display state is
+restored after success or failure. `/api/v1/ota/status` also reports free internal
+heap, its largest free block and the OTA stack high-water mark (in bytes).
+Run `python test/ota_lifecycle_test.py` for host checks of start failures, busy
+requests, repeated updates and display/SPIFFS cleanup with a simulated transport.
+
 ## Firmware Architecture (High-Level)
 
 The firmware is organized into modules and services (for example: clock control, digits, Wi-Fi, HTTP, OTA, temperature, memory, brownout handling, and supply monitoring).

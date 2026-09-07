@@ -937,7 +937,6 @@ void HTTPHandler::begin() noexcept
         if (!executeCommand([&]() {
             const Globals::FirmwareTarget target = Globals::currentFirmwareTarget;
             const std::string baseUrl = Globals::getFirmwareUrl(target);
-            displayEnabled = false;
             if (baseUrl.empty())
             {
                 Logger::log(LOGTYPE, "OTA failed: invalid firmware target");
@@ -955,6 +954,7 @@ void HTTPHandler::begin() noexcept
             if (!ota.startAsync(baseUrl))
             {
                 Logger::log(LOGTYPE, "OTA task could not be started");
+                statusJson = ota.getStatusJson();
                 result = Result::StartFailed;
                 return;
             }
@@ -968,7 +968,7 @@ void HTTPHandler::begin() noexcept
         else if (result == Result::AlreadyRunning)
             server_.send(409, "application/json", "{\"started\":false,\"error\":\"OTA already running\"}");
         else if (result == Result::StartFailed)
-            server_.send(500, "application/json", "{\"started\":false,\"error\":\"Could not start OTA task\"}");
+            server_.send(500, "application/json", "{\"started\":false,\"error\":\"Could not start OTA task\",\"status\":" + statusJson + "}");
         else server_.send(202, "application/json", statusJson.c_str());
     });
 

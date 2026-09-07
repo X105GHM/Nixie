@@ -7,6 +7,7 @@
 #include "esp_crt_bundle.h"
 
 #include <optional>
+#include <atomic>
 #include <string>
 
 #include <freertos/FreeRTOS.h>
@@ -93,8 +94,16 @@ private:
     static int calcPercent_(size_t done, size_t total) noexcept;
 
 private:
+    static constexpr uint32_t OTA_TASK_STACK_BYTES = 18432;
+    // The singleton lives in internal BSS. Reserve the flash-writing task's
+    // stack before runtime heap fragmentation; PSRAM is not suitable here.
+    alignas(16) StackType_t otaTaskStack_[OTA_TASK_STACK_BYTES / sizeof(StackType_t)]{};
+    StaticTask_t otaTaskStorage_{};
+    StaticSemaphore_t statusMutexStorage_{};
     mutable SemaphoreHandle_t statusMutex_ = nullptr;
     TaskHandle_t otaTaskHandle_ = nullptr;
+    std::atomic_bool workerBusy_{false};
+    std::atomic_uint32_t stackMinimumFreeBytes_{0};
 
     Status status_;
     std::string pendingBaseUrl_;
