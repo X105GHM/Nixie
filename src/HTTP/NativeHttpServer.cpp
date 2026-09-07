@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "mbedtls/base64.h"
 
 namespace
@@ -97,15 +98,24 @@ bool NativeHttpServer::begin() noexcept
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = port_;
-    config.stack_size = 16384;
+    // Keep the native HTTP task below the large OTA worker reservation.  The
+    // previous 16 KiB stack could fail allocation after boot when internal
+    // heap blocks were fragmented.
+    config.stack_size = 12288;
     config.core_id = 0;
     config.max_uri_handlers = 12;
     config.lru_purge_enable = true;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.global_user_ctx = this;
 
-    if (httpd_start(&server_, &config) != ESP_OK)
+    const esp_err_t startResult = httpd_start(&server_, &config);
+    if (startResult != ESP_OK)
     {
+        ESP_LOGE(TAG, "httpd_start failed: %s (0x%x), stack=%u, free_internal=%u, largest_internal=%u",
+                 esp_err_to_name(startResult), static_cast<unsigned>(startResult),
+                 static_cast<unsigned>(config.stack_size),
+                 static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+                 static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
         server_ = nullptr;
         return false;
     }
@@ -117,6 +127,7 @@ bool NativeHttpServer::begin() noexcept
     {
         if (!registerWildcard(method))
         {
+            ESP_LOGE(TAG, "httpd_register_uri_handler failed for method %s", methodName(method));
             stop();
             return false;
         }
