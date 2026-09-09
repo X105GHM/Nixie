@@ -6,8 +6,8 @@
 #ifdef INADDR_NONE
 #undef INADDR_NONE
 #endif
-#include "esp_spiffs.h"
 #include "esp_heap_caps.h"
+#include "HTTP/OtaControl.hpp"
 #include <cstring>
 #include <memory>
 #include <new>
@@ -132,7 +132,7 @@ bool OTAManager::startAsync(const std::string& baseUrl) noexcept
     {
         otaTaskHandle_ = xTaskCreateStaticPinnedToCore(
             otaTaskEntry_, "ota_task", OTA_TASK_STACK_BYTES, this, 3,
-            otaTaskStack_, &otaTaskStorage_, 1);
+            otaTaskStack_, &otaTaskStorage_, 0);
         if (!otaTaskHandle_)
         {
             setError_(ESP_FAIL, "Could not initialize reserved OTA task");
@@ -142,6 +142,7 @@ bool OTAManager::startAsync(const std::string& baseUrl) noexcept
     }
 
     xTaskNotifyGive(otaTaskHandle_);
+    Logger::log(LoggerType::OTA, "OTA worker notification sent");
     return true;
 }
 
@@ -362,6 +363,10 @@ void OTAManager::markSpiffsUpdated_() noexcept
     if (xSemaphoreTake(statusMutex_, pdMS_TO_TICKS(100)) == pdTRUE)
     {
         status_.spiffsUpdated = true;
+        // The partition is written directly while the running web server is
+        // kept alive.  A reboot is required so SPIFFS can mount the new image
+        // from a clean state.
+        status_.rebootRequired = true;
         xSemaphoreGive(statusMutex_);
     }
 }
@@ -369,12 +374,14 @@ void OTAManager::markSpiffsUpdated_() noexcept
 void OTAManager::otaTaskEntry_(void* arg) noexcept
 {
     auto* self = static_cast<OTAManager*>(arg);
+    Logger::log(LoggerType::OTA, "OTA worker entered");
     for (;;)
     {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         self->otaTask_();
         self->stackMinimumFreeBytes_ = uxTaskGetStackHighWaterMark(nullptr);
         self->workerBusy_ = false;
+        Logger::log(LoggerType::OTA, "OTA worker finished; waiting for next request");
     }
 }
 
@@ -382,39 +389,15 @@ void OTAManager::otaTask_() noexcept
 {
     const DisplayPause displayPause;
 
-    Logger::log(LoggerType::OTA, "SPIFFS for OTA unmounting...");
-    const esp_err_t unmountResult = esp_vfs_spiffs_unregister(nullptr);
-    if (unmountResult != ESP_OK)
-    {
-        Logger::log(LoggerType::OTA, "SPIFFS unmount failed: %s", esp_err_to_name(unmountResult));
-        setError_(unmountResult, "SPIFFS unmount failed");
-        return;
-    }
-
+    setStageMessage_(Stage::Manifest, "Preparing OTA");
+    Logger::log(LoggerType::OTA, "OTA worker preparing; keeping HTTP/SPIFFS services alive");
     esp_err_t result = checkAndUpdate(pendingBaseUrl_);
-
-    Logger::log(LoggerType::OTA, "SPIFFS remounting...");
-    esp_vfs_spiffs_conf_t spiffsConfig{};
-    spiffsConfig.base_path = "/spiffs";
-    spiffsConfig.partition_label = nullptr;
-    spiffsConfig.max_files = 5;
-    spiffsConfig.format_if_mount_failed = true;
-    const esp_err_t mountResult = esp_vfs_spiffs_register(&spiffsConfig);
-    if (mountResult != ESP_OK && mountResult != ESP_ERR_INVALID_STATE)
-    {
-        Logger::log(LoggerType::OTA, "esp_vfs_spiffs_register failed after OTA: %s", esp_err_to_name(mountResult));
-
-        setError_(ESP_FAIL, "SPIFFS remount failed");
-        return;
-    }
-
-    Logger::log(LoggerType::OTA, "SPIFFS remounted");
 
     if (result == ESP_OK)
     {
         Status s = getStatusCopy_();
 
-        if (s.firmwareUpdated)
+        if (s.firmwareUpdated || s.spiffsUpdated)
         {
             setDone_("OTA finished, reboot required");
         }
@@ -442,6 +425,10 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
     config.cert_pem = nullptr;
     config.skip_cert_common_name_check = false;
     config.disable_auto_redirect = false;
+    config.timeout_ms = 15000;
+    config.buffer_size = 2048;
+    config.buffer_size_tx = 2048;
+    config.keep_alive_enable = false;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client)
@@ -450,9 +437,10 @@ std::optional<std::string> OTAManager::fetchManifestVersion(const std::string &m
         return std::nullopt;
     }
 
-    if (esp_http_client_open(client, 0) != ESP_OK)
+    const esp_err_t openResult = esp_http_client_open(client, 0);
+    if (openResult != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, "HTTP client could not open connection");
+        Logger::log(LoggerType::OTA, "HTTP client could not open connection: %s", esp_err_to_name(openResult));
         esp_http_client_cleanup(client);
         return std::nullopt;
     }
@@ -539,6 +527,10 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
     config.cert_pem = nullptr;
     config.skip_cert_common_name_check = false;
     config.disable_auto_redirect = false;
+    config.timeout_ms = 15000;
+    config.buffer_size = 2048;
+    config.buffer_size_tx = 2048;
+    config.keep_alive_enable = false;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client)
@@ -547,9 +539,10 @@ esp_err_t OTAManager::performFirmwareUpdate(const std::string &firmwareUrl) noex
         return ESP_FAIL;
     }
 
-    if (esp_http_client_open(client, 0) != ESP_OK)
+    const esp_err_t openResult = esp_http_client_open(client, 0);
+    if (openResult != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, "Error opening firmware URL");
+        Logger::log(LoggerType::OTA, "Error opening firmware URL: %s", esp_err_to_name(openResult));
         esp_http_client_cleanup(client);
         return ESP_FAIL;
     }
@@ -689,6 +682,10 @@ esp_err_t OTAManager::performSPIFFSUpdate(const std::string &spiffsUrl) noexcept
     config.cert_pem = nullptr;
     config.skip_cert_common_name_check = false;
     config.disable_auto_redirect = false;
+    config.timeout_ms = 15000;
+    config.buffer_size = 2048;
+    config.buffer_size_tx = 2048;
+    config.keep_alive_enable = false;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client)
@@ -697,9 +694,10 @@ esp_err_t OTAManager::performSPIFFSUpdate(const std::string &spiffsUrl) noexcept
         return ESP_FAIL;
     }
 
-    if (esp_http_client_open(client, 0) != ESP_OK)
+    const esp_err_t openResult = esp_http_client_open(client, 0);
+    if (openResult != ESP_OK)
     {
-        Logger::log(LoggerType::OTA, "Error opening SPIFFS URL");
+        Logger::log(LoggerType::OTA, "Error opening SPIFFS URL: %s", esp_err_to_name(openResult));
         esp_http_client_cleanup(client);
         return ESP_FAIL;
     }
@@ -839,6 +837,21 @@ esp_err_t OTAManager::checkAndUpdate(const std::string &baseUrl) noexcept
         setAppProgress_(100, 100, "Firmware up to date");
     }
 
-    Logger::log(LoggerType::OTA, "Starting SPIFFS download from %s", spiffsUrl.c_str());
-    return performSPIFFSUpdate(spiffsUrl);
+    Logger::log(LoggerType::OTA, "Suspending HTTP/SPIFFS before download from %s", spiffsUrl.c_str());
+    if (!HttpOtaControl::suspend())
+    {
+        Logger::log(LoggerType::OTA, "Could not suspend HTTP/SPIFFS for OTA");
+        (void)HttpOtaControl::resume();
+        return ESP_FAIL;
+    }
+
+    const esp_err_t spiffsResult = performSPIFFSUpdate(spiffsUrl);
+    const bool resumed = HttpOtaControl::resume();
+    if (!resumed)
+    {
+        Logger::log(LoggerType::OTA, "Could not resume HTTP/SPIFFS after OTA");
+        return ESP_FAIL;
+    }
+
+    return spiffsResult;
 }

@@ -8,6 +8,7 @@ class StaticFileServer
 {
 public:
     bool mount() noexcept;
+    bool unmount() noexcept;
     bool serve(httpd_req_t* request, const std::string& uri) const noexcept;
 
 private:

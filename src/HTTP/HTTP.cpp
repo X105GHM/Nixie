@@ -15,6 +15,7 @@ static constexpr LoggerType LOGTYPE = LoggerType::Webserver;
 extern Buzzer buzzer;
 extern AlarmClock alarmClock;
 extern Timer timer;
+extern HTTPHandler httpHandler;
 
 static const std::regex timeRegex(R"(^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$)");
 
@@ -145,6 +146,29 @@ constexpr int tzCount = sizeof(tzNames) / sizeof(tzNames[0]);
 HTTPHandler::HTTPHandler(int port) noexcept
     : server_(port), secureApi_(server_)
 {}
+
+bool HTTPHandler::suspendForOta() noexcept
+{
+    // New static-file requests are rejected while OTAManager reports running.
+    // StaticFileServer serializes the unmount with any request already in
+    // progress, so the HTTP API can remain alive for OTA status polling.
+    const bool unmounted = staticFiles_.unmount();
+    Logger::log(LOGTYPE, "SPIFFS suspended for OTA (unmounted=%s)", unmounted ? "true" : "false");
+    return unmounted;
+}
+
+bool HTTPHandler::resumeAfterOta() noexcept
+{
+    const bool mounted = staticFiles_.mount();
+    if (!mounted)
+    {
+        Logger::log(LOGTYPE, "SPIFFS remount failed after OTA");
+        return false;
+    }
+
+    Logger::log(LOGTYPE, "SPIFFS resumed after OTA; HTTP server stayed alive");
+    return true;
+}
 
 bool HTTPHandler::executeCommand(const std::function<void()>& action) noexcept
 {
@@ -1274,4 +1298,17 @@ void HTTPHandler::handleReset(std::string plannedReason) noexcept
         Logger::log(LOGTYPE, "Could not create delayed reset task; resetting immediately");
         esp_restart();
     }
+}
+
+namespace HttpOtaControl
+{
+bool suspend() noexcept
+{
+    return ::httpHandler.suspendForOta();
+}
+
+bool resume() noexcept
+{
+    return ::httpHandler.resumeAfterOta();
+}
 }

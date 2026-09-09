@@ -126,20 +126,6 @@ int main() {
     assert(!ota.isRunning() && !displayEnabled && createCalls == initialized);
 
     displayEnabled = true;
-    unmountResult = ESP_FAIL;
-    assert(ota.startAsync("unmount-failure"));
-    runWorker();
-    assert(downloads == 2 && displayEnabled && !ota.isRunning());
-    assert(suspends == resumes);
-
-    unmountResult = ESP_OK;
-    mountResult = ESP_FAIL;
-    assert(ota.startAsync("remount-failure"));
-    runWorker();
-    assert(displayEnabled && !ota.isRunning() && suspends == resumes);
-    assert(ota.getStatusJson().find("SPIFFS remount failed") != std::string::npos);
-
-    mountResult = ESP_OK;
     downloadResult = ESP_FAIL;
     assert(ota.startAsync("download-failure"));
     runWorker();

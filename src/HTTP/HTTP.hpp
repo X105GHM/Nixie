@@ -32,6 +32,8 @@ class HTTPHandler
 public:
     explicit HTTPHandler(int port = 80) noexcept;
     void begin() noexcept;
+    bool suspendForOta() noexcept;
+    bool resumeAfterOta() noexcept;
 
 private:
     NativeHttpServer server_;

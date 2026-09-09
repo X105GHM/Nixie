@@ -5,21 +5,62 @@
 #include <string_view>
 #include <sys/stat.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 #include "esp_spiffs.h"
 
 namespace
 {
     constexpr const char* BASE_PATH = "/spiffs";
+
+    SemaphoreHandle_t spiffsAccessMutex() noexcept
+    {
+        static StaticSemaphore_t storage{};
+        static SemaphoreHandle_t handle = xSemaphoreCreateMutexStatic(&storage);
+        return handle;
+    }
+
+    class SpiffsAccessGuard
+    {
+    public:
+        SpiffsAccessGuard() noexcept
+            : handle_(spiffsAccessMutex()), locked_(handle_ && xSemaphoreTake(handle_, portMAX_DELAY) == pdTRUE)
+        {}
+
+        ~SpiffsAccessGuard()
+        {
+            if (locked_) xSemaphoreGive(handle_);
+        }
+
+        bool locked() const noexcept { return locked_; }
+
+    private:
+        SemaphoreHandle_t handle_;
+        bool locked_;
+    };
 }
 
 bool StaticFileServer::mount() noexcept
 {
+    SpiffsAccessGuard guard;
+    if (!guard.locked()) return false;
+
     esp_vfs_spiffs_conf_t config{};
     config.base_path = BASE_PATH;
     config.partition_label = nullptr;
     config.max_files = 5;
     config.format_if_mount_failed = true;
     const esp_err_t result = esp_vfs_spiffs_register(&config);
+    return result == ESP_OK || result == ESP_ERR_INVALID_STATE;
+}
+
+bool StaticFileServer::unmount() noexcept
+{
+    SpiffsAccessGuard guard;
+    if (!guard.locked()) return false;
+
+    const esp_err_t result = esp_vfs_spiffs_unregister(nullptr);
     return result == ESP_OK || result == ESP_ERR_INVALID_STATE;
 }
 
@@ -49,6 +90,9 @@ const char* StaticFileServer::contentType(const std::string& path) noexcept
 
 bool StaticFileServer::serve(httpd_req_t* request, const std::string& uri) const noexcept
 {
+    SpiffsAccessGuard guard;
+    if (!guard.locked()) return false;
+
     if (!request || !safePath(uri)) return false;
 
     std::string path = uri;
