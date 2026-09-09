@@ -1,8 +1,7 @@
 #include "Relay.hpp"
 #include <cstring>
 
-Relay::Relay() noexcept
-    : state_(false)  
+Relay::Relay() noexcept : state_(false)  
 {
     gpio_reset_pin(RELAY_PIN);
     gpio_set_direction(RELAY_PIN, GPIO_MODE_OUTPUT);

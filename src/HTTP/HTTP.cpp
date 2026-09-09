@@ -106,8 +106,7 @@ static bool parseAlarmTime(std::string_view input, uint8_t& hour, uint8_t& minut
     }
 
     const auto isAsciiDigit = [](char c) { return c >= '0' && c <= '9'; };
-    if (!isAsciiDigit(input[0]) || !isAsciiDigit(input[1]) ||
-        !isAsciiDigit(input[3]) || !isAsciiDigit(input[4]))
+    if (!isAsciiDigit(input[0]) || !isAsciiDigit(input[1]) || !isAsciiDigit(input[3]) || !isAsciiDigit(input[4]))
     {
         return false;
     }

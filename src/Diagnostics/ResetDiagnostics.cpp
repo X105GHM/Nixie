@@ -252,8 +252,7 @@ void ResetDiagnostics::initialize() noexcept
     const bool nvsHealthy = saveResult == ESP_OK;
     if (!nvsHealthy)
     {
-        Logger::log(LoggerType::GENERAL, "%s: could not persist reset event: %s",
-                    TAG, esp_err_to_name(saveResult));
+        Logger::log(LoggerType::GENERAL, "%s: could not persist reset event: %s", TAG, esp_err_to_name(saveResult));
     }
 
     Snapshot next{};
@@ -294,8 +293,7 @@ void ResetDiagnostics::updateBreadcrumb(
     RtcBreadcrumb next = validBreadcrumb(rtcBreadcrumb) ? rtcBreadcrumb : RtcBreadcrumb{};
     if (epochSeconds > 0) next.lastEpochSeconds = epochSeconds;
     next.uptimeMs = static_cast<uint64_t>(esp_timer_get_time() / 1000);
-    next.freeInternalHeap = static_cast<uint32_t>(
-        heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    next.freeInternalHeap = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     next.freePsram = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     next.voltage12V = std::isfinite(voltage12V) ? voltage12V : 0.0f;
     next.historyState = historyState;

@@ -228,11 +228,11 @@ void AppState::initializeSystemInfo() noexcept
     systemInfo_.sketchSize = runningImageSize();
     const esp_partition_t *updatePartition = esp_ota_get_next_update_partition(nullptr);
     systemInfo_.sketchFreeSpace = updatePartition ? updatePartition->size : 0;
-#if defined(CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
+    #if defined(CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
     systemInfo_.cpuFrequencyMhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ;
-#else
+    #else
     systemInfo_.cpuFrequencyMhz = CONFIG_ESP32S3_DEFAULT_CPU_FREQ_MHZ;
-#endif
+    #endif
 }
 
 AppState::StatusSnapshot AppState::snapshot() const
@@ -266,9 +266,7 @@ AppState::StatusSnapshot AppState::captureSourceState() noexcept
     StatusSnapshot result{};
     result.capturedAtUs = esp_timer_get_time();
     const int64_t capturedEpochSeconds = static_cast<int64_t>(std::time(nullptr));
-    result.capturedAtEpochSeconds = chart_history::validEpoch(capturedEpochSeconds)
-        ? capturedEpochSeconds
-        : 0;
+    result.capturedAtEpochSeconds = chart_history::validEpoch(capturedEpochSeconds) ? capturedEpochSeconds : 0;
     if (!sourceMutex_ || xSemaphoreTake(sourceMutex_, portMAX_DELAY) != pdTRUE) return result;
 
     const auto load = StatsMonitor::instance().getLoadSnapshot();

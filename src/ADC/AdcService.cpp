@@ -72,8 +72,7 @@ esp_err_t AdcService::initializeLocked() noexcept
     }
 
     initializationResult_ = ESP_OK;
-    ESP_LOGI(TAG, "ADC1 oneshot initialized with %u calibrated channels",
-             static_cast<unsigned>(channels_.size()));
+    ESP_LOGI(TAG, "ADC1 oneshot initialized with %u calibrated channels", static_cast<unsigned>(channels_.size()));
     return ESP_OK;
 }
 
