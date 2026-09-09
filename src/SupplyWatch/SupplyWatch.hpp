@@ -58,11 +58,6 @@ private:
         return static_cast<float>(mv) / 1000.0f;
     }
 
-    float readCompensated(AdcService::Input input,
-                          float temperatureC,
-                          float rTop,
-                          float rBot,
-                          float driftMvPerC,
-                          float intercept) const noexcept;
+    float readCompensated(AdcService::Input input, float temperatureC, float rTop, float rBot, float driftMvPerC, float intercept) const noexcept;
     float readCurrent(float temperatureC) const noexcept;
 };

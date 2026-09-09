@@ -129,10 +129,7 @@ std::vector<ewm::Credential> WiFiConnector::getSavedNetworks() const noexcept
     return EasyWiFiManager::instance().listCredentials();
 }
 
-bool WiFiConnector::addOrUpdateNetwork(
-    const std::string& ssid,
-    const std::string& password,
-    uint8_t priority) noexcept
+bool WiFiConnector::addOrUpdateNetwork(const std::string& ssid, const std::string& password, uint8_t priority) noexcept
 {
     if (ssid.empty()) return false;
     const bool ok = EasyWiFiManager::instance().addCredential(ssid, password, priority);

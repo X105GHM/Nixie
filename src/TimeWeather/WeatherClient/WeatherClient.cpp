@@ -21,14 +21,12 @@ constexpr size_t MAX_RESPONSE_SIZE = 4096;
 
 bool isValidZip(const std::string& zip) noexcept
 {
-    return !zip.empty() && zip.size() <= 10 &&
-           std::all_of(zip.begin(), zip.end(), [](char value) { return value >= '0' && value <= '9'; });
+    return !zip.empty() && zip.size() <= 10 && std::all_of(zip.begin(), zip.end(), [](char value) { return value >= '0' && value <= '9'; });
 }
 
 bool isValidApiKey(const std::string& apiKey) noexcept
 {
-    return !apiKey.empty() && apiKey.size() <= 128 &&
-           std::all_of(apiKey.begin(), apiKey.end(), [](unsigned char value)
+    return !apiKey.empty() && apiKey.size() <= 128 && std::all_of(apiKey.begin(), apiKey.end(), [](unsigned char value)
            {
                return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') ||
                       (value >= '0' && value <= '9') || value == '-' || value == '_';
@@ -66,10 +64,7 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
     }
 
     SensitiveBuffer<256> query;
-    const int queryLength = std::snprintf(
-        query.value, sizeof(query.value),
-        "zip=%s,de&units=metric&appid=%s",
-        zip.c_str(), apiKey_.c_str());
+    const int queryLength = std::snprintf(query.value, sizeof(query.value), "zip=%s,de&units=metric&appid=%s", zip.c_str(), apiKey_.c_str());
     if (queryLength < 0 || static_cast<size_t>(queryLength) >= sizeof(query.value))
     {
         Logger::log(LoggerType::GENERAL, "WeatherClient: request configuration is too long");

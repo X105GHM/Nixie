@@ -107,8 +107,6 @@ bool OTAManager::startAsync(const std::string& baseUrl) noexcept
         return false;
     }
 
-    // Claim the worker through the end of cleanup, even after a terminal
-    // status has been published. Concurrent requests cannot reuse its stack.
     if (workerBusy_.exchange(true))
     {
         Logger::log(LoggerType::OTA, "OTA already running");
