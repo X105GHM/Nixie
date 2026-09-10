@@ -899,21 +899,34 @@ void HTTPHandler::begin() noexcept
             Logger::log(LOGTYPE, "HTTP /set/logConfig invalid value: %s", val.c_str());
             return;
         }
+        if (newConfig > Globals::LOG_CONFIG_MASK)
+        {
+            server_.send(400, "text/plain", "Invalid 'value' (log mask out of range)");
+            Logger::log(LOGTYPE, "HTTP /set/logConfig value out of range: %s", val.c_str());
+            return;
+        }
         const uint32_t config = static_cast<uint32_t>(newConfig);
         if (!enqueueCommand([config]() {
             Globals::logConfig = config;
             Globals::applyLogConfig();
+            Memory::saveGlobals();
         })) return;
 
-        std::string binStr;
-        binStr.reserve(9);
-        for (int i = 8; i >= 0; --i) 
+        std::string legacyBin;
+        legacyBin.reserve(9);
+        for (int i = 8; i >= 0; --i)
         {
-            binStr += ((config >> i) & 1) ? '1' : '0';
+            legacyBin += ((config >> i) & 1) ? '1' : '0';
         }
+        std::string extendedBin;
+        extendedBin.reserve(Globals::LOG_CONFIG_BITS);
+        for (int i = Globals::LOG_CONFIG_BITS - 1; i >= 0; --i)
+            extendedBin += ((config >> i) & 1) ? '1' : '0';
 
-        Logger::log(LOGTYPE, "logConfig set to %s and applied", binStr.c_str());
-        server_.send(200, "text/plain", std::string("logConfig=") + binStr);
+        Logger::log(LOGTYPE, "logConfig set to %s and applied", extendedBin.c_str());
+        // Keep the legacy response format for existing clients.  The complete
+        // mask is available through the status JSON as logConfig/logConfigExtendedBinary.
+        server_.send(200, "text/plain", std::string("logConfig=") + legacyBin);
     });
 
     server_.on("/set/firmware", HTTP_GET, [this]() noexcept 

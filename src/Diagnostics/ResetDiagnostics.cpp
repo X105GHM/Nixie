@@ -218,7 +218,7 @@ void ResetDiagnostics::initialize() noexcept
     {
         if (loadResult != ESP_ERR_NVS_NOT_FOUND && loadResult != ESP_ERR_NVS_NOT_INITIALIZED && loadResult != ESP_OK)
         {
-            Logger::log(LoggerType::GENERAL,
+            Logger::log(LoggerType::SYSTEM,
                         "%s: reset log unavailable or invalid (%s); starting a new log",
                         TAG, esp_err_to_name(loadResult));
         }
@@ -252,7 +252,7 @@ void ResetDiagnostics::initialize() noexcept
     const bool nvsHealthy = saveResult == ESP_OK;
     if (!nvsHealthy)
     {
-        Logger::log(LoggerType::GENERAL, "%s: could not persist reset event: %s", TAG, esp_err_to_name(saveResult));
+        Logger::log(LoggerType::SYSTEM, "%s: could not persist reset event: %s", TAG, esp_err_to_name(saveResult));
     }
 
     Snapshot next{};
@@ -276,7 +276,7 @@ void ResetDiagnostics::initialize() noexcept
         snapshot_ = next;
     }
 
-    Logger::log(LoggerType::GENERAL,
+    Logger::log(LoggerType::SYSTEM,
                 "%s: boot=%u reset=%s (%d), planned=%s, previous uptime=%llu ms",
                 TAG, static_cast<unsigned>(event.bootId), resetReasonName(currentReason),
                 static_cast<int>(currentReason),

@@ -1,7 +1,7 @@
 #include "AdcService.hpp"
 
 #include "esp_adc/adc_cali_scheme.h"
-#include "esp_log.h"
+#include "Logger/Logger.hpp"
 
 namespace
 {
@@ -30,7 +30,7 @@ esp_err_t AdcService::initializeLocked() noexcept
     initializationResult_ = adc_oneshot_new_unit(&unitConfig, &unit_);
     if (initializationResult_ != ESP_OK)
     {
-        ESP_LOGE(TAG, "adc_oneshot_new_unit failed: %s", esp_err_to_name(initializationResult_));
+        Logger::log(LoggerType::SENSOR, "adc_oneshot_new_unit failed: %s", esp_err_to_name(initializationResult_));
         return initializationResult_;
     }
 
@@ -42,7 +42,7 @@ esp_err_t AdcService::initializeLocked() noexcept
         if (result != ESP_OK || mappedUnit != ADC_UNIT_1 || mappedChannel != channel.channel)
         {
             initializationResult_ = result == ESP_OK ? ESP_ERR_INVALID_STATE : result;
-            ESP_LOGE(TAG, "GPIO%d ADC mapping mismatch", channel.gpio);
+            Logger::log(LoggerType::SENSOR, "GPIO%d ADC mapping mismatch", channel.gpio);
             return initializationResult_;
         }
 
@@ -53,7 +53,7 @@ esp_err_t AdcService::initializeLocked() noexcept
         if (result != ESP_OK)
         {
             initializationResult_ = result;
-            ESP_LOGE(TAG, "GPIO%d channel config failed: %s", channel.gpio, esp_err_to_name(result));
+            Logger::log(LoggerType::SENSOR, "GPIO%d channel config failed: %s", channel.gpio, esp_err_to_name(result));
             return initializationResult_;
         }
 
@@ -66,13 +66,13 @@ esp_err_t AdcService::initializeLocked() noexcept
         if (result != ESP_OK)
         {
             initializationResult_ = result;
-            ESP_LOGE(TAG, "GPIO%d calibration failed: %s", channel.gpio, esp_err_to_name(result));
+            Logger::log(LoggerType::SENSOR, "GPIO%d calibration failed: %s", channel.gpio, esp_err_to_name(result));
             return initializationResult_;
         }
     }
 
     initializationResult_ = ESP_OK;
-    ESP_LOGI(TAG, "ADC1 oneshot initialized with %u calibrated channels", static_cast<unsigned>(channels_.size()));
+    Logger::log(LoggerType::SENSOR, "ADC1 oneshot initialized with %u calibrated channels", static_cast<unsigned>(channels_.size()));
     return ESP_OK;
 }
 

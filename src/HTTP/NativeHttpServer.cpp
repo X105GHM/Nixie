@@ -4,7 +4,7 @@
 #include <cctype>
 #include <cstring>
 
-#include "esp_log.h"
+#include "Logger/Logger.hpp"
 #include "esp_heap_caps.h"
 #include "mbedtls/base64.h"
 
@@ -111,7 +111,7 @@ bool NativeHttpServer::begin() noexcept
     const esp_err_t startResult = httpd_start(&server_, &config);
     if (startResult != ESP_OK)
     {
-        ESP_LOGE(TAG, "httpd_start failed: %s (0x%x), stack=%u, free_internal=%u, largest_internal=%u",
+        Logger::log(LoggerType::Webserver, "httpd_start failed: %s (0x%x), stack=%u, free_internal=%u, largest_internal=%u",
                  esp_err_to_name(startResult), static_cast<unsigned>(startResult),
                  static_cast<unsigned>(config.stack_size),
                  static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
@@ -127,7 +127,7 @@ bool NativeHttpServer::begin() noexcept
     {
         if (!registerWildcard(method))
         {
-            ESP_LOGE(TAG, "httpd_register_uri_handler failed for method %s", methodName(method));
+            Logger::log(LoggerType::Webserver, "httpd_register_uri_handler failed for method %s", methodName(method));
             stop();
             return false;
         }

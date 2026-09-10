@@ -2,7 +2,7 @@
 
 #include <limits>
 
-#include "esp_log.h"
+#include "Logger/Logger.hpp"
 
 SupplyWatch::SupplyWatch() noexcept = default;
 
@@ -12,7 +12,7 @@ float SupplyWatch::readCompensated(AdcService::Input input, float temperatureC, 
     const esp_err_t result = AdcService::instance().read(input, measurement);
     if (result != ESP_OK)
     {
-        ESP_LOGE("SupplyWatch", "ADC read failed: %s", esp_err_to_name(result));
+        Logger::log(LoggerType::POWER, "ADC read failed: %s", esp_err_to_name(result));
         return std::numeric_limits<float>::quiet_NaN();
     }
     const float v_adc = mvToVolt(static_cast<uint32_t>(measurement.millivolts));
@@ -59,7 +59,7 @@ float SupplyWatch::readCurrent(float temperatureC) const noexcept
     const esp_err_t result = AdcService::instance().read(AdcService::Input::Current, measurement);
     if (result != ESP_OK)
     {
-        ESP_LOGE("SupplyWatch", "Current ADC read failed: %s", esp_err_to_name(result));
+        Logger::log(LoggerType::POWER, "Current ADC read failed: %s", esp_err_to_name(result));
         return std::numeric_limits<float>::quiet_NaN();
     }
     const float v_adc = mvToVolt(static_cast<uint32_t>(measurement.millivolts));

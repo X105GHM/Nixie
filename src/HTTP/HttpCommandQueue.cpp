@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "AppState/AppState.hpp"
-#include "esp_log.h"
+#include "Logger/Logger.hpp"
 
 namespace { constexpr const char* TAG = "HttpCommands"; }
 
@@ -85,7 +85,7 @@ void HttpCommandQueue::taskLoop()
             const bool succeeded = AppState::instance().executeMutation(*command.action);
             delete command.action;
             command.action = nullptr;
-            if (!succeeded) ESP_LOGE(TAG, "Command execution failed");
+            if (!succeeded) Logger::log(LoggerType::HTTP, "Command execution failed");
             if (command.executionSucceeded) *command.executionSucceeded = succeeded;
             if (command.completion) xSemaphoreGive(command.completion);
         }

@@ -18,6 +18,7 @@
 #include "SupplyWatch/SupplyWatch.hpp"
 #include "Timer/Timer.hpp"
 #include "WiFiConnector/WiFiConnector.hpp"
+#include "Logger/Logger.hpp"
 #include "esp_app_format.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
@@ -214,7 +215,7 @@ void AppState::initializeSystemInfo() noexcept
     }
     else
     {
-        ESP_LOGE(TAG, "Could not read base MAC: %s", esp_err_to_name(macResult));
+        Logger::log(LoggerType::SYSTEM, "Could not read base MAC: %s", esp_err_to_name(macResult));
     }
     systemInfo_.sdkVersion = esp_get_idf_version();
 
@@ -222,7 +223,7 @@ void AppState::initializeSystemInfo() noexcept
         esp_flash_default_chip, &systemInfo_.flashSize);
     if (flashResult != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not read flash size: %s", esp_err_to_name(flashResult));
+        Logger::log(LoggerType::SYSTEM, "Could not read flash size: %s", esp_err_to_name(flashResult));
     }
     systemInfo_.flashSpeed = configuredFlashSpeedHz();
     systemInfo_.sketchSize = runningImageSize();
@@ -300,11 +301,18 @@ AppState::StatusSnapshot AppState::captureSourceState() noexcept
     char alarmTimeBuffer[8]{};
     std::snprintf(alarmTimeBuffer, sizeof(alarmTimeBuffer), "%02u:%02u", alarmTime.hour, alarmTime.minute);
 
-    std::string logBits;
-    logBits.reserve(9);
+    // Keep the historic nine-bit field for older clients and expose the
+    // complete mask separately for clients that know the extended categories.
+    std::string legacyLogBits;
+    legacyLogBits.reserve(9);
     for (int bit = 8; bit >= 0; --bit)
 
-        logBits += ((logConfig >> bit) & 1U) ? '1' : '0';
+        legacyLogBits += ((logConfig >> bit) & 1U) ? '1' : '0';
+
+    std::string extendedLogBits;
+    extendedLogBits.reserve(Globals::LOG_CONFIG_BITS);
+    for (int bit = Globals::LOG_CONFIG_BITS - 1; bit >= 0; --bit)
+        extendedLogBits += ((logConfig >> bit) & 1U) ? '1' : '0';
 
     std::string json;
     json.reserve(2200);
@@ -353,7 +361,9 @@ AppState::StatusSnapshot AppState::captureSourceState() noexcept
     json += std::string("  \"manualBrightnessEnabled\": ") + (Globals::manualBrightnessEnabled ? "1" : "0") + ",\n";
     json += std::string("  \"WeatherUpdateEnabled\": ") + (Globals::WeatherUpdateEnabled ? "1" : "0") + ",\n";
     json += std::string("  \"cricketSoundEnabled\": ") + (Globals::cricketSoundEnabled ? "1" : "0") + ",\n";
-    json += "  \"logConfigBinary\": " + jsonString(logBits) + ",\n";
+    json += "  \"logConfig\": " + std::to_string(logConfig) + ",\n";
+    json += "  \"logConfigBinary\": " + jsonString(legacyLogBits) + ",\n";
+    json += "  \"logConfigExtendedBinary\": " + jsonString(extendedLogBits) + ",\n";
     json += std::string("  \"loadDetected\": ") + (result.loadDetected ? "1" : "0") + ",\n";
     json += "  \"Brightness\": " + std::to_string(brightnessValue) + ",\n";
     json += "  \"brightnessNightStartHour\": " + std::to_string(Globals::brightnessNightStartHour) + ",\n";
@@ -433,8 +443,8 @@ void AppState::taskLoop()
                 const UBaseType_t minimumFreeStack = uxTaskGetStackHighWaterMark(nullptr);
                 if (!stackBaselineLogged)
                 {
-                    ESP_LOGI(
-                        TAG,
+                    Logger::log(
+                        LoggerType::SYSTEM,
                         "AppTelemetry running; minimum free stack=%u bytes",
                         static_cast<unsigned>(minimumFreeStack));
                 }
@@ -442,8 +452,8 @@ void AppState::taskLoop()
                     minimumFreeStack < STACK_WARNING_BYTES &&
                     minimumFreeStack < lowestReportedStack)
                 {
-                    ESP_LOGW(
-                        TAG,
+                    Logger::log(
+                        LoggerType::SYSTEM,
                         "AppTelemetry stack reserve low: %u bytes",
                         static_cast<unsigned>(minimumFreeStack));
                 }

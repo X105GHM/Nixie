@@ -11,8 +11,9 @@
 
 #include "History/ChartHistory.hpp"
 #include "Diagnostics/ResetDiagnostics.hpp"
+#include "Globals/Globals.hpp"
 #include "cJSON.h"
-#include "esp_log.h"
+#include "Logger/Logger.hpp"
 
 namespace
 {
@@ -195,7 +196,7 @@ void SecureApi::handleHistory()
     httpd_req_t* request = server_.nativeRequest();
     if (!request)
     {
-        ESP_LOGE(TAG, "History request lost its native request context");
+        Logger::log(LoggerType::HTTP, "History request lost its native request context");
         return;
     }
 
@@ -206,7 +207,7 @@ void SecureApi::handleHistory()
     if (headerResult == ESP_OK) headerResult = httpd_resp_set_hdr(request, "X-Frame-Options", "DENY");
     if (headerResult != ESP_OK)
     {
-        ESP_LOGW(TAG, "Could not prepare history response: %s", esp_err_to_name(headerResult));
+        Logger::log(LoggerType::HTTP, "Could not prepare history response: %s", esp_err_to_name(headerResult));
         return;
     }
 
@@ -263,7 +264,7 @@ void SecureApi::handleHistory()
     ok = ok && appendMatrix("minimum", &chart_history::AggregateValue::minimum);
     ok = ok && appendMatrix("maximum", &chart_history::AggregateValue::maximum);
     ok = ok && writer.append("}") && writer.finish();
-    if (!ok) ESP_LOGW(TAG, "History response transmission failed");
+    if (!ok) Logger::log(LoggerType::HTTP, "History response transmission failed");
 }
 
 cJSON *SecureApi::parseJsonRequest()
@@ -521,9 +522,11 @@ void SecureApi::handleCommand()
     else if (command == "logging.set")
     {
         int64_t value = 0;
+        // The historic mask range ("value", 0, 511) remains valid; the
+        // extended mask accepts the additional category bits as well.
         if (!hasOnlyFields(root, {"command", "value"}) ||
-            !getRequiredInteger(root, "value", 0, 511, value))
-            sendError(400, "invalid_fields", "value must be an integer from 0 to 511");
+            !getRequiredInteger(root, "value", 0, Globals::LOG_CONFIG_MASK, value))
+            sendError(400, "invalid_fields", "value must be an integer from 0 to 65535");
         else
             (void)invoke("/set/logConfig", HTTP_GET, {{"value", std::to_string(value)}});
     }

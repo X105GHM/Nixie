@@ -14,6 +14,7 @@
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "Logger/Logger.hpp"
 
 namespace
 {
@@ -54,12 +55,12 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
 {
     if (!isValidZip(zip))
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: invalid ZIP configuration");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: invalid ZIP configuration");
         return std::numeric_limits<float>::quiet_NaN();
     }
     if (!isValidApiKey(apiKey_))
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: API key is not configured or invalid");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: API key is not configured or invalid");
         return std::numeric_limits<float>::quiet_NaN();
     }
 
@@ -67,7 +68,7 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
     const int queryLength = std::snprintf(query.value, sizeof(query.value), "zip=%s,de&units=metric&appid=%s", zip.c_str(), apiKey_.c_str());
     if (queryLength < 0 || static_cast<size_t>(queryLength) >= sizeof(query.value))
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: request configuration is too long");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: request configuration is too long");
         return std::numeric_limits<float>::quiet_NaN();
     }
 
@@ -87,12 +88,15 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
     // ESP-IDF's INFO/DEBUG HTTP client trace may contain the complete request
     // line, including query parameters. Keep it at warning level so the API key
     // cannot be emitted by this request path.
-    esp_log_level_set("HTTP_CLIENT", ESP_LOG_WARN);
+    // Keep the legacy privacy guard, but only re-enable it for this category.
+    // With all categories disabled the central logger leaves this tag at NONE.
+    if (Logger::WEATHEREnabled.load(std::memory_order_relaxed))
+        esp_log_level_set("HTTP_CLIENT", ESP_LOG_WARN);
     esp_http_client_handle_t client = esp_http_client_init(&config);
 
     if (!client)
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: failed to initialize HTTPS client");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: failed to initialize HTTPS client");
         return std::numeric_limits<float>::quiet_NaN();
     }
 
@@ -100,9 +104,9 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
 
     if (err != ESP_OK)
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: HTTPS connection failed: %s", esp_err_to_name(err));
+        Logger::log(LoggerType::WEATHER, "WeatherClient: HTTPS connection failed: %s", esp_err_to_name(err));
         Logger::log(
-            LoggerType::GENERAL,
+            LoggerType::WEATHER,
             "WeatherClient: heap after TLS failure: internal free=%u, largest=%u, PSRAM free=%u bytes",
             static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
             static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
@@ -114,7 +118,7 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
     const int64_t headerResult = esp_http_client_fetch_headers(client);
     if (headerResult < 0)
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: failed to read HTTPS response headers");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: failed to read HTTPS response headers");
         esp_http_client_cleanup(client);
         return std::numeric_limits<float>::quiet_NaN();
     }
@@ -122,7 +126,7 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
     int status = esp_http_client_get_status_code(client);
     if (status != 200)
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: weather service returned HTTP %d", status);
+        Logger::log(LoggerType::WEATHER, "WeatherClient: weather service returned HTTP %d", status);
         esp_http_client_cleanup(client);
         return std::numeric_limits<float>::quiet_NaN();
     }
@@ -130,7 +134,7 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
     const int64_t contentLength = esp_http_client_get_content_length(client);
     if (contentLength >= static_cast<int64_t>(MAX_RESPONSE_SIZE))
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: response exceeds size limit");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: response exceeds size limit");
         esp_http_client_cleanup(client);
         return std::numeric_limits<float>::quiet_NaN();
     }
@@ -145,7 +149,7 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
     std::unique_ptr<char, decltype(&heap_caps_free)> buffer(responseMemory, &heap_caps_free);
     if (!buffer)
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: response buffer allocation failed");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: response buffer allocation failed");
         esp_http_client_cleanup(client);
         return std::numeric_limits<float>::quiet_NaN();
     }
@@ -154,7 +158,7 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
 
     if (readLength < 0 || !esp_http_client_is_complete_data_received(client))
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: incomplete weather response");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: incomplete weather response");
         esp_http_client_cleanup(client);
         return std::numeric_limits<float>::quiet_NaN();
     }
@@ -165,7 +169,7 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
 
     if (!root)
     {
-        Logger::log(LoggerType::GENERAL, "WeatherClient: JSON parsing failed");
+        Logger::log(LoggerType::WEATHER, "WeatherClient: JSON parsing failed");
     }
     else
     {
@@ -180,12 +184,12 @@ float WeatherClient::getTemperatureByZip(const std::string &zip) const
             }
             else
             {
-                Logger::log(LoggerType::GENERAL, "WeatherClient: \"main\" does not contain a valid \"temp\" field");
+                Logger::log(LoggerType::WEATHER, "WeatherClient: \"main\" does not contain a valid \"temp\" field");
             }
         }
         else
         {
-            Logger::log(LoggerType::GENERAL, "WeatherClient: JSON does not contain a \"main\" object");
+            Logger::log(LoggerType::WEATHER, "WeatherClient: JSON does not contain a \"main\" object");
         }
         cJSON_Delete(root);
     }

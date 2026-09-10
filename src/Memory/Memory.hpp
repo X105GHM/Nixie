@@ -29,6 +29,11 @@ namespace Memory
 
         void setFloatValue(float val) noexcept;
         float getFloatValue() const noexcept;
+        bool hasFloatValue() const noexcept;
+
+        void setLogConfigValue(uint32_t val) noexcept;
+        uint32_t getLogConfigValue() const noexcept;
+        bool hasLogConfigValue() const noexcept;
 
         void setStringValue(const std::string &val) noexcept;
         std::string getStringValue() const noexcept;
@@ -40,8 +45,11 @@ namespace Memory
         static constexpr const char *KEY_STRING     = "str_val";
         static constexpr char KEY_LAST_EVENT[]      = "last_event";
 
-        int intValue_;
-        float floatValue_;
+        int intValue_{0};
+        float floatValue_{0.0f};
+        uint32_t logConfigValue_{0};
+        bool hasFloatValue_{false};
+        bool hasLogConfigValue_{false};
         std::string stringValue_;
     };
 

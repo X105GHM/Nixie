@@ -61,7 +61,8 @@ These photos show the assembled **Nixie V6** clock hardware.
 - Dashboard with system/device information (chip, SDK, flash, heap, firmware target, etc.)
 - Voltage/temperature/current/power/energy telemetry fields
 - Live graph section with selectable time windows
-- Log tab with configurable log categories (HTTP, TIME, HSS, DIGIT, OTA, WIFI, etc.)
+- Log tab with configurable log categories for web server, time, display, OTA,
+  WiFi, storage, sensors, power, history, weather, system and audio events
 
 ### OTA Updates
 

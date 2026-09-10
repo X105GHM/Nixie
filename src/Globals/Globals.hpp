@@ -22,7 +22,23 @@ namespace Globals
         LOG_BUTTON     = 1 << 6,  ///< Bit 6  → Logger::BUTTONEnabled
         LOG_GENERAL    = 1 << 7,  ///< Bit 7  → Logger::GENERALEnabled
         LOG_WIFI       = 1 << 8,  ///< Bit 8  → Logger::WiFiEnabled
+        LOG_STORAGE    = 1 << 9,  ///< Bit 9  → persistent NVS storage
+        LOG_SENSOR     = 1 << 10, ///< Bit 10 → ADC and temperature sensors
+        LOG_POWER      = 1 << 11, ///< Bit 11 → supply, energy and brownout
+        LOG_HISTORY    = 1 << 12, ///< Bit 12 → chart history
+        LOG_WEATHER    = 1 << 13, ///< Bit 13 → weather client
+        LOG_SYSTEM     = 1 << 14, ///< Bit 14 → boot, system and diagnostics
+        LOG_AUDIO      = 1 << 15, ///< Bit 15 → buzzer and relay
     };
+
+    constexpr uint32_t LOG_CONFIG_MASK =
+        LOG_HTTP | LOG_TIME | LOG_HSS | LOG_DIGIT | LOG_WEBSERVER |
+        LOG_OTA | LOG_BUTTON | LOG_GENERAL | LOG_WIFI | LOG_STORAGE |
+        LOG_SENSOR | LOG_POWER | LOG_HISTORY | LOG_WEATHER | LOG_SYSTEM |
+        LOG_AUDIO;
+    constexpr int LOG_CONFIG_BITS = 16;
+
+    constexpr uint32_t allLogBits() noexcept { return LOG_CONFIG_MASK; }
 
     extern std::atomic_uint32_t logConfig;
 
@@ -92,7 +108,14 @@ namespace Globals
             LOG_OTA         |
             LOG_BUTTON      |
             LOG_GENERAL     |
-            LOG_WIFI;
+            LOG_WIFI        |
+            LOG_STORAGE     |
+            LOG_SENSOR      |
+            LOG_POWER       |
+            LOG_HISTORY     |
+            LOG_WEATHER     |
+            LOG_SYSTEM      |
+            LOG_AUDIO;
         applyLogConfig();
     }
 

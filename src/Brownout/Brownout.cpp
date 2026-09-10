@@ -23,7 +23,7 @@ void Brownout::start() noexcept
     TaskHandle_t monitorTaskHandle = nullptr;
     if (xTaskCreatePinnedToCore(&Brownout::monitorTask, "BrownoutMonitor", 8192, this,  4, &monitorTaskHandle, 0) != pdPASS)
     {
-        Logger::log(LoggerType::GENERAL, "Brownout: monitor task creation failed");
+        Logger::log(LoggerType::POWER, "Brownout: monitor task creation failed");
         return;
     }
     monitor_task_.store(monitorTaskHandle, std::memory_order_release);
@@ -38,7 +38,7 @@ void Brownout::start() noexcept
         timer_ = nullptr;
         stop_requested_.store(true, std::memory_order_release);
         xTaskNotifyGive(monitorTaskHandle);
-        Logger::log(LoggerType::GENERAL, "Brownout: timer creation failed: %s", esp_err_to_name(err));
+        Logger::log(LoggerType::POWER, "Brownout: timer creation failed: %s", esp_err_to_name(err));
         return;
     }
 
@@ -54,7 +54,7 @@ void Brownout::start() noexcept
         restore_timer_ = nullptr;
         stop_requested_.store(true, std::memory_order_release);
         xTaskNotifyGive(monitorTaskHandle);
-        Logger::log(LoggerType::GENERAL, "Brownout: restore timer creation failed: %s", esp_err_to_name(err));
+        Logger::log(LoggerType::POWER, "Brownout: restore timer creation failed: %s", esp_err_to_name(err));
         return;
     }
 
@@ -67,7 +67,7 @@ void Brownout::start() noexcept
         timer_ = nullptr;
         stop_requested_.store(true, std::memory_order_release);
         xTaskNotifyGive(monitorTaskHandle);
-        Logger::log(LoggerType::GENERAL, "Brownout: timer start failed: %s", esp_err_to_name(err));
+        Logger::log(LoggerType::POWER, "Brownout: timer start failed: %s", esp_err_to_name(err));
     }
 }
 
@@ -160,11 +160,11 @@ bool Brownout::processSample() noexcept
             "  \"voltage\": " + std::to_string(v12) + "\n"
             "}";
 
-        Logger::log(LoggerType::GENERAL, "%s", json.c_str());
+        Logger::log(LoggerType::POWER, "%s", json.c_str());
 
         if (auto err = storage_.saveEventLog(json); err != ESP_OK)
         {
-            Logger::log(LoggerType::GENERAL, "Brownout: saveEventLog failed: %s", esp_err_to_name(err));
+            Logger::log(LoggerType::POWER, "Brownout: saveEventLog failed: %s", esp_err_to_name(err));
         }
 
         if (timer_)

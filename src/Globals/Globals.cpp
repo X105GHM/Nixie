@@ -72,7 +72,8 @@ namespace Globals
     std::atomic_uint8_t brightnessDimValue{75};  // Mem
     std::atomic_uint8_t brightnessDayValue{100}; // Mem
 
-    std::atomic_uint32_t logConfig{ // Mem
+    std::atomic_uint32_t logConfig // Mem
+    {
         LOG_HTTP        |
         LOG_TIME        |
         LOG_HSS         |
@@ -81,7 +82,15 @@ namespace Globals
         LOG_OTA         |
         LOG_BUTTON      |
         LOG_GENERAL     |
-        LOG_WIFI};
+        LOG_WIFI        |
+        LOG_STORAGE     |
+        LOG_SENSOR      |
+        LOG_POWER       |
+        LOG_HISTORY     |
+        LOG_WEATHER     |
+        LOG_SYSTEM      |
+        LOG_AUDIO
+    };
 
     void applyLogConfig()
     {
@@ -103,6 +112,22 @@ namespace Globals
         Logger::GENERALEnabled = (config & LOG_GENERAL) != 0;
 
         Logger::WiFiEnabled = (config & LOG_WIFI) != 0;
+
+        Logger::STORAGEEnabled = (config & LOG_STORAGE) != 0;
+
+        Logger::SENSOREnabled = (config & LOG_SENSOR) != 0;
+
+        Logger::POWEREnabled = (config & LOG_POWER) != 0;
+
+        Logger::HISTORYEnabled = (config & LOG_HISTORY) != 0;
+
+        Logger::WEATHEREnabled = (config & LOG_WEATHER) != 0;
+
+        Logger::SYSTEMEnabled = (config & LOG_SYSTEM) != 0;
+
+        Logger::AUDIOEnabled = (config & LOG_AUDIO) != 0;
+
+        Logger::applyPlatformLevels(config);
     }
 
     std::atomic<FirmwareTarget> currentFirmwareTarget{FirmwareTarget::NixieV6_std}; // Mem

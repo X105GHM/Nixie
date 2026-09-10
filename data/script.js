@@ -1796,17 +1796,25 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Logstufen
-  const logIds = [
-    "logHttpToggle", "logTimeToggle", "logHssToggle", "logDigitToggle", "logWebserverToggle",
-    "logOtaToggle", "logButtonToggle", "logGeneralToggle", "logWifiToggle"
+  // Bit positions are kept stable for persisted configurations.  The first
+  // nine entries are the legacy mask and must not be renumbered.
+  const logControls = [
+    ["logHttpToggle", 0], ["logTimeToggle", 1], ["logHssToggle", 2],
+    ["logDigitToggle", 3], ["logWebserverToggle", 4], ["logOtaToggle", 5],
+    ["logButtonToggle", 6], ["logGeneralToggle", 7], ["logWifiToggle", 8],
+    ["logStorageToggle", 9], ["logSensorToggle", 10], ["logPowerToggle", 11],
+    ["logHistoryToggle", 12], ["logWeatherToggle", 13], ["logSystemToggle", 14],
+    ["logAudioToggle", 15]
   ];
+  const logIds = logControls.map(([id]) => id);
 
   logIds.forEach(id => {
     const cb = document.getElementById(id);
     cb.addEventListener("change", async () => {
-      const bits = logIds.map(i => document.getElementById(i).checked ? '1' : '0').join("");
+      const value = logControls.reduce((mask, [controlId, bit]) =>
+        mask | (document.getElementById(controlId).checked ? (1 << bit) : 0), 0);
       await sendStateCommand(
-          logIds, 'logConfigBinary', bits, 'logging.set', {value: parseInt(bits, 2)});
+          logIds, 'logConfig', value, 'logging.set', {value});
     });
   });
 
@@ -2193,10 +2201,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Logstufen abgleichen
-      const bin = data.logConfigBinary.padStart(9, '0');
-      logIds.forEach((id, i) => {
+      const configuredLogMask = Number.isInteger(Number(data.logConfig))
+        ? Number(data.logConfig)
+        : parseInt(data.logConfigBinary || '0', 2);
+      logControls.forEach(([id, bit]) => {
         if (!skipSync.has(id))
-          document.getElementById(id).checked = (bin[i] === '1');
+          document.getElementById(id).checked = (configuredLogMask & (1 << bit)) !== 0;
       });
 
       // Firmware und Standort abgleichen

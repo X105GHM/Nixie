@@ -63,7 +63,7 @@ void Buzzer::startCricketInTask() noexcept
         buzzer->playCricketSound();
 
         const UBaseType_t minimumFreeStack = uxTaskGetStackHighWaterMark(nullptr);
-        Logger::log(LoggerType::GENERAL,
+        Logger::log(LoggerType::AUDIO,
                     "Cricket task finished, minimum free stack=%u bytes",
                     static_cast<unsigned>(minimumFreeStack));
 
@@ -82,11 +82,11 @@ void Buzzer::startCricketInTask() noexcept
     if (result != pdPASS)
     {
         cricketRunning_.store(false, std::memory_order_release);
-        Logger::log(LoggerType::GENERAL, "Cricket task creation failed");
+        Logger::log(LoggerType::AUDIO, "Cricket task creation failed");
         return;
     }
 
-    Logger::log(LoggerType::GENERAL, "Cricket sound started in task");
+    Logger::log(LoggerType::AUDIO, "Cricket sound started in task");
 }
 
 void Buzzer::playCricketSound() noexcept
@@ -122,7 +122,7 @@ void Buzzer::playCricketSound() noexcept
     }
 
     gpio_set_level(BUZZER_PIN, 0);
-    Logger::log(LoggerType::GENERAL, "Cricket sound chirp finished");
+    Logger::log(LoggerType::AUDIO, "Cricket sound chirp finished");
 }
 
 void Buzzer::Silence() noexcept

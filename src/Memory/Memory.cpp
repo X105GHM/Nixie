@@ -17,13 +17,15 @@ namespace Memory
             err = nvs_flash_init();
         }
         if (err != ESP_OK) {
-            Logger::log(LoggerType::GENERAL, "NVS init failed: %s", esp_err_to_name(err));
+            Logger::log(LoggerType::STORAGE, "NVS init failed: %s", esp_err_to_name(err));
         }
         return err;
     }
 
     esp_err_t PersistentStorage::load() noexcept
     {
+        hasFloatValue_ = false;
+        hasLogConfigValue_ = false;
         nvs_handle_t handle;
         esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
         if (err != ESP_OK) return err;
@@ -32,7 +34,20 @@ namespace Memory
         if ((err = nvs_get_i32(handle, KEY_INT, &i)) == ESP_OK) intValue_ = i;
 
         int32_t f;
-        if ((err = nvs_get_i32(handle, KEY_FLOAT, &f)) == ESP_OK) floatValue_ = f / 10000.0f;
+        if ((err = nvs_get_i32(handle, KEY_FLOAT, &f)) == ESP_OK)
+        {
+            floatValue_ = f / 10000.0f;
+            hasFloatValue_ = true;
+        }
+
+        // New firmware stores the mask as an integer.  The legacy float key
+        // above remains readable so existing devices retain their settings.
+        uint32_t logConfig = 0;
+        if (nvs_get_u32(handle, "log_mask", &logConfig) == ESP_OK)
+        {
+            logConfigValue_ = logConfig;
+            hasLogConfigValue_ = true;
+        }
 
         size_t len = 0;
         if ((err = nvs_get_str(handle, KEY_STRING, nullptr, &len)) == ESP_OK) {
@@ -55,6 +70,8 @@ namespace Memory
         err = nvs_set_i32(handle, KEY_INT, intValue_);
         if (err != ESP_OK) { nvs_close(handle); return err; }
         err = nvs_set_i32(handle, KEY_FLOAT, static_cast<int32_t>(floatValue_ * 10000));
+        if (err != ESP_OK) { nvs_close(handle); return err; }
+        err = nvs_set_u32(handle, "log_mask", logConfigValue_);
         if (err != ESP_OK) { nvs_close(handle); return err; }
 
         const auto textConfig = Globals::getTextConfig();
@@ -134,6 +151,16 @@ namespace Memory
 
     void PersistentStorage::setFloatValue(float val) noexcept { floatValue_ = val; }
     float PersistentStorage::getFloatValue() const noexcept   { return floatValue_; }
+    bool PersistentStorage::hasFloatValue() const noexcept    { return hasFloatValue_; }
+
+    void PersistentStorage::setLogConfigValue(uint32_t val) noexcept
+    {
+        logConfigValue_ = val;
+        hasLogConfigValue_ = true;
+    }
+
+    uint32_t PersistentStorage::getLogConfigValue() const noexcept { return logConfigValue_; }
+    bool PersistentStorage::hasLogConfigValue() const noexcept     { return hasLogConfigValue_; }
 
     void PersistentStorage::setStringValue(const std::string &val) noexcept { stringValue_ = val; }
     std::string PersistentStorage::getStringValue() const noexcept           { return stringValue_; }
@@ -156,7 +183,7 @@ namespace Memory
     {
         if (auto err = storage.clearAll(); err != ESP_OK) 
         {
-            Logger::log(LoggerType::GENERAL,"resetGlobals: erase failed: %s",esp_err_to_name(err));
+            Logger::log(LoggerType::STORAGE,"resetGlobals: erase failed: %s",esp_err_to_name(err));
         }
 
         Globals::tickerEnabled           = false;
@@ -184,6 +211,7 @@ namespace Memory
         Globals::brightnessDayValue       = 100;
 
         Globals::logConfig               = 0;
+        Globals::applyLogConfig();
 
         brightness                       = 0;
 
@@ -206,7 +234,11 @@ namespace Memory
             (Globals::noACPatNight            ? 1 << 6 : 0);
         storage.setIntValue(flags);
 
-        storage.setFloatValue(static_cast<float>(Globals::logConfig));
+        const uint32_t logConfig = Globals::logConfig.load(std::memory_order_relaxed);
+        storage.setLogConfigValue(logConfig);
+        // Keep writing the old key for downgrade compatibility with older
+        // firmware that only knows the float-based representation.
+        storage.setFloatValue(static_cast<float>(logConfig));
 
         const auto textConfig = Globals::getTextConfig();
         std::string packed =
@@ -230,7 +262,7 @@ namespace Memory
 
         if (auto err = storage.save(); err != ESP_OK)
         {
-            Logger::log(LoggerType::GENERAL,"saveGlobals failed: %s",esp_err_to_name(err));
+            Logger::log(LoggerType::STORAGE,"saveGlobals failed: %s",esp_err_to_name(err));
         }
     }
 
@@ -238,7 +270,7 @@ namespace Memory
     {
         if (auto err = storage.load(); err != ESP_OK)
         {
-            Logger::log(LoggerType::GENERAL,"loadGlobals failed: %s",esp_err_to_name(err));
+            Logger::log(LoggerType::STORAGE,"loadGlobals failed: %s",esp_err_to_name(err));
             return;
         }
 
@@ -251,7 +283,25 @@ namespace Memory
         Globals::PWM_disabled            = flags & (1 << 5);
         Globals::noACPatNight            = flags & (1 << 6);
 
-        Globals::logConfig = static_cast<uint32_t>(storage.getFloatValue());
+        const bool hasLegacyLogConfig = storage.hasFloatValue();
+        const uint32_t legacyLogConfig = hasLegacyLogConfig
+            ? static_cast<uint32_t>(storage.getFloatValue())
+            : 0U;
+        if (storage.hasLogConfigValue() &&
+            (!hasLegacyLogConfig || legacyLogConfig == storage.getLogConfigValue()))
+        {
+            Globals::logConfig = storage.getLogConfigValue() & Globals::LOG_CONFIG_MASK;
+        }
+        else if (hasLegacyLogConfig)
+        {
+            // A downgrade can update only the legacy float key.  Prefer that
+            // changed value instead of resurrecting a stale extended mask.
+            Globals::logConfig = legacyLogConfig & Globals::LOG_CONFIG_MASK;
+        }
+        else
+        {
+            Globals::logConfig = Globals::allLogBits();
+        }
 
         std::string packed = storage.getStringValue();
 
@@ -296,14 +346,14 @@ namespace Memory
     void StorageReset() noexcept
     {
         storage.resetGlobals();
-        Logger::log(LoggerType::GENERAL, "Persistent storage reset and globals reloaded");
+        Logger::log(LoggerType::STORAGE, "Persistent storage reset and globals reloaded");
     }
 
     void ReadBrownoutLog(std::string &outJson) noexcept
     {
         if (auto err = storage.getLastEventLog(outJson); err != ESP_OK)
         {
-            Logger::log(LoggerType::GENERAL, "ReadBrownoutLog failed: %s", esp_err_to_name(err));
+            Logger::log(LoggerType::STORAGE, "ReadBrownoutLog failed: %s", esp_err_to_name(err));
         }
     }
 
@@ -311,11 +361,11 @@ namespace Memory
     {
         if (auto err = storage.deleteEventLog(); err != ESP_OK)
         {
-            Logger::log(LoggerType::GENERAL, "BrownoutReset failed: %s", esp_err_to_name(err));
+            Logger::log(LoggerType::STORAGE, "BrownoutReset failed: %s", esp_err_to_name(err));
         }
         else
         {
-            Logger::log(LoggerType::GENERAL, "Brownout log cleared");
+            Logger::log(LoggerType::STORAGE, "Brownout log cleared");
         }
     }
 }

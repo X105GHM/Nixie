@@ -3,7 +3,7 @@
 #include <ctime>
 
 #include "esp_heap_caps.h"
-#include "esp_log.h"
+#include "Logger/Logger.hpp"
 
 namespace
 {
@@ -27,7 +27,7 @@ bool ChartHistory::initialize() noexcept
     if (!mutex_)
     {
         state_.store(State::MutexUnavailable, std::memory_order_release);
-        ESP_LOGE(TAG, "History mutex creation failed; history disabled");
+        Logger::log(LoggerType::HISTORY, "History mutex creation failed; history disabled");
         return false;
     }
 
@@ -36,7 +36,7 @@ bool ChartHistory::initialize() noexcept
     if (!allocation_)
     {
         state_.store(State::PsramAllocationFailed, std::memory_order_release);
-        ESP_LOGE(TAG, "Could not reserve %u bytes in PSRAM; charts fall back to live data", static_cast<unsigned>(allocatedBytes_));
+        Logger::log(LoggerType::HISTORY, "Could not reserve %u bytes in PSRAM; charts fall back to live data", static_cast<unsigned>(allocatedBytes_));
         allocatedBytes_ = 0;
         return false;
     }
@@ -49,14 +49,14 @@ bool ChartHistory::initialize() noexcept
         snapshotBuffer_ = nullptr;
         allocatedBytes_ = 0;
         state_.store(State::RingInitializationFailed, std::memory_order_release);
-        ESP_LOGE(TAG, "History ring initialization failed; history disabled");
+        Logger::log(LoggerType::HISTORY, "History ring initialization failed; history disabled");
         return false;
     }
 
     freePsramAfterAllocation_ = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
     state_.store(State::Ready, std::memory_order_release);
     available_.store(true, std::memory_order_release);
-    ESP_LOGI(TAG, "Reserved %u bytes PSRAM for 6x1000 points plus HTTP snapshot; free PSRAM=%u",
+    Logger::log(LoggerType::HISTORY, "Reserved %u bytes PSRAM for 6x1000 points plus HTTP snapshot; free PSRAM=%u",
              static_cast<unsigned>(allocatedBytes_),
              static_cast<unsigned>(freePsramAfterAllocation_));
     return true;
@@ -99,12 +99,8 @@ ChartHistory::SnapshotResult ChartHistory::acquireSnapshot(
     }
 
     const int64_t now = static_cast<int64_t>(std::time(nullptr));
-    const int64_t first = chart_history::validEpoch(now)
-        ? now - static_cast<int64_t>(range->windowSeconds)
-        : chart_history::MINIMUM_VALID_EPOCH_SECONDS;
-    const size_t count = chart_history::validEpoch(now)
-        ? pyramid_.copyRange(range->level, first, now, snapshotBuffer_, SNAPSHOT_CAPACITY)
-        : 0;
+    const int64_t first = chart_history::validEpoch(now) ? now - static_cast<int64_t>(range->windowSeconds) : chart_history::MINIMUM_VALID_EPOCH_SECONDS;
+    const size_t count = chart_history::validEpoch(now) ? pyramid_.copyRange(range->level, first, now, snapshotBuffer_, SNAPSHOT_CAPACITY) : 0;
 
     snapshotInUse_ = true;
     snapshot.points = snapshotBuffer_;

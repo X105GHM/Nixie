@@ -1,5 +1,5 @@
 #include "EnergyMonitor.hpp"
-#include "esp_log.h"
+#include "Logger/Logger.hpp"
 #include <cstdio>
 
 static const char *TAG = "EnergyMonitor";
@@ -23,7 +23,7 @@ void EnergyMonitor::update() noexcept
     const float totalEnergyWh = totalEnergyWh_;
     taskEXIT_CRITICAL(&mux_);
 
-    ESP_LOGD(TAG, "Instant Power: %.3f W | Total Energy: %.3f Wh", instantPowerW, totalEnergyWh);
+    Logger::log(LoggerType::POWER, "Instant Power: %.3f W | Total Energy: %.3f Wh", instantPowerW, totalEnergyWh);
 }
 
 float EnergyMonitor::getInstantPowerW() const noexcept

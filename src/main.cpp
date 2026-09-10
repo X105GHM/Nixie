@@ -1,7 +1,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include "esp_heap_caps.h"
-#include "esp_log.h"
 #include "esp_system.h"
 #include <new>
 
@@ -23,7 +22,7 @@
 #include "StatsMonitor/StatsMonitor.hpp"
 #include "Diagnostics/ResetDiagnostics.hpp"
 
-static constexpr LoggerType LOGTYPE = LoggerType::GENERAL;
+static constexpr LoggerType LOGTYPE = LoggerType::SYSTEM;
 static constexpr uint32_t TIME_SYNC_TASK_STACK_BYTES = 6144;
 static constexpr uint32_t CLOCK_TASK_STACK_BYTES = 8192;
 static constexpr uint32_t BUTTON_TASK_STACK_BYTES = 6144;
@@ -107,8 +106,6 @@ static void statsTask(void *pvParameters)
 
 extern "C" void app_main(void)
 {
-
-    esp_log_level_set("*", ESP_LOG_ERROR); // Suppress verbose ESP-IDF component logs.
 
     Logger::begin();
     Logger::log(LOGTYPE, "System start");

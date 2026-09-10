@@ -79,7 +79,7 @@ void StatsMonitor::update()
 void StatsMonitor::logLoad()
 {
     const auto load = instance().getLoadSnapshot();
-    Logger::log(LoggerType::GENERAL, "Core0: %.1f%%  Core1: %.1f%%  Total: %.1f%%", load.core0, load.core1, load.total);
+    Logger::log(LoggerType::SYSTEM, "Core0: %.1f%%  Core1: %.1f%%  Total: %.1f%%", load.core0, load.core1, load.total);
 }
 
 uint32_t StatsMonitor::diffU32_(uint32_t now, uint32_t prev)

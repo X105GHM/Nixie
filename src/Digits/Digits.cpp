@@ -368,7 +368,7 @@ void displayWeather() noexcept
     WeatherClient weather(apiKey);
     const std::string zip = Globals::getTextConfig().zipCode;
 
-    Logger::log(LoggerType::GENERAL, "displayWeather(): going to fetch temp for ZIP: %s", zip.c_str());
+    Logger::log(LoggerType::WEATHER, "displayWeather(): going to fetch temp for ZIP: %s", zip.c_str());
 
     float temp = weather.getTemperatureByZip(zip);
     if (!std::isnan(temp))
@@ -386,6 +386,6 @@ void displayWeather() noexcept
     {
         digits = 0;
 
-        Logger::log(LoggerType::DIGIT, "Error fetching weather data for ZIP: %s", zip.c_str());
+        Logger::log(LoggerType::WEATHER, "Error fetching weather data for ZIP: %s", zip.c_str());
     }
 }
